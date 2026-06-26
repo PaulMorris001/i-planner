@@ -4,7 +4,6 @@
     "slug": "i-planner",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
     "scheme": "iplanner",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -38,7 +37,9 @@
             "backgroundColor": "#000000"
           }
         }
-      ]
+      ],
+      "expo-font",
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true,
