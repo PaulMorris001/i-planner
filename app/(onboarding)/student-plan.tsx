@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { Colors, Spacing, Typography, Radius } from '@/constants/theme';
 import { Routes } from '@/constants/routes';
 import { usePlan } from '@/hooks/usePlan';
+import { useOnboarding } from '@/hooks/useOnboarding';
 import type {
   StudentPlan as StudentPlanType,
   ClassItem,
@@ -59,6 +60,7 @@ function formatDate(date: Date): string {
 export default function StudentPlan() {
   const insets = useSafeAreaInsets();
   const { savePlan } = usePlan();
+  const { completeOnboarding } = useOnboarding();
 
   const [plan, setPlan] = useState<StudentPlanType>({
     classes:       [],
@@ -199,6 +201,7 @@ export default function StudentPlan() {
   const handleContinue = async () => {
     setLoading(true);
     await savePlan(plan);
+    await completeOnboarding();
     router.replace(Routes.DASHBOARD);
   };
 

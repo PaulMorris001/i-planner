@@ -14,6 +14,10 @@ export const Colors = {
   error: '#E24B4A',
   errorBg: '#FEF2F2',
   success: '#1D9E75',
+  successSoft: '#E3F5EE',
+  warning: '#DB6B2C',
+  warningSoft: '#FBEAE0',
+  infoSoft: '#E8EEFC',
   overlay: 'rgba(26, 20, 99, 0.06)',
 };
 

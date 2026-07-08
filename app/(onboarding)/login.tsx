@@ -5,11 +5,13 @@ import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useAuth } from '@/hooks/useAuth';
+import { useOnboarding } from '@/hooks/useOnboarding';
 import { Colors, Spacing, Typography, Radius } from '@/constants/theme';
 import { Routes } from '@/constants/routes';
 
 export default function Login() {
   const { login, loading } = useAuth();
+  const { completeOnboarding } = useOnboarding();
 
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
@@ -27,6 +29,7 @@ export default function Login() {
     if (!validate()) return;
     try {
       await login({ email, password });
+      await completeOnboarding();
       router.replace(Routes.DASHBOARD);
     } catch (e: any) {
       setErrors({ general: e.message });

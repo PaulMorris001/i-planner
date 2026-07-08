@@ -10,30 +10,10 @@ import { Button } from '@/components/ui/Button';
 import { Colors, Spacing, Typography, Radius } from '@/constants/theme';
 import { Routes } from '@/constants/routes';
 import { usePlan } from '@/hooks/usePlan';
+import { useOnboarding } from '@/hooks/useOnboarding';
+import type { CareerGoal, FinancialGoal, ProfessionalPlan } from '@/types/plan.types';
 
-// ── Types ──────────────────────────────────────────────────────────────────
-interface CareerGoal {
-  id: string;
-  goal: string;
-  targetYear: string;
-}
-
-interface FinancialGoal {
-  id: string;
-  goal: string;
-  targetAmount: string;
-  targetYear: string;
-}
-
-interface ProfessionalPlanData {
-  currentRole: string;
-  currentIndustry: string;
-  careerGoals: CareerGoal[];
-  financialGoals: FinancialGoal[];
-  certifications: string[];
-}
-
-const EMPTY_PLAN: ProfessionalPlanData = {
+const EMPTY_PLAN: ProfessionalPlan = {
   currentRole:     '',
   currentIndustry: '',
   careerGoals:     [],
@@ -81,9 +61,10 @@ const SECTIONS: { key: Section; label: string; emoji: string; hint: string }[] =
 
 export default function ProfessionalPlan() {
   const insets = useSafeAreaInsets();
-  const { savePlan } = usePlan();
+  const { saveProfessionalPlan } = usePlan();
+  const { completeOnboarding } = useOnboarding();
 
-  const [plan, setPlan]         = useState<ProfessionalPlanData>(EMPTY_PLAN);
+  const [plan, setPlan]         = useState<ProfessionalPlan>(EMPTY_PLAN);
   const [expanded, setExpanded] = useState<Section | null>('role');
   const [loading, setLoading]   = useState(false);
 
@@ -163,9 +144,8 @@ export default function ProfessionalPlan() {
   // ── Continue ──
   const handleContinue = async () => {
     setLoading(true);
-    // Store professional plan — reuse savePlan with a cast for now
-    // TODO: add saveProfessionalPlan to usePlan when building the dashboard
-    await savePlan(plan as any);
+    await saveProfessionalPlan(plan);
+    await completeOnboarding();
     router.replace(Routes.DASHBOARD);
   };
 
@@ -536,7 +516,10 @@ export default function ProfessionalPlan() {
             loading={loading}
           />
           <TouchableOpacity
-            onPress={() => router.replace(Routes.DASHBOARD)}
+            onPress={async () => {
+              await completeOnboarding();
+              router.replace(Routes.DASHBOARD);
+            }}
             activeOpacity={0.7}
           >
             <Text style={styles.skipLink}>Skip for now</Text>

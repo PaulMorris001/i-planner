@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/Button";
 import { Colors, Spacing, Typography, Radius } from "@/constants/theme";
 import { Routes } from "@/constants/routes";
 import { usePlan } from "@/hooks/usePlan";
+import { useOnboarding } from "@/hooks/useOnboarding";
 import type { Exam, ExamPlan as ExamPlanType } from "@/types/plan.types";
 
 const MAX_EXAMS = 3;
@@ -46,6 +47,7 @@ const EMPTY_FORM = {
 export default function ExamPlan() {
   const insets = useSafeAreaInsets();
   const { saveExamPlan } = usePlan();
+  const { completeOnboarding } = useOnboarding();
 
   const [exams, setExams] = useState<Exam[]>([]);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -95,7 +97,13 @@ export default function ExamPlan() {
         "No exams added",
         "Add at least one exam to generate your revision plan, or skip to continue.",
         [
-          { text: "Skip", onPress: () => router.replace(Routes.DASHBOARD) },
+          {
+            text: "Skip",
+            onPress: async () => {
+              await completeOnboarding();
+              router.replace(Routes.DASHBOARD);
+            },
+          },
           { text: "Add exam", style: "cancel" },
         ],
       );
@@ -104,6 +112,7 @@ export default function ExamPlan() {
     setLoading(true);
     const planToSave: ExamPlanType = { exams };
     await saveExamPlan(planToSave);
+    await completeOnboarding();
     router.replace(Routes.DASHBOARD);
   };
 

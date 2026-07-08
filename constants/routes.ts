@@ -11,7 +11,10 @@ export const Routes = {
   DASHBOARD:  '/(app)/dashboard',
   PLANNER:    '/(app)/planner',
   TASKS:      '/(app)/tasks',
+  COACH:      '/(app)/coach',
   PROFILE:    '/(app)/profile',
+  GOALS:      '/(app)/goals',
+  HABITS:     '/habits',
 } as const;
 
 export type AppRoute = (typeof Routes)[keyof typeof Routes];

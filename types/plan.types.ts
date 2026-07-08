@@ -66,3 +66,25 @@ export interface Exam {
 export interface ExamPlan {
   exams: Exam[];
 }
+
+// ── Professional plan types ────────────────────────────────────────────────
+export interface CareerGoal {
+  id:         string;
+  goal:       string;
+  targetYear: string;
+}
+
+export interface FinancialGoal {
+  id:           string;
+  goal:         string;
+  targetAmount: string;
+  targetYear:   string;
+}
+
+export interface ProfessionalPlan {
+  currentRole:     string;
+  currentIndustry: string;
+  careerGoals:     CareerGoal[];
+  financialGoals:  FinancialGoal[];
+  certifications:  string[];
+}

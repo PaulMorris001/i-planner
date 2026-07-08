@@ -25,6 +25,19 @@ const MAPPING = {
   'pencil': 'edit',
   'briefcase.fill': 'work',
   'checkmark': 'check',
+  'checklist': 'checklist',
+  'person.fill': 'person',
+  'plus': 'add',
+  'sparkles': 'auto-awesome',
+  'clock': 'schedule',
+  'flame.fill': 'local-fire-department',
+  'target': 'track-changes',
+  'arrow.right': 'arrow-forward',
+  'star.fill': 'star',
+  'xmark': 'close',
+  'chevron.left': 'chevron-left',
+  'paperclip': 'attach-file',
+  'doc.fill': 'insert-drive-file',
 } as IconMapping;
 
 /**
