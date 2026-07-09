@@ -4,51 +4,29 @@ import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { GreetingHeader } from '@/components/ui/GreetingHeader';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors, Spacing } from '@/constants/theme';
-import { TaskCategories, TaskCategoryId, TaskPriorities, TaskPriorityId } from '@/constants/taskMeta';
-
-interface Task {
-  id: string;
-  title: string;
-  category: TaskCategoryId;
-  priority: TaskPriorityId;
-  day: number;
-  hour: number;
-  time: string;
-  done: boolean;
-}
+import { TaskCategories, TaskPriorities, TaskPriorityId } from '@/constants/taskMeta';
+import { useTasks } from '@/hooks/useTasks';
+import type { Task } from '@/types/task.types';
 
 const DAY_FULL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const TODAY_IDX = 1;
 const TODAY_DATE = 'Tue, Sep 9';
 const PRIORITY_RANK: Record<TaskPriorityId, number> = { high: 0, medium: 1, low: 2 };
 
-const SEED_TASKS: Task[] = [
-  { id: 'k1', title: 'Corporate Finance — Case Memo 1', category: 'academic', day: 1, time: '9:30 AM', hour: 9, priority: 'high', done: false },
-  { id: 'k2', title: 'Read Marketing — Chapter 4', category: 'academic', day: 1, time: '2:00 PM', hour: 14, priority: 'medium', done: false },
-  { id: 'k3', title: 'Coffee chat — McKinsey alum', category: 'career', day: 1, time: '4:00 PM', hour: 16, priority: 'medium', done: false },
-  { id: 'k4', title: 'Gym + meal prep', category: 'personal', day: 1, time: '6:30 PM', hour: 18, priority: 'low', done: true },
-  { id: 'k5', title: 'Pay tuition installment', category: 'financial', day: 2, time: '10:00 AM', hour: 10, priority: 'high', done: false },
-  { id: 'k6', title: 'Group Case — Valuation', category: 'academic', day: 3, time: '11:00 AM', hour: 11, priority: 'high', done: false },
-  { id: 'k7', title: 'Bain — interview round 1', category: 'career', day: 4, time: '1:00 PM', hour: 13, priority: 'high', done: false },
-  { id: 'k8', title: 'Managerial Econ problem set', category: 'academic', day: 4, time: '3:00 PM', hour: 15, priority: 'medium', done: false },
-  { id: 'k9', title: 'Cohort welcome party', category: 'personal', day: 5, time: '7:00 PM', hour: 19, priority: 'low', done: false },
-  { id: 'k10', title: 'Weekly review & planning', category: 'personal', day: 6, time: '9:00 AM', hour: 9, priority: 'medium', done: false },
-];
-
 function sortTasks(tasks: Task[]) {
   return [...tasks].sort((a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] || a.hour - b.hour);
 }
 
-const DAY_TASKS = sortTasks(SEED_TASKS.filter((t) => t.day === TODAY_IDX));
-
-const WEEK_DAYS = DAY_FULL.map((label, i) => ({
-  label,
-  isToday: i === TODAY_IDX,
-  items: sortTasks(SEED_TASKS.filter((t) => t.day === i)),
-}));
-
 export default function Planner() {
   const [view, setView] = useState<'day' | 'week'>('day');
+  const { tasks, toggleDone } = useTasks();
+
+  const dayTasks = sortTasks(tasks.filter((t) => t.day === TODAY_IDX));
+  const weekDays = DAY_FULL.map((label, i) => ({
+    label,
+    isToday: i === TODAY_IDX,
+    items: sortTasks(tasks.filter((t) => t.day === i)),
+  }));
 
   return (
     <ScreenWrapper backgroundColor={Colors.offWhite} scroll style={styles.scrollContent}>
@@ -78,53 +56,57 @@ export default function Planner() {
             </View>
 
             <View style={styles.taskList}>
-              {DAY_TASKS.map((task) => {
-                const category = TaskCategories[task.category];
-                const priority = TaskPriorities[task.priority];
-                return (
-                  <View key={task.id} style={styles.taskRow}>
-                    <View
-                      style={[
-                        styles.checkbox,
-                        task.done
-                          ? { backgroundColor: category.color }
-                          : { borderWidth: 1.5, borderColor: Colors.border },
-                      ]}
-                    >
-                      {task.done && <IconSymbol name="checkmark" color={Colors.white} size={14} />}
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <View style={styles.titleRow}>
-                        {task.priority === 'high' && !task.done && (
-                          <View style={[styles.priorityDot, { backgroundColor: priority.color }]} />
-                        )}
-                        <Text
-                          style={[
-                            styles.taskTitle,
-                            task.done && { color: Colors.textMuted, textDecorationLine: 'line-through' },
-                          ]}
-                        >
-                          {task.title}
-                        </Text>
+              {dayTasks.length === 0 ? (
+                <Text style={styles.noTasks}>No tasks yet — tap the + button to add one.</Text>
+              ) : (
+                dayTasks.map((task) => {
+                  const category = TaskCategories[task.category];
+                  const priority = TaskPriorities[task.priority];
+                  return (
+                    <Pressable key={task.id} style={styles.taskRow} onPress={() => toggleDone(task.id)}>
+                      <View
+                        style={[
+                          styles.checkbox,
+                          task.done
+                            ? { backgroundColor: category.color }
+                            : { borderWidth: 1.5, borderColor: Colors.border },
+                        ]}
+                      >
+                        {task.done && <IconSymbol name="checkmark" color={Colors.white} size={14} />}
                       </View>
-                      <View style={styles.metaRow}>
-                        <Text style={[styles.chip, { color: category.color, backgroundColor: category.soft }]}>
-                          {category.label}
-                        </Text>
-                        <Text style={[styles.chip, { color: priority.color, backgroundColor: priority.soft }]}>
-                          {priority.label}
-                        </Text>
-                        <Text style={styles.time}>{task.time}</Text>
+                      <View style={{ flex: 1 }}>
+                        <View style={styles.titleRow}>
+                          {task.priority === 'high' && !task.done && (
+                            <View style={[styles.priorityDot, { backgroundColor: priority.color }]} />
+                          )}
+                          <Text
+                            style={[
+                              styles.taskTitle,
+                              task.done && { color: Colors.textMuted, textDecorationLine: 'line-through' },
+                            ]}
+                          >
+                            {task.title}
+                          </Text>
+                        </View>
+                        <View style={styles.metaRow}>
+                          <Text style={[styles.chip, { color: category.color, backgroundColor: category.soft }]}>
+                            {category.label}
+                          </Text>
+                          <Text style={[styles.chip, { color: priority.color, backgroundColor: priority.soft }]}>
+                            {priority.label}
+                          </Text>
+                          {!!task.time && <Text style={styles.time}>{task.time}</Text>}
+                        </View>
                       </View>
-                    </View>
-                  </View>
-                );
-              })}
+                    </Pressable>
+                  );
+                })
+              )}
             </View>
           </>
         ) : (
           <View style={styles.weekList}>
-            {WEEK_DAYS.map((day) => (
+            {weekDays.map((day) => (
               <View key={day.label}>
                 <View style={styles.weekDayHeader}>
                   <Text style={[styles.weekDayLabel, day.isToday && { color: Colors.primaryLight }]}>
@@ -139,7 +121,7 @@ export default function Planner() {
                     day.items.map((task) => {
                       const category = TaskCategories[task.category];
                       return (
-                        <View key={task.id} style={styles.weekTaskRow}>
+                        <Pressable key={task.id} style={styles.weekTaskRow} onPress={() => toggleDone(task.id)}>
                           <View style={[styles.weekTaskBar, { backgroundColor: category.color }]} />
                           <View style={{ flex: 1 }}>
                             <Text
@@ -150,14 +132,14 @@ export default function Planner() {
                             >
                               {task.title}
                             </Text>
-                            <Text style={styles.weekTaskTime}>{task.time}</Text>
+                            {!!task.time && <Text style={styles.weekTaskTime}>{task.time}</Text>}
                           </View>
                           {task.done && (
                             <View style={[styles.weekDoneCircle, { backgroundColor: category.color }]}>
                               <IconSymbol name="checkmark" color={Colors.white} size={12} />
                             </View>
                           )}
-                        </View>
+                        </Pressable>
                       );
                     })
                   )}

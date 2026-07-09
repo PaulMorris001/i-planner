@@ -1,10 +1,8 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useState, useEffect } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from '@/config/firebase';
+import { planService } from '@/services/plan.service';
 import type { StudentPlan, ExamPlan, ProfessionalPlan } from '@/types/plan.types';
-
-const PLAN_KEY         = '@iplanner_student_plan';
-const EXAM_PLAN_KEY    = '@iplanner_exam_plan';
-const PROFESSIONAL_PLAN_KEY = '@iplanner_professional_plan';
 
 const EMPTY_PLAN: StudentPlan = {
   classes:       [],
@@ -25,41 +23,58 @@ const EMPTY_PROFESSIONAL_PLAN: ProfessionalPlan = {
 };
 
 export function usePlan() {
-  const [plan, setPlan]                       = useState<StudentPlan>(EMPTY_PLAN);
-  const [examPlan, setExamPlan]               = useState<ExamPlan>(EMPTY_EXAM_PLAN);
+  const [plan, setPlan]                         = useState<StudentPlan>(EMPTY_PLAN);
+  const [examPlan, setExamPlan]                 = useState<ExamPlan>(EMPTY_EXAM_PLAN);
   const [professionalPlan, setProfessionalPlan] = useState<ProfessionalPlan>(EMPTY_PROFESSIONAL_PLAN);
-  const [loading, setLoading]                 = useState(true);
+  const [loading, setLoading]                   = useState(true);
 
   useEffect(() => {
-    Promise.all([
-      AsyncStorage.getItem(PLAN_KEY),
-      AsyncStorage.getItem(EXAM_PLAN_KEY),
-      AsyncStorage.getItem(PROFESSIONAL_PLAN_KEY),
-    ]).then(([raw, rawExam, rawProfessional]) => {
-      if (raw)             setPlan(JSON.parse(raw));
-      if (rawExam)         setExamPlan(JSON.parse(rawExam));
-      if (rawProfessional) setProfessionalPlan(JSON.parse(rawProfessional));
-      setLoading(false);
+    // Wait for a live Firebase user before fetching — on cold start, session
+    // rehydration can land a tick after this hook mounts.
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        setPlan(EMPTY_PLAN);
+        setExamPlan(EMPTY_EXAM_PLAN);
+        setProfessionalPlan(EMPTY_PROFESSIONAL_PLAN);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const [studentData, examData, professionalData] = await Promise.all([
+          planService.get<StudentPlan>('student'),
+          planService.get<ExamPlan>('exam'),
+          planService.get<ProfessionalPlan>('professional'),
+        ]);
+        if (studentData)      setPlan(studentData);
+        if (examData)         setExamPlan(examData);
+        if (professionalData) setProfessionalPlan(professionalData);
+      } catch (err) {
+        console.error('[usePlan] failed to load plans', err);
+      } finally {
+        setLoading(false);
+      }
     });
+
+    return unsubscribe;
   }, []);
 
   const savePlan = async (newPlan: StudentPlan) => {
-    await AsyncStorage.setItem(PLAN_KEY, JSON.stringify(newPlan));
     setPlan(newPlan);
+    await planService.save('student', newPlan);
   };
 
   const saveExamPlan = async (newExamPlan: ExamPlan) => {
-    await AsyncStorage.setItem(EXAM_PLAN_KEY, JSON.stringify(newExamPlan));
     setExamPlan(newExamPlan);
+    await planService.save('exam', newExamPlan);
   };
 
   const saveProfessionalPlan = async (newProfessionalPlan: ProfessionalPlan) => {
-    await AsyncStorage.setItem(PROFESSIONAL_PLAN_KEY, JSON.stringify(newProfessionalPlan));
     setProfessionalPlan(newProfessionalPlan);
+    await planService.save('professional', newProfessionalPlan);
   };
 
-  const clearPlan = async () => {
-    await AsyncStorage.multiRemove([PLAN_KEY, EXAM_PLAN_KEY, PROFESSIONAL_PLAN_KEY]);
+  const clearPlan = () => {
     setPlan(EMPTY_PLAN);
     setExamPlan(EMPTY_EXAM_PLAN);
     setProfessionalPlan(EMPTY_PROFESSIONAL_PLAN);

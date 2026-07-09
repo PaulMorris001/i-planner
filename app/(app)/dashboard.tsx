@@ -9,7 +9,10 @@ import { Colors, Spacing } from '@/constants/theme';
 import { Routes } from '@/constants/routes';
 import { usePlan } from '@/hooks/usePlan';
 import { useOnboarding } from '@/hooks/useOnboarding';
+import { useHabits } from '@/hooks/useHabits';
 import { TaskCategories } from '@/constants/taskMeta';
+
+const TODAY_IDX = 1;
 
 type PathKey = 'student' | 'exam' | 'professional';
 
@@ -42,8 +45,10 @@ export default function Dashboard() {
   const router = useRouter();
   const { professionalPlan } = usePlan();
   const { focusProfile } = useOnboarding();
+  const { habits } = useHabits();
   const careerGoal = professionalPlan.careerGoals[0];
   const financialGoal = professionalPlan.financialGoals[0];
+  const habitsDoneToday = habits.filter((h) => h.week[TODAY_IDX]).length;
 
   const [studentTaskDone, setStudentTaskDone] = useState(false);
 
@@ -166,7 +171,7 @@ export default function Dashboard() {
                 <View style={[styles.heroProgressFill, { width: '30%' }]} />
               </View>
               <Text style={styles.heroSub}>3 of 10 topics complete</Text>
-              <Pressable style={styles.heroButton}>
+              <Pressable style={styles.heroButton} onPress={() => router.push(Routes.CERT_TRACKER)}>
                 <Text style={styles.heroButtonText}>Track my progress</Text>
                 <IconSymbol name="chevron.right" color={Colors.white} size={16} />
               </Pressable>
@@ -328,7 +333,9 @@ export default function Dashboard() {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.habitEyebrow}>HABITS</Text>
-            <Text style={styles.habitText}>2 of 3 done today</Text>
+            <Text style={styles.habitText}>
+              {habitsDoneToday} of {habits.length} done today
+            </Text>
           </View>
           <IconSymbol name="chevron.right" color={Colors.textMuted} size={20} />
         </Pressable>

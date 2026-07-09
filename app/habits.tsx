@@ -5,46 +5,24 @@ import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors, Spacing } from '@/constants/theme';
 import { TaskCategories, TaskCategoryId } from '@/constants/taskMeta';
+import { useHabits } from '@/hooks/useHabits';
 
 const DAY_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 const TODAY_IDX = 1;
 
 const CATEGORY_ORDER: TaskCategoryId[] = ['academic', 'career', 'personal', 'financial', 'exam', 'habit', 'other'];
 
-interface Habit {
-  id: string;
-  name: string;
-  category: TaskCategoryId;
-  streak: number;
-  week: boolean[];
-}
-
-const SEED_HABITS: Habit[] = [
-  { id: 'h1', name: 'Morning study block', category: 'academic', streak: 5, week: [true, true, false, false, false, false, false] },
-  { id: 'h2', name: 'Read 20 pages', category: 'personal', streak: 12, week: [true, true, false, false, false, false, false] },
-  { id: 'h3', name: 'Log spending', category: 'financial', streak: 3, week: [true, false, false, false, false, false, false] },
-];
-
 export default function Habits() {
   const router = useRouter();
-  const [habits, setHabits] = useState(SEED_HABITS);
+  const { habits, createHabit, toggleToday } = useHabits();
 
   const [sheetOpen, setSheetOpen] = useState(false);
   const [habitName, setHabitName] = useState('');
   const [habitCategory, setHabitCategory] = useState<TaskCategoryId>('academic');
+  const [submitting, setSubmitting] = useState(false);
 
   const doneToday = habits.filter((h) => h.week[TODAY_IDX]).length;
-  const canSave = habitName.trim().length > 0;
-
-  const toggleToday = (id: string) => {
-    setHabits((prev) =>
-      prev.map((h) =>
-        h.id === id
-          ? { ...h, week: h.week.map((on, i) => (i === TODAY_IDX ? !on : on)) }
-          : h
-      )
-    );
-  };
+  const canSave = habitName.trim().length > 0 && !submitting;
 
   const openSheet = () => {
     setHabitName('');
@@ -52,19 +30,17 @@ export default function Habits() {
     setSheetOpen(true);
   };
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!canSave) return;
-    setHabits((prev) => [
-      ...prev,
-      {
-        id: `h${Date.now()}`,
-        name: habitName.trim(),
-        category: habitCategory,
-        streak: 0,
-        week: [false, false, false, false, false, false, false],
-      },
-    ]);
-    setSheetOpen(false);
+    setSubmitting(true);
+    try {
+      await createHabit({ name: habitName.trim(), category: habitCategory });
+      setSheetOpen(false);
+    } catch (err) {
+      console.error('[Habits] failed to create habit', err);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (

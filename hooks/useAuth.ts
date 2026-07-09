@@ -1,52 +1,40 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useState } from 'react';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { auth } from '@/config/firebase';
 import { authService } from '@/services/auth.service';
-import type { LoginPayload, RegisterPayload, AuthError, AuthResponse } from '@/types/auth.types';
+import type { LoginPayload, RegisterPayload, AuthError } from '@/types/auth.types';
 import type { User } from '@/types/user.types';
-
-const SESSION_KEY = '@iplanner_auth_session';
-
-interface StoredSession {
-  token: string;
-  user: User;
-}
 
 export function useAuth() {
   const [user, setUser]                 = useState<User | null>(null);
-  const [token, setToken]               = useState<string | null>(null);
   const [initializing, setInitializing] = useState(true);
   const [loading, setLoading]           = useState(false);
   const [error, setError]               = useState<AuthError | null>(null);
 
   useEffect(() => {
-    AsyncStorage.getItem(SESSION_KEY).then((raw) => {
-      if (raw) {
-        const session: StoredSession = JSON.parse(raw);
-        setUser(session.user);
-        setToken(session.token);
-      }
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      setUser(
+        firebaseUser
+          ? {
+              id: firebaseUser.uid,
+              email: firebaseUser.email ?? '',
+              fullName: firebaseUser.displayName ?? '',
+              createdAt: firebaseUser.metadata.creationTime ?? new Date().toISOString(),
+            }
+          : null
+      );
       setInitializing(false);
     });
+    return unsubscribe;
   }, []);
-
-  const persistSession = async (res: AuthResponse) => {
-    await AsyncStorage.setItem(SESSION_KEY, JSON.stringify({ token: res.token, user: res.user }));
-    setUser(res.user);
-    setToken(res.token);
-  };
 
   const login = async (payload: LoginPayload) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await authService.login(payload);
-      await persistSession(res);
-      return res;
-    } catch (e: any) {
-      const err: AuthError = {
-        message: e?.message ?? 'Login failed. Please try again.',
-        field: e?.field ?? 'general',
-      };
+      return await authService.login(payload);
+    } catch (e) {
+      const err = e as AuthError;
       setError(err);
       throw err;
     } finally {
@@ -58,14 +46,9 @@ export function useAuth() {
     setLoading(true);
     setError(null);
     try {
-      const res = await authService.register(payload);
-      await persistSession(res);
-      return res;
-    } catch (e: any) {
-      const err: AuthError = {
-        message: e?.message ?? 'Registration failed. Please try again.',
-        field: e?.field ?? 'general',
-      };
+      return await authService.register(payload);
+    } catch (e) {
+      const err = e as AuthError;
       setError(err);
       throw err;
     } finally {
@@ -74,13 +57,11 @@ export function useAuth() {
   };
 
   const logout = async () => {
-    await AsyncStorage.removeItem(SESSION_KEY);
-    setUser(null);
-    setToken(null);
+    await signOut(auth);
     setError(null);
   };
 
   const clearError = () => setError(null);
 
-  return { user, token, initializing, loading, error, login, register, logout, clearError };
+  return { user, initializing, loading, error, login, register, logout, clearError };
 }

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Modal, View, Text, TextInput, Pressable, Switch, ScrollView, StyleSheet } from 'react-native';
 import { useNewTaskModal } from '@/contexts/NewTaskModalContext';
+import { useTasks } from '@/hooks/useTasks';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors, Spacing } from '@/constants/theme';
 import { TaskCategories, TaskCategoryId, TaskPriorities, TaskPriorityId } from '@/constants/taskMeta';
@@ -10,8 +11,19 @@ const PRIORITY_ORDER: TaskPriorityId[] = ['high', 'medium', 'low'];
 const DAY_LABELS = ['Mon', 'Today', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const DEFAULT_DAY_INDEX = 1;
 
+// Best-effort parse of the free-text "due time" field for day/week sort order.
+// Unparseable or empty times sort to the end of the day rather than the top.
+function parseHour(timeText: string): number {
+  const match = timeText.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+  if (!match) return 23;
+  let hour = parseInt(match[1], 10) % 12;
+  if (match[3]?.toUpperCase() === 'PM') hour += 12;
+  return hour;
+}
+
 export function NewTaskModal() {
   const { isOpen, close } = useNewTaskModal();
+  const { createTask } = useTasks();
 
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState<TaskCategoryId>('academic');
@@ -20,8 +32,9 @@ export function NewTaskModal() {
   const [dueTime, setDueTime] = useState('');
   const [recurring, setRecurring] = useState(false);
   const [notes, setNotes] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  const canSave = title.trim().length > 0;
+  const canSave = title.trim().length > 0 && !submitting;
 
   const reset = () => {
     setTitle('');
@@ -36,6 +49,28 @@ export function NewTaskModal() {
   const handleClose = () => {
     close();
     reset();
+  };
+
+  const handleCreate = async () => {
+    if (!canSave) return;
+    setSubmitting(true);
+    try {
+      await createTask({
+        title: title.trim(),
+        category,
+        priority,
+        day: dayIndex,
+        hour: parseHour(dueTime),
+        time: dueTime.trim(),
+        recurring,
+        notes: notes.trim(),
+      });
+      handleClose();
+    } catch (err) {
+      console.error('[NewTaskModal] failed to create task', err);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -163,7 +198,7 @@ export function NewTaskModal() {
             <Pressable
               style={[styles.saveButton, !canSave && styles.saveButtonDisabled]}
               disabled={!canSave}
-              onPress={handleClose}
+              onPress={handleCreate}
             >
               <Text style={[styles.saveButtonText, !canSave && styles.saveButtonTextDisabled]}>Create task</Text>
             </Pressable>

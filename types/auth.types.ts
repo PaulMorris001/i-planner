@@ -10,7 +10,6 @@ export interface RegisterPayload {
 }
 
 export interface AuthResponse {
-  token: string;
   user: import('./user.types').User;
 }
 

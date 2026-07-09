@@ -11,7 +11,9 @@ function required(name: string, fallback?: string): string {
 export const env = {
   port: Number(process.env.PORT ?? 4000),
   mongoUri: required('MONGODB_URI', 'mongodb://localhost:27017/i-planner'),
-  jwtSecret: required('JWT_SECRET', 'dev-secret-change-me'),
-  jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? '7d',
   corsOrigin: process.env.CORS_ORIGIN ?? '*',
+  // Either set FIREBASE_SERVICE_ACCOUNT_JSON directly, or leave unset and rely on
+  // GOOGLE_APPLICATION_CREDENTIALS pointing at a service account key file.
+  firebaseServiceAccountJson: process.env.FIREBASE_SERVICE_ACCOUNT_JSON,
+  firebaseProjectId: process.env.FIREBASE_PROJECT_ID,
 };

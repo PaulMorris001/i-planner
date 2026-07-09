@@ -1,9 +1,0 @@
-import { Router } from 'express';
-import { login, register, forgotPassword } from '../controllers/auth.controller';
-import { asyncHandler } from '../utils/asyncHandler';
-
-export const authRouter = Router();
-
-authRouter.post('/register', asyncHandler(register));
-authRouter.post('/login', asyncHandler(login));
-authRouter.post('/forgot-password', asyncHandler(forgotPassword));

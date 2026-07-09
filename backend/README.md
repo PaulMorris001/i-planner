@@ -2,15 +2,26 @@
 
 Express + MongoDB (Mongoose) API server for the I-Planner app.
 
+Authentication is handled entirely client-side by **Firebase Auth** — this server doesn't
+issue its own sessions or store passwords. It only verifies Firebase ID tokens (via
+`firebase-admin`) on whatever protected routes get added as real data endpoints (tasks,
+plans, habits, etc.) come online.
+
 ## Setup
 
 ```bash
 cd backend
 npm install
-cp .env.example .env   # then edit MONGODB_URI / JWT_SECRET as needed
+cp .env.example .env   # then edit MONGODB_URI / Firebase settings as needed
 ```
 
 Requires a running MongoDB instance (local `mongod`, Docker, or Atlas) matching `MONGODB_URI`.
+
+For Firebase Admin credentials, either:
+1. Paste a service account JSON (Firebase console → Project settings → Service accounts →
+   Generate new private key) as a single-line string into `FIREBASE_SERVICE_ACCOUNT_JSON`, or
+2. Point `GOOGLE_APPLICATION_CREDENTIALS` at the downloaded key file path instead and leave
+   `FIREBASE_SERVICE_ACCOUNT_JSON` blank.
 
 ## Run
 
@@ -25,32 +36,29 @@ Server listens on `PORT` (default `4000`), routes mounted under `/api`.
 
 ## Endpoints
 
-| Method | Path                     | Body                                  | Notes                          |
-|--------|--------------------------|----------------------------------------|---------------------------------|
-| GET    | `/api/health`            | —                                      | Liveness check                  |
-| POST   | `/api/auth/register`     | `{ fullName, email, password }`       | Returns `{ token, user }`       |
-| POST   | `/api/auth/login`        | `{ email, password }`                 | Returns `{ token, user }`       |
-| POST   | `/api/auth/forgot-password` | `{ email }`                        | Returns `{ message }`           |
+| Method | Path          | Notes            |
+|--------|---------------|-------------------|
+| GET    | `/api/health` | Liveness check    |
 
-Error responses are `{ message, field? }` with a matching HTTP status, mirroring the shape the
-Expo app's `services/api.ts` (`apiRequest`) already expects — so swapping
-`services/auth.service.ts` from its current mock to real `apiRequest(...)` calls against this
-server is a drop-in change once `EXPO_PUBLIC_API_URL` points here.
+No auth endpoints live here — the app calls Firebase Auth directly (`services/auth.service.ts`
+on the frontend). When a protected data route is needed, mount it behind the `requireAuth`
+middleware, which expects `Authorization: Bearer <firebaseIdToken>` (get the token from the
+app via `auth.currentUser.getIdToken()`) and sets `req.userId` to the Firebase UID.
 
 ## Structure
 
 ```
 src/
-  config/       env loading, MongoDB connection
-  models/       Mongoose schemas
-  controllers/  request handlers
+  config/       env loading, MongoDB connection, Firebase Admin init
+  models/       Mongoose schemas (empty for now — add as real data endpoints are built)
+  controllers/  request handlers (empty for now)
   routes/       Express routers
-  middleware/   auth guard, error handler
-  utils/        JWT helpers, ApiError, asyncHandler
+  middleware/   requireAuth (Firebase token verification), error handler
+  utils/        ApiError, asyncHandler
 ```
 
 ## Not yet implemented
 
-Only auth is wired up for now, matching what the frontend currently calls. Tasks, plans,
-habits, and the AI Coach are still static/mocked on the frontend, so there's no corresponding
-API for them yet — add models/routes here as those features get real data.
+Only the `/health` check exists. Tasks, plans, habits, and the AI Coach are still
+static/mocked on the frontend, so there's no corresponding API for them yet — add
+models/controllers/routes here, protected by `requireAuth`, as those features get real data.

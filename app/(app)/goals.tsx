@@ -5,16 +5,20 @@ import { GreetingHeader } from '@/components/ui/GreetingHeader';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors, Spacing } from '@/constants/theme';
 import { useOnboarding } from '@/hooks/useOnboarding';
+import { useGoals } from '@/hooks/useGoals';
 import { TaskCategories } from '@/constants/taskMeta';
+import type { GoalTypeId } from '@/types/goal.types';
 
-interface GoalCard {
+interface DisplayGoal {
   tag: string;
   title: string;
   pct: number;
   color: string;
 }
 
-const GOAL_CARDS: Record<'student' | 'exam' | 'professional', GoalCard[]> = {
+type PathKey = 'student' | 'exam' | 'professional';
+
+const GOAL_CARDS: Record<PathKey, DisplayGoal[]> = {
   student: [
     { tag: 'Study', title: 'Finish Corporate Finance modules 1–3', pct: 60, color: Colors.primaryLight },
     { tag: 'Habit', title: 'Keep a 7-day study streak', pct: 71, color: Colors.primaryLight },
@@ -29,13 +33,11 @@ const GOAL_CARDS: Record<'student' | 'exam' | 'professional', GoalCard[]> = {
   ],
 };
 
-function toPathKey(focusProfile: string | null): 'student' | 'exam' | 'professional' {
+function toPathKey(focusProfile: string | null): PathKey {
   if (focusProfile === 'student') return 'student';
   if (focusProfile === 'exam_candidate') return 'exam';
   return 'professional';
 }
-
-type GoalTypeId = 'study' | 'career' | 'personal' | 'habit';
 
 const GOAL_TYPES: { id: GoalTypeId; label: string; color: string }[] = [
   { id: 'study', label: 'Study', color: Colors.primaryLight },
@@ -46,15 +48,18 @@ const GOAL_TYPES: { id: GoalTypeId; label: string; color: string }[] = [
 
 export default function Goals() {
   const { focusProfile } = useOnboarding();
-  const baseGoals = GOAL_CARDS[toPathKey(focusProfile)];
-  const [addedGoals, setAddedGoals] = useState<GoalCard[]>([]);
-  const goals = [...baseGoals, ...addedGoals];
+  const { goals: realGoals, createGoal } = useGoals();
+
+  // Path-specific seed cards are illustrative only — they disappear the moment
+  // the user has any real goal, so they never sit alongside real data.
+  const goals: DisplayGoal[] = realGoals.length > 0 ? realGoals : GOAL_CARDS[toPathKey(focusProfile)];
 
   const [sheetOpen, setSheetOpen] = useState(false);
   const [goalType, setGoalType] = useState<GoalTypeId>('study');
   const [goalName, setGoalName] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  const canSave = goalName.trim().length > 0;
+  const canSave = goalName.trim().length > 0 && !submitting;
 
   const openSheet = () => {
     setGoalType('study');
@@ -62,11 +67,18 @@ export default function Goals() {
     setSheetOpen(true);
   };
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!canSave) return;
     const type = GOAL_TYPES.find((t) => t.id === goalType)!;
-    setAddedGoals((prev) => [...prev, { tag: type.label, title: goalName.trim(), pct: 0, color: type.color }]);
-    setSheetOpen(false);
+    setSubmitting(true);
+    try {
+      await createGoal({ type: type.id, tag: type.label, title: goalName.trim(), color: type.color });
+      setSheetOpen(false);
+    } catch (err) {
+      console.error('[Goals] failed to create goal', err);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (

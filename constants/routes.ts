@@ -15,6 +15,7 @@ export const Routes = {
   PROFILE:    '/(app)/profile',
   GOALS:      '/(app)/goals',
   HABITS:     '/habits',
+  CERT_TRACKER: '/cert-tracker',
 } as const;
 
 export type AppRoute = (typeof Routes)[keyof typeof Routes];
