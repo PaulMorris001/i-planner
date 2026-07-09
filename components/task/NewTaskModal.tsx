@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Modal, View, Text, TextInput, Pressable, Switch, ScrollView, StyleSheet } from 'react-native';
+import { Modal, View, Text, TextInput, Pressable, Switch, ScrollView, StyleSheet, Platform } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useNewTaskModal } from '@/contexts/NewTaskModalContext';
 import { useTasks } from '@/hooks/useTasks';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -11,14 +12,12 @@ const PRIORITY_ORDER: TaskPriorityId[] = ['high', 'medium', 'low'];
 const DAY_LABELS = ['Mon', 'Today', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const DEFAULT_DAY_INDEX = 1;
 
-// Best-effort parse of the free-text "due time" field for day/week sort order.
-// Unparseable or empty times sort to the end of the day rather than the top.
-function parseHour(timeText: string): number {
-  const match = timeText.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
-  if (!match) return 23;
-  let hour = parseInt(match[1], 10) % 12;
-  if (match[3]?.toUpperCase() === 'PM') hour += 12;
-  return hour;
+function formatTime(date: Date): string {
+  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
+
+function formatDate(date: Date): string {
+  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 export function NewTaskModal() {
@@ -29,7 +28,10 @@ export function NewTaskModal() {
   const [category, setCategory] = useState<TaskCategoryId>('academic');
   const [priority, setPriority] = useState<TaskPriorityId>('medium');
   const [dayIndex, setDayIndex] = useState(DEFAULT_DAY_INDEX);
-  const [dueTime, setDueTime] = useState('');
+  const [dueTime, setDueTime] = useState<Date | null>(null);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [dueDate, setDueDate] = useState<Date | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [recurring, setRecurring] = useState(false);
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -41,7 +43,8 @@ export function NewTaskModal() {
     setCategory('academic');
     setPriority('medium');
     setDayIndex(DEFAULT_DAY_INDEX);
-    setDueTime('');
+    setDueTime(null);
+    setDueDate(null);
     setRecurring(false);
     setNotes('');
   };
@@ -60,8 +63,9 @@ export function NewTaskModal() {
         category,
         priority,
         day: dayIndex,
-        hour: parseHour(dueTime),
-        time: dueTime.trim(),
+        hour: dueTime ? dueTime.getHours() : 23,
+        time: dueTime ? formatTime(dueTime) : '',
+        dueDate: dueDate ? dueDate.toISOString() : '',
         recurring,
         notes: notes.trim(),
       });
@@ -159,14 +163,59 @@ export function NewTaskModal() {
             })}
           </View>
 
-          <Text style={styles.eyebrow}>Due time</Text>
-          <TextInput
-            value={dueTime}
-            onChangeText={setDueTime}
-            placeholder="e.g. 2:00 PM (optional)"
-            placeholderTextColor={Colors.textMuted}
-            style={styles.input}
-          />
+          <View style={styles.fieldLabelRow}>
+            <Text style={styles.eyebrow}>Due date</Text>
+            {dueDate && (
+              <Pressable onPress={() => setDueDate(null)} hitSlop={8}>
+                <Text style={styles.clearLabel}>Clear</Text>
+              </Pressable>
+            )}
+          </View>
+          <Pressable style={styles.datePickerButton} onPress={() => setShowDatePicker(true)}>
+            <IconSymbol name="calendar" color={Colors.textSecondary} size={17} />
+            <Text style={[styles.datePickerText, !dueDate && styles.datePickerPlaceholder]}>
+              {dueDate ? formatDate(dueDate) : 'Select date (optional)'}
+            </Text>
+          </Pressable>
+          {showDatePicker && (
+            <DateTimePicker
+              value={dueDate ?? new Date()}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              themeVariant="light"
+              onChange={(_, date) => {
+                if (Platform.OS === 'android') setShowDatePicker(false);
+                if (date) setDueDate(date);
+              }}
+            />
+          )}
+
+          <View style={styles.fieldLabelRow}>
+            <Text style={styles.eyebrow}>Due time</Text>
+            {dueTime && (
+              <Pressable onPress={() => setDueTime(null)} hitSlop={8}>
+                <Text style={styles.clearLabel}>Clear</Text>
+              </Pressable>
+            )}
+          </View>
+          <Pressable style={styles.datePickerButton} onPress={() => setShowTimePicker(true)}>
+            <IconSymbol name="clock" color={Colors.textSecondary} size={17} />
+            <Text style={[styles.datePickerText, !dueTime && styles.datePickerPlaceholder]}>
+              {dueTime ? formatTime(dueTime) : 'Select time (optional)'}
+            </Text>
+          </Pressable>
+          {showTimePicker && (
+            <DateTimePicker
+              value={dueTime ?? new Date()}
+              mode="time"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              themeVariant="light"
+              onChange={(_, date) => {
+                if (Platform.OS === 'android') setShowTimePicker(false);
+                if (date) setDueTime(date);
+              }}
+            />
+          )}
 
           <View style={styles.repeatRow}>
             <View>
@@ -280,6 +329,35 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginTop: 18,
     marginBottom: 10,
+  },
+  fieldLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  clearLabel: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: Colors.primaryLight,
+  },
+  datePickerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    borderRadius: 13,
+    padding: 14,
+    backgroundColor: Colors.white,
+  },
+  datePickerText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+  },
+  datePickerPlaceholder: {
+    color: Colors.textMuted,
+    fontWeight: '400',
   },
   chipWrap: {
     flexDirection: 'row',

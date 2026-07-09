@@ -13,6 +13,12 @@ interface HabitsContextValue {
 
 const HabitsContext = createContext<HabitsContextValue | null>(null);
 
+// Monday-start weekday index for "today" (0=Mon .. 6=Sun), matching the
+// server's computeWeek() ordering.
+function todayIndex(): number {
+  return (new Date().getDay() + 6) % 7;
+}
+
 export function HabitsProvider({ children }: { children: ReactNode }) {
   const [habits, setHabits] = useState<Habit[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,7 +45,15 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
     const tempId = `temp-${Date.now()}`;
     setHabits((prev) => [
       ...prev,
-      { ...input, id: tempId, streak: 0, week: [false, false, false, false, false, false, false] },
+      {
+        ...input,
+        id: tempId,
+        createdAt: new Date().toISOString(),
+        completedDates: [],
+        streak: 0,
+        week: [false, false, false, false, false, false, false],
+        doneToday: false,
+      },
     ]);
     try {
       const created = await habitService.create(input);
@@ -55,13 +69,15 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
     setHabits((prev) =>
       prev.map((h) => {
         if (h.id !== id) return h;
+        const doneToday = !h.doneToday;
         const week = [...h.week];
-        week[1] = !week[1];
-        return { ...h, week };
+        week[todayIndex()] = doneToday;
+        return { ...h, week, doneToday, streak: Math.max(0, h.streak + (doneToday ? 1 : -1)) };
       })
     );
     try {
-      await habitService.toggleToday(id);
+      const updated = await habitService.toggleToday(id);
+      setHabits((prev) => prev.map((h) => (h.id === id ? updated : h)));
     } catch (err) {
       setHabits(prevHabits);
       console.error('[HabitsProvider] failed to toggle habit', err);

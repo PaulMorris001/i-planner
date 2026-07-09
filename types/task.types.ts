@@ -8,6 +8,7 @@ export interface Task {
   day: number;
   hour: number;
   time: string;
+  dueDate: string;
   done: boolean;
   recurring: boolean;
   notes: string;

@@ -10,9 +10,10 @@ import { Routes } from '@/constants/routes';
 import { usePlan } from '@/hooks/usePlan';
 import { useOnboarding } from '@/hooks/useOnboarding';
 import { useHabits } from '@/hooks/useHabits';
+import { useTasks } from '@/hooks/useTasks';
 import { TaskCategories } from '@/constants/taskMeta';
 
-const TODAY_IDX = 1;
+const TODAY_SHORT = 'Tue'; // matches student-plan.tsx's day-chip convention and the app's fixed demo "today"
 
 type PathKey = 'student' | 'exam' | 'professional';
 
@@ -28,31 +29,59 @@ const AI_TIP: Record<PathKey, string> = {
   professional: 'Your first action is due in 2 days. Want a reminder?',
 };
 
-const STUDENT_TODAY_TASK = { title: 'Corporate Finance — Case Memo 1', meta: '90 min' };
-
-const STUDENT_UPCOMING = [
-  { title: 'Case Memo 1 — WACC', date: 'Sep 12', dotColor: Colors.primaryLight },
-  { title: 'Midterm Exam', date: 'Oct 3', dotColor: Colors.error },
-];
-
 const EXAM_WEEK_TASKS: { title: string; status: 'done' | 'active' | 'todo'; meta?: string }[] = [
   { title: 'Mutual fund structures', status: 'done' },
   { title: 'ETFs & closed-end funds', status: 'active', meta: 'Today · 2h' },
   { title: 'UITs & annuities', status: 'todo' },
 ];
 
+function formatShortDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
 export default function Dashboard() {
   const router = useRouter();
-  const { professionalPlan } = usePlan();
+  const { professionalPlan, plan, examPlan } = usePlan();
   const { focusProfile } = useOnboarding();
   const { habits } = useHabits();
+  const { tasks } = useTasks();
   const careerGoal = professionalPlan.careerGoals[0];
   const financialGoal = professionalPlan.financialGoals[0];
-  const habitsDoneToday = habits.filter((h) => h.week[TODAY_IDX]).length;
+  const habitsDoneToday = habits.filter((h) => h.doneToday).length;
 
   const [studentTaskDone, setStudentTaskDone] = useState(false);
 
   const pathKey = toPathKey(focusProfile);
+
+  // Today's class, matched against the app's fixed demo "today" (Tuesday) —
+  // same convention student-plan.tsx's day chips and Planner already use.
+  const todayClass = plan.classes.find((c) => c.days.includes(TODAY_SHORT));
+
+  // Nearest dated items from onboarding (recruitment tasks + "other" items
+  // that were given a date) plus real tasks with a due date, soonest-first
+  // and excluding anything already past or done — this feeds both the "Up
+  // next" stat card and the UPCOMING list below.
+  const studentUpcoming = [
+    ...plan.recruitment.map((r) => ({
+      title: `${r.company} — ${r.taskType}`,
+      date: r.date,
+      dotColor: Colors.primaryLight,
+    })),
+    ...plan.other
+      .filter((o) => !!o.date)
+      .map((o) => ({ title: o.title, date: o.date, dotColor: Colors.warning })),
+    ...tasks
+      .filter((t) => !!t.dueDate && !t.done)
+      .map((t) => ({ title: t.title, date: t.dueDate, dotColor: TaskCategories[t.category].color })),
+  ]
+    .filter((item) => new Date(item.date).getTime() >= Date.now())
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    .slice(0, 3);
+
+  const primaryExam = examPlan.exams[0];
+  const examDaysToGo = primaryExam
+    ? Math.max(0, Math.ceil((new Date(primaryExam.examDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+    : 0;
 
   return (
     <ScreenWrapper backgroundColor={Colors.offWhite} scroll style={styles.scrollContent}>
@@ -72,10 +101,16 @@ export default function Dashboard() {
               </View>
               <View style={styles.statCard}>
                 <Text style={styles.statLabel}>Up next</Text>
-                <Text style={styles.statNextTitle} numberOfLines={1}>
-                  {STUDENT_UPCOMING[0].title}
-                </Text>
-                <Text style={styles.statNextDate}>{STUDENT_UPCOMING[0].date}</Text>
+                {studentUpcoming.length > 0 ? (
+                  <>
+                    <Text style={styles.statNextTitle} numberOfLines={1}>
+                      {studentUpcoming[0].title}
+                    </Text>
+                    <Text style={styles.statNextDate}>{formatShortDate(studentUpcoming[0].date)}</Text>
+                  </>
+                ) : (
+                  <Text style={styles.statNextTitle}>Nothing scheduled</Text>
+                )}
               </View>
             </View>
 
@@ -83,29 +118,35 @@ export default function Dashboard() {
             <View style={styles.card}>
               <View style={styles.rowBetween}>
                 <Text style={styles.todayTitle}>Today</Text>
-                <Text style={styles.todayProgress}>{studentTaskDone ? '1 of 1 done' : '0 of 1 done'}</Text>
+                {todayClass && (
+                  <Text style={styles.todayProgress}>{studentTaskDone ? '1 of 1 done' : '0 of 1 done'}</Text>
+                )}
               </View>
-              <Pressable style={styles.todayTaskRow} onPress={() => setStudentTaskDone((d) => !d)}>
-                <View
-                  style={[
-                    styles.checkbox,
-                    studentTaskDone
-                      ? { backgroundColor: Colors.primaryLight }
-                      : { borderWidth: 1.5, borderColor: Colors.border },
-                  ]}
-                >
-                  {studentTaskDone && <IconSymbol name="checkmark" color={Colors.white} size={13} />}
-                </View>
-                <Text
-                  style={[
-                    styles.todayTaskTitle,
-                    studentTaskDone && { color: Colors.textMuted, textDecorationLine: 'line-through' },
-                  ]}
-                >
-                  {STUDENT_TODAY_TASK.title}
-                </Text>
-                <Text style={styles.todayTaskMeta}>{STUDENT_TODAY_TASK.meta}</Text>
-              </Pressable>
+              {todayClass ? (
+                <Pressable style={styles.todayTaskRow} onPress={() => setStudentTaskDone((d) => !d)}>
+                  <View
+                    style={[
+                      styles.checkbox,
+                      studentTaskDone
+                        ? { backgroundColor: Colors.primaryLight }
+                        : { borderWidth: 1.5, borderColor: Colors.border },
+                    ]}
+                  >
+                    {studentTaskDone && <IconSymbol name="checkmark" color={Colors.white} size={13} />}
+                  </View>
+                  <Text
+                    style={[
+                      styles.todayTaskTitle,
+                      studentTaskDone && { color: Colors.textMuted, textDecorationLine: 'line-through' },
+                    ]}
+                  >
+                    {todayClass.courseName}
+                  </Text>
+                  <Text style={styles.todayTaskMeta}>{todayClass.time || 'All day'}</Text>
+                </Pressable>
+              ) : (
+                <Text style={[styles.noClassText, { marginTop: 10 }]}>No classes scheduled today.</Text>
+              )}
             </View>
 
             {/* This week's goal */}
@@ -120,35 +161,21 @@ export default function Dashboard() {
               </View>
             </View>
 
-            {/* Savings goal */}
-            <View style={styles.card}>
-              <View style={styles.rowBetween}>
-                <Text style={styles.todayTitle}>Savings goal</Text>
-                <Text style={styles.pill}>COMING IN PHASE 1B</Text>
-              </View>
-              <View style={styles.placeholderRow}>
-                <View style={styles.dashedIconBox}>
-                  <IconSymbol name="plus" color={Colors.textMuted} size={19} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.placeholderTitle}>Set a savings goal</Text>
-                  <Text style={styles.placeholderSub}>
-                    Track money goals alongside your studies — arriving in Phase 1B.
-                  </Text>
-                </View>
-              </View>
-            </View>
-
             {/* Upcoming */}
             <View style={{ gap: 9 }}>
               <Text style={styles.eyebrowMuted}>UPCOMING</Text>
-              {STUDENT_UPCOMING.map((item) => (
-                <View key={item.title} style={styles.upcomingRow}>
+              {studentUpcoming.length === 0 && (
+                <Text style={styles.noClassText}>
+                  Nothing coming up — add recruitment tasks or other items from onboarding.
+                </Text>
+              )}
+              {studentUpcoming.map((item) => (
+                <View key={`${item.title}-${item.date}`} style={styles.upcomingRow}>
                   <View style={[styles.upcomingDot, { backgroundColor: item.dotColor }]} />
                   <Text style={styles.upcomingTitle} numberOfLines={1}>
                     {item.title}
                   </Text>
-                  <Text style={styles.upcomingDate}>{item.date}</Text>
+                  <Text style={styles.upcomingDate}>{formatShortDate(item.date)}</Text>
                 </View>
               ))}
             </View>
@@ -156,26 +183,45 @@ export default function Dashboard() {
         ) : pathKey === 'exam' ? (
           <>
             {/* Countdown hero */}
-            <LinearGradient
-              colors={['#8B3FD1', '#5A2A99']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.heroCard}
-            >
-              <Text style={styles.heroLabel}>SIE Exam · Nov 22</Text>
-              <View style={styles.heroValueRow}>
-                <Text style={styles.heroValue}>70</Text>
-                <Text style={styles.heroUnit}>days to go</Text>
+            {primaryExam ? (
+              <LinearGradient
+                colors={['#8B3FD1', '#5A2A99']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.heroCard}
+              >
+                <Text style={styles.heroLabel}>
+                  {primaryExam.name} · {formatShortDate(primaryExam.examDate)}
+                </Text>
+                <View style={styles.heroValueRow}>
+                  <Text style={styles.heroValue}>{examDaysToGo}</Text>
+                  <Text style={styles.heroUnit}>days to go</Text>
+                </View>
+                <View style={styles.heroProgressTrack}>
+                  <View style={[styles.heroProgressFill, { width: '30%' }]} />
+                </View>
+                <Text style={styles.heroSub}>3 of 10 topics complete</Text>
+                <Pressable style={styles.heroButton} onPress={() => router.push(Routes.CERT_TRACKER)}>
+                  <Text style={styles.heroButtonText}>Track my progress</Text>
+                  <IconSymbol name="chevron.right" color={Colors.white} size={16} />
+                </Pressable>
+              </LinearGradient>
+            ) : (
+              <View style={styles.card}>
+                <Text style={styles.eyebrowMuted}>EXAM COUNTDOWN</Text>
+                <View style={styles.placeholderRow}>
+                  <View style={styles.dashedIconBox}>
+                    <IconSymbol name="plus" color={Colors.textMuted} size={19} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.placeholderTitle}>No exam added yet</Text>
+                    <Text style={styles.placeholderSub}>
+                      Add one from onboarding to see your countdown here.
+                    </Text>
+                  </View>
+                </View>
               </View>
-              <View style={styles.heroProgressTrack}>
-                <View style={[styles.heroProgressFill, { width: '30%' }]} />
-              </View>
-              <Text style={styles.heroSub}>3 of 10 topics complete</Text>
-              <Pressable style={styles.heroButton} onPress={() => router.push(Routes.CERT_TRACKER)}>
-                <Text style={styles.heroButtonText}>Track my progress</Text>
-                <IconSymbol name="chevron.right" color={Colors.white} size={16} />
-              </Pressable>
-            </LinearGradient>
+            )}
 
             {/* This week */}
             <View style={styles.card}>
@@ -230,24 +276,6 @@ export default function Dashboard() {
               </View>
             </View>
 
-            {/* Savings goal */}
-            <View style={styles.card}>
-              <View style={styles.rowBetween}>
-                <Text style={styles.todayTitle}>Savings goal</Text>
-                <Text style={styles.pill}>COMING IN PHASE 1B</Text>
-              </View>
-              <View style={styles.placeholderRow}>
-                <View style={styles.dashedIconBox}>
-                  <IconSymbol name="plus" color={Colors.textMuted} size={19} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.placeholderTitle}>Set a savings goal</Text>
-                  <Text style={styles.placeholderSub}>
-                    Budget for exam & prep-course fees — arriving in Phase 1B.
-                  </Text>
-                </View>
-              </View>
-            </View>
           </>
         ) : (
           <>
@@ -442,20 +470,6 @@ const styles = StyleSheet.create({
     marginTop: 1,
     lineHeight: 17,
   },
-  pill: {
-    fontSize: 10.5,
-    fontWeight: '700',
-    color: Colors.textMuted,
-    backgroundColor: Colors.offWhite,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    paddingVertical: 4,
-    paddingHorizontal: 9,
-    borderRadius: 999,
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
-    overflow: 'hidden',
-  },
   statsRow: {
     flexDirection: 'row',
     gap: 11,
@@ -641,6 +655,11 @@ const styles = StyleSheet.create({
   todayTaskMeta: {
     fontSize: 12,
     color: Colors.textMuted,
+  },
+  noClassText: {
+    fontSize: 13,
+    color: Colors.textMuted,
+    lineHeight: 18,
   },
   weekGoalTitle: {
     fontSize: 15,

@@ -8,18 +8,26 @@ interface GreetingHeaderProps {
   avatarInitial?: string;
 }
 
-export function GreetingHeader({ greeting = 'Good morning,', name, avatarInitial }: GreetingHeaderProps) {
+function getTimeBasedGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good morning,';
+  if (hour < 17) return 'Good afternoon,';
+  return 'Good evening,';
+}
+
+export function GreetingHeader({ greeting, name, avatarInitial }: GreetingHeaderProps) {
   const { user } = useAuth();
   const firstName = user?.fullName?.trim().split(/\s+/)[0];
   const initial = user?.fullName?.trim().charAt(0).toUpperCase();
 
+  const displayGreeting = greeting ?? getTimeBasedGreeting();
   const displayName = name ?? firstName ?? 'Jordan';
   const displayInitial = avatarInitial ?? initial ?? 'J';
 
   return (
     <View style={styles.header}>
       <View style={{ flexShrink: 1 }}>
-        <Text style={styles.greeting}>{greeting}</Text>
+        <Text style={styles.greeting}>{displayGreeting}</Text>
         <Text style={styles.name}>{displayName}</Text>
       </View>
       <View style={styles.avatar}>

@@ -8,6 +8,7 @@ export interface TaskDocument extends Document {
   day: number;
   hour: number;
   time: string;
+  dueDate: string;
   done: boolean;
   recurring: boolean;
   notes: string;
@@ -24,6 +25,7 @@ const taskSchema = new Schema<TaskDocument>({
   day: { type: Number, required: true },
   hour: { type: Number, required: true },
   time: { type: String, default: '' },
+  dueDate: { type: String, default: '' },
   done: { type: Boolean, default: false },
   recurring: { type: Boolean, default: false },
   notes: { type: String, default: '' },
@@ -38,6 +40,7 @@ export function toPublicTask(doc: TaskDocument) {
     day: doc.day,
     hour: doc.hour,
     time: doc.time,
+    dueDate: doc.dueDate,
     done: doc.done,
     recurring: doc.recurring,
     notes: doc.notes,

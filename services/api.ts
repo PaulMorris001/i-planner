@@ -1,4 +1,11 @@
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://api.i-planner.app';
+// EXPO_PUBLIC_API_URL, if set, always wins (useful for pointing a dev build at
+// staging/production, or production at a different host). Otherwise this falls
+// back automatically based on __DEV__: localhost while running via `expo start`,
+// the deployed Render backend in a production build.
+const DEV_API_URL = 'http://localhost:4000/api';
+const PRODUCTION_API_URL = 'https://i-planner.onrender.com/api';
+
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? (__DEV__ ? DEV_API_URL : PRODUCTION_API_URL);
 
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';

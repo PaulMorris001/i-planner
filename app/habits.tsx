@@ -8,9 +8,16 @@ import { TaskCategories, TaskCategoryId } from '@/constants/taskMeta';
 import { useHabits } from '@/hooks/useHabits';
 
 const DAY_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-const TODAY_IDX = 1;
 
 const CATEGORY_ORDER: TaskCategoryId[] = ['academic', 'career', 'personal', 'financial', 'exam', 'habit', 'other'];
+
+function mondayOfCurrentWeek(): Date {
+  const d = new Date();
+  const daysSinceMonday = (d.getDay() + 6) % 7;
+  d.setDate(d.getDate() - daysSinceMonday);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
 
 export default function Habits() {
   const router = useRouter();
@@ -21,8 +28,9 @@ export default function Habits() {
   const [habitCategory, setHabitCategory] = useState<TaskCategoryId>('academic');
   const [submitting, setSubmitting] = useState(false);
 
-  const doneToday = habits.filter((h) => h.week[TODAY_IDX]).length;
+  const doneToday = habits.filter((h) => h.doneToday).length;
   const canSave = habitName.trim().length > 0 && !submitting;
+  const monday = mondayOfCurrentWeek();
 
   const openSheet = () => {
     setHabitName('');
@@ -58,7 +66,9 @@ export default function Habits() {
       <View style={styles.list}>
         {habits.map((habit) => {
           const category = TaskCategories[habit.category];
-          const done = habit.week[TODAY_IDX];
+          const done = habit.doneToday;
+          const createdDate = new Date(habit.createdAt);
+          createdDate.setHours(0, 0, 0, 0);
           return (
             <View key={habit.id} style={styles.card}>
               <View style={styles.cardHeaderRow}>
@@ -87,19 +97,28 @@ export default function Habits() {
               </View>
 
               <View style={styles.weekRow}>
-                {habit.week.map((on, i) => (
-                  <View key={i} style={styles.weekCell}>
-                    <View
-                      style={[
-                        styles.weekBox,
-                        { backgroundColor: on ? category.color : Colors.border },
-                      ]}
-                    >
-                      {on && <IconSymbol name="checkmark" color={Colors.white} size={14} />}
+                {habit.week.map((on, i) => {
+                  const cellDate = new Date(monday);
+                  cellDate.setDate(monday.getDate() + i);
+                  const beforeCreation = cellDate < createdDate;
+                  return (
+                    <View key={i} style={styles.weekCell}>
+                      <View
+                        style={[
+                          styles.weekBox,
+                          beforeCreation
+                            ? styles.weekBoxDisabled
+                            : { backgroundColor: on ? category.color : Colors.border },
+                        ]}
+                      >
+                        {on && !beforeCreation && (
+                          <IconSymbol name="checkmark" color={Colors.white} size={14} />
+                        )}
+                      </View>
+                      <Text style={styles.weekLetter}>{DAY_LETTERS[i]}</Text>
                     </View>
-                    <Text style={styles.weekLetter}>{DAY_LETTERS[i]}</Text>
-                  </View>
-                ))}
+                  );
+                })}
               </View>
             </View>
           );
@@ -249,6 +268,12 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  weekBoxDisabled: {
+    backgroundColor: Colors.offWhite,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: Colors.border,
   },
   weekLetter: {
     fontSize: 10.5,

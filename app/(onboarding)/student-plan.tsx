@@ -56,6 +56,12 @@ function formatDate(date: Date): string {
   });
 }
 
+function formatTime(date: Date): string {
+  return date.toLocaleTimeString('en-US', {
+    hour: 'numeric', minute: '2-digit',
+  });
+}
+
 // ── Component ──────────────────────────────────────────────────────────────
 export default function StudentPlan() {
   const insets = useSafeAreaInsets();
@@ -76,7 +82,8 @@ export default function StudentPlan() {
   // ── Class form state ──
   const [className, setClassName]   = useState('');
   const [classDays, setClassDays]   = useState<string[]>([]);
-  const [classTime, setClassTime]   = useState('');
+  const [classTime, setClassTime]   = useState<Date | null>(null);
+  const [showClassTimePicker, setShowClassTimePicker] = useState(false);
 
   // ── Recruitment form state ──
   const [recType, setRecType]       = useState<RecruitmentItem['taskType']>('Apply');
@@ -120,12 +127,12 @@ export default function StudentPlan() {
       id:         Date.now().toString(),
       courseName: className.trim(),
       days:       classDays,
-      time:       classTime.trim(),
+      time:       classTime ? formatTime(classTime) : '',
     };
     setPlan(prev => ({ ...prev, classes: [...prev.classes, item] }));
     setClassName('');
     setClassDays([]);
-    setClassTime('');
+    setClassTime(null);
   };
 
   const addRecruitment = () => {
@@ -331,14 +338,36 @@ export default function StudentPlan() {
                         </View>
                       </View>
                       <View style={styles.fieldGroup}>
-                        <Text style={styles.fieldLabel}>Time (optional)</Text>
-                        <TextInput
-                          style={styles.input}
-                          placeholder="e.g. 9:00 AM"
-                          placeholderTextColor={Colors.textMuted}
-                          value={classTime}
-                          onChangeText={setClassTime}
-                        />
+                        <View style={styles.fieldLabelRow}>
+                          <Text style={styles.fieldLabel}>Time (optional)</Text>
+                          {classTime && (
+                            <TouchableOpacity onPress={() => setClassTime(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                              <Text style={styles.clearLabel}>Clear</Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                        <TouchableOpacity
+                          style={styles.datePicker}
+                          onPress={() => setShowClassTimePicker(true)}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={styles.datePickerIcon}>🕐</Text>
+                          <Text style={[styles.datePickerText, !classTime && styles.datePickerPlaceholder]}>
+                            {classTime ? formatTime(classTime) : 'Select time'}
+                          </Text>
+                        </TouchableOpacity>
+                        {showClassTimePicker && (
+                          <DateTimePicker
+                            value={classTime ?? new Date()}
+                            mode="time"
+                            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                            themeVariant="light"
+                            onChange={(_, date) => {
+                              if (Platform.OS === 'android') setShowClassTimePicker(false);
+                              if (date) setClassTime(date);
+                            }}
+                          />
+                        )}
                       </View>
                       <TouchableOpacity
                         style={[styles.addBtn, { borderColor: '#6366F1', backgroundColor: '#EEF2FF' }]}
@@ -731,6 +760,8 @@ const styles = StyleSheet.create({
   formDivider: { height: 1, backgroundColor: Colors.border },
   fieldGroup:  { gap: 6 },
   fieldLabel:  { ...Typography.label, color: Colors.textSecondary },
+  fieldLabelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  clearLabel:  { ...Typography.label, color: Colors.primary, fontWeight: '600' },
   input: {
     height: 48, borderRadius: Radius.md, borderWidth: 1,
     borderColor: Colors.border, paddingHorizontal: Spacing.md,
@@ -755,6 +786,7 @@ const styles = StyleSheet.create({
   },
   datePickerIcon: { fontSize: 16 },
   datePickerText: { flex: 1, fontSize: 15, color: '#000000', fontWeight: '600' },
+  datePickerPlaceholder: { color: Colors.textMuted, fontWeight: '400' },
 
   toggleRow:        { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   toggle:           { width: 40, height: 22, borderRadius: 11, backgroundColor: Colors.border, justifyContent: 'center', paddingHorizontal: 2 },

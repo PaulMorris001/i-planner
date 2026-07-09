@@ -38,6 +38,8 @@ const MAPPING = {
   'chevron.left': 'chevron-left',
   'paperclip': 'attach-file',
   'doc.fill': 'insert-drive-file',
+  'eye': 'visibility',
+  'eye.slash': 'visibility-off',
 } as IconMapping;
 
 /**

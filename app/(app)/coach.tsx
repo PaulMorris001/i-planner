@@ -28,7 +28,7 @@ const EMPTY_STATE: Record<CoachModeId, { title: string; desc: string }> = {
 const SUGGESTIONS: Record<CoachModeId, string[]> = {
   study: ['Quiz me on Week 1 topics', 'Explain a concept simply', 'Summarize my last upload'],
   plan: ['Plan my day', 'What should I focus on?', 'Reschedule around my class'],
-  goal: ['Set a study goal this week', 'Set a savings goal', 'Break down my exam prep', 'Suggest a habit'],
+  goal: ['Set a study goal this week', 'Break down my exam prep', 'Suggest a habit'],
 };
 
 const AI_FREE_LIMIT = 5;

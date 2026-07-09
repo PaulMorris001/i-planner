@@ -10,7 +10,7 @@ export async function listTasks(req: AuthedRequest, res: Response) {
 }
 
 export async function createTask(req: AuthedRequest, res: Response) {
-  const { title, category, priority, day, hour, time, recurring, notes } = req.body ?? {};
+  const { title, category, priority, day, hour, time, dueDate, recurring, notes } = req.body ?? {};
 
   if (!title || typeof title !== 'string' || !title.trim()) {
     throw new ApiError(400, 'Title is required.', 'general');
@@ -27,6 +27,7 @@ export async function createTask(req: AuthedRequest, res: Response) {
     day: Number(day) || 0,
     hour: Number(hour) || 0,
     time: time ?? '',
+    dueDate: dueDate ?? '',
     recurring: !!recurring,
     notes: notes ?? '',
   });
@@ -37,13 +38,14 @@ export async function createTask(req: AuthedRequest, res: Response) {
 export async function updateTask(req: AuthedRequest, res: Response) {
   const task = await findOwnedOrThrow(Task, req.params.id, req.userId!);
 
-  const { title, category, priority, day, hour, time, done, recurring, notes } = req.body ?? {};
+  const { title, category, priority, day, hour, time, dueDate, done, recurring, notes } = req.body ?? {};
   if (title !== undefined) task.title = title;
   if (category !== undefined) task.category = category;
   if (priority !== undefined) task.priority = priority;
   if (day !== undefined) task.day = Number(day);
   if (hour !== undefined) task.hour = Number(hour);
   if (time !== undefined) task.time = time;
+  if (dueDate !== undefined) task.dueDate = dueDate;
   if (done !== undefined) task.done = !!done;
   if (recurring !== undefined) task.recurring = !!recurring;
   if (notes !== undefined) task.notes = notes;
