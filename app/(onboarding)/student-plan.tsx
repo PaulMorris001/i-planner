@@ -207,9 +207,16 @@ export default function StudentPlan() {
 
   const handleContinue = async () => {
     setLoading(true);
-    await savePlan(plan);
-    await completeOnboarding();
-    router.replace(Routes.DASHBOARD);
+    try {
+      await savePlan(plan);
+      await completeOnboarding();
+      router.replace(Routes.DASHBOARD);
+    } catch (err) {
+      console.error('[StudentPlan] failed to save plan', err);
+      Alert.alert("Couldn't save your plan", 'Check your connection and try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const totalItems =

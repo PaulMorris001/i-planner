@@ -110,10 +110,20 @@ export default function ExamPlan() {
       return;
     }
     setLoading(true);
-    const planToSave: ExamPlanType = { exams };
-    await saveExamPlan(planToSave);
-    await completeOnboarding();
-    router.replace(Routes.DASHBOARD);
+    try {
+      const planToSave: ExamPlanType = { exams };
+      await saveExamPlan(planToSave);
+      await completeOnboarding();
+      router.replace(Routes.DASHBOARD);
+    } catch (err) {
+      console.error("[ExamPlan] failed to save plan", err);
+      Alert.alert(
+        "Couldn't save your exams",
+        "Check your connection and try again.",
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

@@ -9,7 +9,9 @@ import { TaskCategories, TaskCategoryId, TaskPriorities, TaskPriorityId } from '
 
 const CATEGORY_ORDER: TaskCategoryId[] = ['academic', 'career', 'personal', 'financial', 'exam', 'habit', 'other'];
 const PRIORITY_ORDER: TaskPriorityId[] = ['high', 'medium', 'low'];
-const DAY_LABELS = ['Mon', 'Today', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+// Planner's day-of-week grouping, derived from the due date when one is set
+// rather than asked for separately (Monday-start, matching Planner's grid).
+// Falls back to Planner's fixed "today" column when no due date is picked.
 const DEFAULT_DAY_INDEX = 1;
 
 function formatTime(date: Date): string {
@@ -20,6 +22,10 @@ function formatDate(date: Date): string {
   return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+function weekdayIndexMonday(date: Date): number {
+  return (date.getDay() + 6) % 7;
+}
+
 export function NewTaskModal() {
   const { isOpen, close } = useNewTaskModal();
   const { createTask } = useTasks();
@@ -27,7 +33,6 @@ export function NewTaskModal() {
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState<TaskCategoryId>('academic');
   const [priority, setPriority] = useState<TaskPriorityId>('medium');
-  const [dayIndex, setDayIndex] = useState(DEFAULT_DAY_INDEX);
   const [dueTime, setDueTime] = useState<Date | null>(null);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [dueDate, setDueDate] = useState<Date | null>(null);
@@ -42,7 +47,6 @@ export function NewTaskModal() {
     setTitle('');
     setCategory('academic');
     setPriority('medium');
-    setDayIndex(DEFAULT_DAY_INDEX);
     setDueTime(null);
     setDueDate(null);
     setRecurring(false);
@@ -62,7 +66,7 @@ export function NewTaskModal() {
         title: title.trim(),
         category,
         priority,
-        day: dayIndex,
+        day: dueDate ? weekdayIndexMonday(dueDate) : DEFAULT_DAY_INDEX,
         hour: dueTime ? dueTime.getHours() : 23,
         time: dueTime ? formatTime(dueTime) : '',
         dueDate: dueDate ? dueDate.toISOString() : '',
@@ -136,27 +140,6 @@ export function NewTaskModal() {
                 >
                   <Text style={[styles.priorityChipText, { color: on ? Colors.white : Colors.textSecondary }]}>
                     {p.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-
-          <Text style={styles.eyebrow}>Due day</Text>
-          <View style={styles.chipWrap}>
-            {DAY_LABELS.map((label, i) => {
-              const on = dayIndex === i;
-              return (
-                <Pressable
-                  key={label}
-                  style={[
-                    styles.dayChip,
-                    { backgroundColor: on ? Colors.primaryLight : Colors.white, borderColor: on ? Colors.primaryLight : Colors.border },
-                  ]}
-                  onPress={() => setDayIndex(i)}
-                >
-                  <Text style={[styles.dayChipText, { color: on ? Colors.white : Colors.textSecondary }]}>
-                    {label}
                   </Text>
                 </Pressable>
               );
@@ -387,16 +370,6 @@ const styles = StyleSheet.create({
   },
   priorityChipText: {
     fontSize: 13,
-    fontWeight: '700',
-  },
-  dayChip: {
-    borderWidth: 1.5,
-    borderRadius: 999,
-    paddingVertical: 8,
-    paddingHorizontal: 11,
-  },
-  dayChipText: {
-    fontSize: 12.5,
     fontWeight: '700',
   },
   repeatRow: {

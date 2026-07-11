@@ -144,9 +144,16 @@ export default function ProfessionalPlan() {
   // ── Continue ──
   const handleContinue = async () => {
     setLoading(true);
-    await saveProfessionalPlan(plan);
-    await completeOnboarding();
-    router.replace(Routes.DASHBOARD);
+    try {
+      await saveProfessionalPlan(plan);
+      await completeOnboarding();
+      router.replace(Routes.DASHBOARD);
+    } catch (err) {
+      console.error('[ProfessionalPlan] failed to save plan', err);
+      Alert.alert("Couldn't save your plan", 'Check your connection and try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const totalItems =
