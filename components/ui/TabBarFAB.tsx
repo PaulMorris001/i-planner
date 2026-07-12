@@ -14,16 +14,15 @@ export function TabBarFAB({ accessibilityState }: BottomTabBarButtonProps) {
       style={styles.button}
       hitSlop={12}
     >
-      <IconSymbol name="plus" color={Colors.white} size={28} />
+      <IconSymbol name="plus" color={Colors.white} size={24} />
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   button: {
-    top: -20,
-    width: 56,
-    height: 56,
+    width: 44,
+    height: 44,
     borderRadius: Radius.lg,
     backgroundColor: Colors.primaryLight,
     alignItems: 'center',

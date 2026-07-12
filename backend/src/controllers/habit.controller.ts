@@ -1,8 +1,10 @@
 import { Response } from 'express';
-import { Habit, toPublicHabit, toDateKey } from '../models/Habit';
+import { Habit, toPublicHabit, toDateKey, HabitFrequency } from '../models/Habit';
 import { AuthedRequest } from '../middleware/requireAuth';
 import { ApiError } from '../utils/ApiError';
 import { findOwnedOrThrow } from '../utils/ownedDoc';
+
+const VALID_FREQS: HabitFrequency[] = ['daily', 'weekdays', 'weekly', 'monthly'];
 
 export async function listHabits(req: AuthedRequest, res: Response) {
   const habits = await Habit.find({ firebaseUid: req.userId });
@@ -10,7 +12,7 @@ export async function listHabits(req: AuthedRequest, res: Response) {
 }
 
 export async function createHabit(req: AuthedRequest, res: Response) {
-  const { name, category } = req.body ?? {};
+  const { name, category, freq } = req.body ?? {};
 
   if (!name || typeof name !== 'string' || !name.trim()) {
     throw new ApiError(400, 'Name is required.', 'general');
@@ -23,6 +25,7 @@ export async function createHabit(req: AuthedRequest, res: Response) {
     firebaseUid: req.userId,
     name: name.trim(),
     category,
+    freq: VALID_FREQS.includes(freq) ? freq : 'daily',
     completedDates: [],
   });
 

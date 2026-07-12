@@ -3,6 +3,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '@/config/firebase';
 import { habitService } from '@/services/habit.service';
 import type { Habit, NewHabitInput } from '@/types/habit.types';
+import { weekdayIndexMonday } from '@/utils/date';
 
 interface HabitsContextValue {
   habits: Habit[];
@@ -12,12 +13,6 @@ interface HabitsContextValue {
 }
 
 const HabitsContext = createContext<HabitsContextValue | null>(null);
-
-// Monday-start weekday index for "today" (0=Mon .. 6=Sun), matching the
-// server's computeWeek() ordering.
-function todayIndex(): number {
-  return (new Date().getDay() + 6) % 7;
-}
 
 export function HabitsProvider({ children }: { children: ReactNode }) {
   const [habits, setHabits] = useState<Habit[]>([]);
@@ -71,7 +66,7 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
         if (h.id !== id) return h;
         const doneToday = !h.doneToday;
         const week = [...h.week];
-        week[todayIndex()] = doneToday;
+        week[weekdayIndexMonday(new Date())] = doneToday;
         return { ...h, week, doneToday, streak: Math.max(0, h.streak + (doneToday ? 1 : -1)) };
       })
     );

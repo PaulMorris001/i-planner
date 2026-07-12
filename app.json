@@ -39,7 +39,13 @@
         }
       ],
       "expo-font",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Allow $(PRODUCT_NAME) to access your calendar so it can plan around your schedule."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

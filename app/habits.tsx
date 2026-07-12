@@ -6,10 +6,32 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors, Spacing } from '@/constants/theme';
 import { TaskCategories, TaskCategoryId } from '@/constants/taskMeta';
 import { useHabits } from '@/hooks/useHabits';
+import type { HabitFrequency } from '@/types/habit.types';
 
 const DAY_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
 const CATEGORY_ORDER: TaskCategoryId[] = ['academic', 'career', 'personal', 'financial', 'exam', 'habit', 'other'];
+
+const FREQ_OPTIONS: { id: HabitFrequency; label: string }[] = [
+  { id: 'daily', label: 'Every day' },
+  { id: 'weekdays', label: 'Weekdays' },
+  { id: 'weekly', label: 'Weekly' },
+  { id: 'monthly', label: 'Monthly' },
+];
+
+const FREQ_LABEL: Record<HabitFrequency, string> = {
+  daily: 'Every day',
+  weekdays: 'Weekdays',
+  weekly: 'Weekly',
+  monthly: 'Monthly',
+};
+
+const STREAK_UNIT: Record<HabitFrequency, string> = {
+  daily: 'day',
+  weekdays: 'day',
+  weekly: 'week',
+  monthly: 'month',
+};
 
 function mondayOfCurrentWeek(): Date {
   const d = new Date();
@@ -26,6 +48,7 @@ export default function Habits() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [habitName, setHabitName] = useState('');
   const [habitCategory, setHabitCategory] = useState<TaskCategoryId>('academic');
+  const [habitFreq, setHabitFreq] = useState<HabitFrequency>('daily');
   const [submitting, setSubmitting] = useState(false);
 
   const doneToday = habits.filter((h) => h.doneToday).length;
@@ -35,6 +58,7 @@ export default function Habits() {
   const openSheet = () => {
     setHabitName('');
     setHabitCategory('academic');
+    setHabitFreq('daily');
     setSheetOpen(true);
   };
 
@@ -42,7 +66,7 @@ export default function Habits() {
     if (!canSave) return;
     setSubmitting(true);
     try {
-      await createHabit({ name: habitName.trim(), category: habitCategory });
+      await createHabit({ name: habitName.trim(), category: habitCategory, freq: habitFreq });
       setSheetOpen(false);
     } catch (err) {
       console.error('[Habits] failed to create habit', err);
@@ -77,7 +101,7 @@ export default function Habits() {
                   <View style={styles.streakRow}>
                     <IconSymbol name="flame.fill" color={category.color} size={13} />
                     <Text style={[styles.streakText, { color: category.color }]}>
-                      {habit.streak} day streak
+                      {habit.streak} {STREAK_UNIT[habit.freq]}{habit.streak === 1 ? '' : 's'} streak · {FREQ_LABEL[habit.freq]}
                     </Text>
                   </View>
                 </View>
@@ -160,6 +184,27 @@ export default function Habits() {
                 >
                   <Text style={[styles.categoryChipText, { color: on ? Colors.white : Colors.textSecondary }]}>
                     {c.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <Text style={styles.sheetEyebrow}>Repeats</Text>
+          <View style={styles.chipWrap}>
+            {FREQ_OPTIONS.map((f) => {
+              const on = habitFreq === f.id;
+              return (
+                <Pressable
+                  key={f.id}
+                  style={[
+                    styles.categoryChip,
+                    { backgroundColor: on ? Colors.primary : Colors.white, borderColor: on ? Colors.primary : Colors.border },
+                  ]}
+                  onPress={() => setHabitFreq(f.id)}
+                >
+                  <Text style={[styles.categoryChipText, { color: on ? Colors.white : Colors.textSecondary }]}>
+                    {f.label}
                   </Text>
                 </Pressable>
               );

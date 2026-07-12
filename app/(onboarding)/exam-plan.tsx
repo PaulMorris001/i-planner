@@ -1,16 +1,13 @@
-/* eslint-disable react/no-unescaped-entities */
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  TextInput,
   ScrollView,
   Platform,
   Alert,
 } from "react-native";
 import { useState } from "react";
-import DateTimePicker from "@react-native-community/datetimepicker";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Button } from "@/components/ui/Button";
@@ -18,31 +15,15 @@ import { Colors, Spacing, Typography, Radius } from "@/constants/theme";
 import { Routes } from "@/constants/routes";
 import { usePlan } from "@/hooks/usePlan";
 import { useOnboarding } from "@/hooks/useOnboarding";
+import {
+  ExamSetupForm,
+  EXAM_NAME_PLACEHOLDER,
+  DEFAULT_EXAM_WEEKS,
+  DEFAULT_EXAM_HOURS,
+} from "@/components/plan/ExamSetupForm";
 import type { Exam, ExamPlan as ExamPlanType } from "@/types/plan.types";
 
 const MAX_EXAMS = 3;
-
-const HOUR_OPTIONS = [1, 2, 3, 4, 5, 6, 8, 10, 12, 14];
-
-function calcWeeksRemaining(isoDate: string): number {
-  const diff = new Date(isoDate).getTime() - Date.now();
-  return Math.max(1, Math.ceil(diff / (1000 * 60 * 60 * 24 * 7)));
-}
-
-function formatDate(date: Date): string {
-  return date.toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
-
-const EMPTY_FORM = {
-  name: "",
-  subject: "",
-  examDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 1 week from now
-  hoursPerWeek: 4,
-};
 
 export default function ExamPlan() {
   const insets = useSafeAreaInsets();
@@ -50,40 +31,33 @@ export default function ExamPlan() {
   const { completeOnboarding } = useOnboarding();
 
   const [exams, setExams] = useState<Exam[]>([]);
-  const [form, setForm] = useState(EMPTY_FORM);
-  const [showPicker, setShowPicker] = useState(false);
+  const [examName, setExamName] = useState("");
+  const [weeks, setWeeks] = useState(DEFAULT_EXAM_WEEKS);
+  const [hours, setHours] = useState(DEFAULT_EXAM_HOURS);
+  const [adding, setAdding] = useState(true);
   const [loading, setLoading] = useState(false);
-  const [adding, setAdding] = useState(true); // show form by default
 
   const PROGRESS = 0.66;
 
-  const weeksRemaining = calcWeeksRemaining(form.examDate.toISOString());
-  const totalHours = weeksRemaining * form.hoursPerWeek;
+  const resetDraft = () => {
+    setExamName("");
+    setWeeks(DEFAULT_EXAM_WEEKS);
+    setHours(DEFAULT_EXAM_HOURS);
+  };
 
   const handleAddExam = () => {
-    if (!form.name.trim()) {
-      Alert.alert("Exam name required", "Please enter a name for this exam.");
-      return;
-    }
-    if (!form.subject.trim()) {
-      Alert.alert(
-        "Subject required",
-        "Please enter the subject for this exam.",
-      );
-      return;
-    }
-
-    const newExam: Exam = {
+    const name = examName.trim() || EXAM_NAME_PLACEHOLDER;
+    const examDate = new Date(Date.now() + weeks * 7 * 24 * 60 * 60 * 1000).toISOString();
+    const exam: Exam = {
       id: Date.now().toString(),
-      name: form.name.trim(),
-      subject: form.subject.trim(),
-      examDate: form.examDate.toISOString(),
-      hoursPerWeek: form.hoursPerWeek,
-      weeksRemaining,
+      name,
+      subject: name,
+      examDate,
+      hoursPerWeek: hours,
+      weeksRemaining: weeks,
     };
-
-    setExams((prev) => [...prev, newExam]);
-    setForm(EMPTY_FORM);
+    setExams((prev) => [...prev, exam]);
+    resetDraft();
     setAdding(false);
   };
 
@@ -92,23 +66,6 @@ export default function ExamPlan() {
   };
 
   const handleContinue = async () => {
-    if (exams.length === 0) {
-      Alert.alert(
-        "No exams added",
-        "Add at least one exam to generate your revision plan, or skip to continue.",
-        [
-          {
-            text: "Skip",
-            onPress: async () => {
-              await completeOnboarding();
-              router.replace(Routes.DASHBOARD);
-            },
-          },
-          { text: "Add exam", style: "cancel" },
-        ],
-      );
-      return;
-    }
     setLoading(true);
     try {
       const planToSave: ExamPlanType = { exams };
@@ -117,13 +74,15 @@ export default function ExamPlan() {
       router.replace(Routes.DASHBOARD);
     } catch (err) {
       console.error("[ExamPlan] failed to save plan", err);
-      Alert.alert(
-        "Couldn't save your exams",
-        "Check your connection and try again.",
-      );
+      Alert.alert("Couldn't save your exams", "Check your connection and try again.");
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSkip = async () => {
+    await completeOnboarding();
+    router.replace(Routes.DASHBOARD);
   };
 
   return (
@@ -160,16 +119,18 @@ export default function ExamPlan() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Page heading */}
+        <View style={styles.pathBadge}>
+          <Text style={styles.pathBadgeText}>Exam Candidate path</Text>
+        </View>
+
         <View style={styles.pageHeader}>
-          <Text style={styles.title}>Set up your exams</Text>
+          <Text style={styles.title}>Set up your exam{exams.length > 1 ? "s" : ""}</Text>
           <Text style={styles.subtitle}>
-            Add up to {MAX_EXAMS} exams. We'll build a revision plan with topic
-            checklists and time estimates based on your schedule.
+            Tell us the basics. The AI builds a week-by-week plan around your real availability.
           </Text>
         </View>
 
-        {/* Added exams */}
+        {/* Already-added exams */}
         {exams.map((exam, index) => (
           <View key={exam.id} style={styles.examCard}>
             <View style={styles.examCardLeft}>
@@ -178,19 +139,13 @@ export default function ExamPlan() {
               </View>
               <View style={styles.examInfo}>
                 <Text style={styles.examName}>{exam.name}</Text>
-                <Text style={styles.examMeta}>
-                  {exam.subject} · {formatDate(new Date(exam.examDate))}
-                </Text>
                 <View style={styles.examTags}>
                   <View style={styles.tag}>
-                    <Text style={styles.tagText}>
-                      ⏱ {exam.hoursPerWeek}h/week
-                    </Text>
+                    <Text style={styles.tagText}>⏱ {exam.hoursPerWeek}h/week</Text>
                   </View>
                   <View style={styles.tag}>
                     <Text style={styles.tagText}>
-                      📅 {exam.weeksRemaining} week
-                      {exam.weeksRemaining > 1 ? "s" : ""} left
+                      📅 {exam.weeksRemaining} week{exam.weeksRemaining > 1 ? "s" : ""}
                     </Text>
                   </View>
                   <View style={[styles.tag, styles.tagGreen]}>
@@ -211,159 +166,39 @@ export default function ExamPlan() {
           </View>
         ))}
 
-        {/* Add exam form */}
-        {adding && exams.length < MAX_EXAMS && (
-          <View style={styles.formCard}>
-            <Text style={styles.formTitle}>
-              {exams.length === 0 ? "Add your first exam" : "Add another exam"}
-            </Text>
-
-            {/* Exam name */}
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Exam name</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. Final Year Economics"
-                placeholderTextColor={Colors.textMuted}
-                value={form.name}
-                onChangeText={(v) => setForm((f) => ({ ...f, name: v }))}
-              />
-            </View>
-
-            {/* Subject */}
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Subject</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. Macroeconomics"
-                placeholderTextColor={Colors.textMuted}
-                value={form.subject}
-                onChangeText={(v) => setForm((f) => ({ ...f, subject: v }))}
-              />
-            </View>
-
-            {/* Exam date */}
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Exam date</Text>
-              <TouchableOpacity
-                style={styles.datePicker}
-                onPress={() => setShowPicker(true)}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.datePickerIcon}>📅</Text>
-                <Text style={styles.datePickerText}>
-                  {formatDate(form.examDate)}
-                </Text>
-                <Text style={styles.datePickerBadge}>
-                  {weeksRemaining} week{weeksRemaining > 1 ? "s" : ""} away
-                </Text>
-              </TouchableOpacity>
-
-              {showPicker && (
-                <DateTimePicker
-                  value={form.examDate}
-                  mode="date"
-                  display={Platform.OS === "ios" ? "spinner" : "default"}
-                  minimumDate={new Date()}
-                  themeVariant="light"
-                  accentColor={Colors.primary}
-                  textColor="#000000"
-                  onChange={(_, date) => {
-                    if (Platform.OS === "android") setShowPicker(false);
-                    if (date) setForm((f) => ({ ...f, examDate: date }));
-                  }}
-                />
-              )}
-            </View>
-
-            {/* Hours per week */}
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>
-                Available study hours per week
-              </Text>
-              <View style={styles.hoursGrid}>
-                {HOUR_OPTIONS.map((h) => (
-                  <TouchableOpacity
-                    key={h}
-                    style={[
-                      styles.hourChip,
-                      form.hoursPerWeek === h && styles.hourChipActive,
-                    ]}
-                    onPress={() => setForm((f) => ({ ...f, hoursPerWeek: h }))}
-                    activeOpacity={0.7}
-                  >
-                    <Text
-                      style={[
-                        styles.hourChipText,
-                        form.hoursPerWeek === h && styles.hourChipTextActive,
-                      ]}
-                    >
-                      {h}h
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            {/* Study summary */}
-            <View style={styles.summaryBox}>
-              <Text style={styles.summaryText}>
-                📊 You have{" "}
-                <Text style={styles.summaryHighlight}>
-                  {weeksRemaining} week{weeksRemaining > 1 ? "s" : ""}
-                </Text>{" "}
-                and roughly{" "}
-                <Text style={styles.summaryHighlight}>
-                  {totalHours} total study hours
-                </Text>{" "}
-                before this exam. We'll build your revision checklist around
-                this.
-              </Text>
-            </View>
-
-            {/* Add button */}
-            <TouchableOpacity
-              style={styles.addExamBtn}
-              onPress={handleAddExam}
-              activeOpacity={0.85}
-            >
+        {/* Add-exam form */}
+        {adding && exams.length < MAX_EXAMS ? (
+          <>
+            <ExamSetupForm
+              examName={examName}
+              onExamNameChange={setExamName}
+              weeks={weeks}
+              hours={hours}
+              onWeeksChange={setWeeks}
+              onHoursChange={setHours}
+            />
+            <TouchableOpacity style={styles.addExamBtn} onPress={handleAddExam} activeOpacity={0.85}>
               <Text style={styles.addExamBtnText}>+ Add exam</Text>
             </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Add another */}
-        {!adding && exams.length < MAX_EXAMS && (
-          <TouchableOpacity
-            style={styles.addAnotherBtn}
-            onPress={() => setAdding(true)}
-            activeOpacity={0.7}
-          >
+          </>
+        ) : exams.length < MAX_EXAMS ? (
+          <TouchableOpacity style={styles.addAnotherBtn} onPress={() => setAdding(true)} activeOpacity={0.7}>
             <Text style={styles.addAnotherText}>+ Add another exam</Text>
           </TouchableOpacity>
-        )}
+        ) : null}
 
-        {/* Footer */}
         <View style={styles.footer}>
-          {exams.length === 0 ? (
-            <Text style={styles.skipHint}>
-              Add at least one exam to generate your revision plan.
-            </Text>
-          ) : (
+          {exams.length > 0 && (
             <Text style={styles.summaryHint}>
-              {exams.length} exam{exams.length > 1 ? "s" : ""} added ✓ — your
-              revision plan is ready to generate.
+              {exams.length} exam{exams.length > 1 ? "s" : ""} added ✓
             </Text>
           )}
           <Button
-            label="Continue to dashboard"
+            label="Generate my study plan"
             onPress={handleContinue}
             loading={loading}
           />
-          <TouchableOpacity
-            onPress={() => router.replace(Routes.DASHBOARD)}
-            activeOpacity={0.7}
-          >
+          <TouchableOpacity onPress={handleSkip} activeOpacity={0.7}>
             <Text style={styles.skipLink}>Skip for now</Text>
           </TouchableOpacity>
         </View>
@@ -440,6 +275,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.xl,
   },
+  pathBadge: {
+    alignSelf: "flex-start",
+    backgroundColor: "#F1E7FB",
+    borderRadius: Radius.full,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    marginBottom: Spacing.sm,
+  },
+  pathBadgeText: {
+    fontSize: 12.5,
+    fontWeight: "700",
+    color: "#8B3FD1",
+  },
   pageHeader: {
     marginBottom: Spacing.lg,
   },
@@ -493,10 +341,6 @@ const styles = StyleSheet.create({
     ...Typography.h3,
     color: Colors.textPrimary,
   },
-  examMeta: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
-  },
   examTags: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -528,116 +372,6 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
   },
 
-  // ── Form card ──
-  formCard: {
-    backgroundColor: Colors.white,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: Spacing.lg,
-    marginBottom: Spacing.md,
-    gap: Spacing.md,
-  },
-  formTitle: {
-    ...Typography.h3,
-    color: Colors.textPrimary,
-  },
-  fieldGroup: {
-    gap: 6,
-  },
-  fieldLabel: {
-    ...Typography.label,
-    color: Colors.textSecondary,
-  },
-  input: {
-    height: 48,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    paddingHorizontal: Spacing.md,
-    fontSize: 15,
-    color: Colors.textPrimary,
-    backgroundColor: Colors.offWhite,
-  },
-
-  // ── Date picker ──
-  datePicker: {
-    height: 48,
-    borderRadius: Radius.md,
-    borderWidth: 1.5,
-    borderColor: Colors.primary,
-    backgroundColor: Colors.white,
-    paddingHorizontal: Spacing.md,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-  },
-  datePickerIcon: {
-    fontSize: 16,
-  },
-  datePickerText: {
-    flex: 1,
-    fontSize: 15,
-    color: "#000000",
-    fontWeight: "600",
-  },
-  datePickerBadge: {
-    fontSize: 12,
-    color: Colors.primary,
-    fontWeight: "600",
-    backgroundColor: Colors.overlay,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: Radius.full,
-  },
-
-  // ── Hours grid ──
-  hoursGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  hourChip: {
-    width: 52,
-    height: 40,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: Colors.offWhite,
-  },
-  hourChipActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  hourChipText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: Colors.textSecondary,
-  },
-  hourChipTextActive: {
-    color: Colors.white,
-  },
-
-  // ── Summary box ──
-  summaryBox: {
-    backgroundColor: Colors.accentLight,
-    borderRadius: Radius.md,
-    padding: Spacing.md,
-    borderWidth: 1,
-    borderColor: "rgba(93, 202, 165, 0.25)",
-  },
-  summaryText: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
-    lineHeight: 20,
-  },
-  summaryHighlight: {
-    fontWeight: "700",
-    color: Colors.primary,
-  },
-
   // ── Add exam button ──
   addExamBtn: {
     height: 48,
@@ -645,6 +379,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     alignItems: "center",
     justifyContent: "center",
+    marginTop: Spacing.md,
   },
   addExamBtnText: {
     fontSize: 15,
@@ -673,11 +408,6 @@ const styles = StyleSheet.create({
   footer: {
     marginTop: Spacing.lg,
     gap: Spacing.sm,
-  },
-  skipHint: {
-    ...Typography.caption,
-    color: Colors.textMuted,
-    textAlign: "center",
   },
   summaryHint: {
     ...Typography.caption,

@@ -6,6 +6,7 @@ import { useTasks } from '@/hooks/useTasks';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors, Spacing } from '@/constants/theme';
 import { TaskCategories, TaskCategoryId, TaskPriorities, TaskPriorityId } from '@/constants/taskMeta';
+import { weekdayIndexMonday } from '@/utils/date';
 
 const CATEGORY_ORDER: TaskCategoryId[] = ['academic', 'career', 'personal', 'financial', 'exam', 'habit', 'other'];
 const PRIORITY_ORDER: TaskPriorityId[] = ['high', 'medium', 'low'];
@@ -20,10 +21,6 @@ function formatTime(date: Date): string {
 
 function formatDate(date: Date): string {
   return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-}
-
-function weekdayIndexMonday(date: Date): number {
-  return (date.getDay() + 6) % 7;
 }
 
 export function NewTaskModal() {

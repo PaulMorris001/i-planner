@@ -1,0 +1,181 @@
+import { useState } from 'react';
+import { View, Text, Pressable, StyleSheet, Alert } from 'react-native';
+import { useRouter } from 'expo-router';
+import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
+import { IconSymbol } from '@/components/ui/icon-symbol';
+import { AddClassModal } from '@/components/plan/AddClassModal';
+import { Colors, Spacing } from '@/constants/theme';
+import { COURSE_COLORS } from '@/constants/classColors';
+import { usePlan } from '@/hooks/usePlan';
+import type { ClassItem } from '@/types/plan.types';
+
+const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+function classDaysLabel(item: ClassItem): string {
+  if (!item.recurring) return 'One time';
+  if (item.freq === 'monthly') return 'Monthly';
+  return item.dayIdxs.map((i) => DAY_SHORT[i]).join(' · ');
+}
+
+export default function Classes() {
+  const router = useRouter();
+  const { plan, savePlan } = usePlan();
+  const [modalOpen, setModalOpen] = useState(false);
+
+  // Most-recently-created first — class ids are Date.now() timestamps, so a
+  // numeric sort on id doubles as a creation-order sort. Matches the
+  // Dashboard's "My Classes" ordering.
+  const classes = [...plan.classes].sort((a, b) => Number(b.id) - Number(a.id));
+
+  const handleAddClass = async (item: ClassItem) => {
+    try {
+      await savePlan({ ...plan, classes: [...plan.classes, item] });
+    } catch (err) {
+      console.error('[Classes] failed to add class', err);
+      Alert.alert("Couldn't add class", 'Check your connection and try again.');
+    }
+  };
+
+  const handleRemove = async (id: string) => {
+    const prevClasses = plan.classes;
+    try {
+      await savePlan({ ...plan, classes: plan.classes.filter((c) => c.id !== id) });
+    } catch (err) {
+      await savePlan({ ...plan, classes: prevClasses });
+      console.error('[Classes] failed to remove class', err);
+      Alert.alert("Couldn't remove class", 'Check your connection and try again.');
+    }
+  };
+
+  return (
+    <ScreenWrapper backgroundColor={Colors.offWhite} scroll style={styles.scrollContent}>
+      <Pressable style={styles.backRow} onPress={() => router.back()}>
+        <IconSymbol name="chevron.left" color={Colors.textSecondary} size={18} />
+        <Text style={styles.backText}>Back</Text>
+      </Pressable>
+
+      <Text style={styles.title}>Classes</Text>
+      <Text style={styles.subtitle}>
+        {classes.length} class{classes.length === 1 ? '' : 'es'}
+      </Text>
+
+      <View style={styles.list}>
+        {classes.length === 0 ? (
+          <Text style={styles.emptyText}>No classes added yet.</Text>
+        ) : (
+          classes.map((c) => {
+            const color = COURSE_COLORS[plan.classes.indexOf(c) % COURSE_COLORS.length];
+            return (
+              <View key={c.id} style={styles.classRow}>
+                <View style={[styles.classBar, { backgroundColor: color }]} />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={styles.classRowTitle} numberOfLines={1}>{c.courseName}</Text>
+                  <Text style={styles.classRowMeta}>{classDaysLabel(c)}{c.time ? ` · ${c.time}` : ''}</Text>
+                </View>
+                <Pressable onPress={() => handleRemove(c.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Text style={styles.removeText}>✕</Text>
+                </Pressable>
+              </View>
+            );
+          })
+        )}
+
+        <Pressable style={styles.addButton} onPress={() => setModalOpen(true)}>
+          <IconSymbol name="plus" color={Colors.primaryLight} size={18} />
+          <Text style={styles.addButtonText}>Add class</Text>
+        </Pressable>
+      </View>
+
+      <AddClassModal visible={modalOpen} onClose={() => setModalOpen(false)} onAdd={handleAddClass} />
+    </ScreenWrapper>
+  );
+}
+
+const styles = StyleSheet.create({
+  scrollContent: {
+    paddingBottom: 40,
+  },
+  backRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.sm,
+    alignSelf: 'flex-start',
+  },
+  backText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  title: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+    letterSpacing: -0.3,
+    marginTop: 12,
+    paddingHorizontal: Spacing.md,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    marginTop: 5,
+    paddingHorizontal: Spacing.md,
+  },
+  list: {
+    marginTop: 20,
+    paddingHorizontal: Spacing.md,
+    gap: 10,
+  },
+  emptyText: {
+    fontSize: 13,
+    color: Colors.textMuted,
+  },
+  classRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+  },
+  classBar: {
+    width: 4,
+    alignSelf: 'stretch',
+    borderRadius: 2,
+  },
+  classRowTitle: {
+    fontSize: 14.5,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  classRowMeta: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
+  removeText: {
+    fontSize: 13,
+    color: Colors.textMuted,
+    padding: 4,
+  },
+  addButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: Colors.border,
+    borderRadius: 16,
+    padding: 16,
+  },
+  addButtonText: {
+    fontSize: 14.5,
+    fontWeight: '700',
+    color: Colors.primaryLight,
+  },
+});

@@ -1,8 +1,13 @@
 // ── Student plan item types ────────────────────────────────────────────────
+export type ClassFrequency = 'weekly' | 'weekdays' | 'daily' | 'monthly';
+
 export interface ClassItem {
   id:         string;
   courseName: string;
-  days:       string[];
+  startDate:  string;   // ISO date this class starts / started
+  recurring:  boolean;
+  freq:       ClassFrequency;
+  dayIdxs:    number[];  // Monday-start weekday indices (0=Mon..6=Sun) this class occurs on
   time:       string;
 }
 

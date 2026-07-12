@@ -3,6 +3,7 @@ import { planRouter } from './plan.routes';
 import { taskRouter } from './task.routes';
 import { habitRouter } from './habit.routes';
 import { goalRouter } from './goal.routes';
+import { settingsRouter } from './settings.routes';
 
 export const router = Router();
 
@@ -15,3 +16,4 @@ router.use('/plans', planRouter);
 router.use('/tasks', taskRouter);
 router.use('/habits', habitRouter);
 router.use('/goals', goalRouter);
+router.use('/settings', settingsRouter);

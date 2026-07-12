@@ -4,40 +4,9 @@ import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { GreetingHeader } from '@/components/ui/GreetingHeader';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors, Spacing } from '@/constants/theme';
-import { useOnboarding } from '@/hooks/useOnboarding';
 import { useGoals } from '@/hooks/useGoals';
 import { TaskCategories } from '@/constants/taskMeta';
 import type { GoalTypeId } from '@/types/goal.types';
-
-interface DisplayGoal {
-  tag: string;
-  title: string;
-  pct: number;
-  color: string;
-}
-
-type PathKey = 'student' | 'exam' | 'professional';
-
-const GOAL_CARDS: Record<PathKey, DisplayGoal[]> = {
-  student: [
-    { tag: 'Study', title: 'Finish Corporate Finance modules 1–3', pct: 60, color: Colors.primaryLight },
-    { tag: 'Habit', title: 'Keep a 7-day study streak', pct: 71, color: Colors.primaryLight },
-  ],
-  exam: [
-    { tag: 'Exam', title: 'Pass the SIE on first attempt', pct: 30, color: '#8B3FD1' },
-    { tag: 'Habit', title: 'Study 8 hrs every week', pct: 85, color: Colors.primaryLight },
-  ],
-  professional: [
-    { tag: 'Career', title: 'Senior Manager by Jun 2027', pct: 25, color: Colors.success },
-    { tag: 'Habit', title: 'Weekly skill-building block', pct: 40, color: Colors.primaryLight },
-  ],
-};
-
-function toPathKey(focusProfile: string | null): PathKey {
-  if (focusProfile === 'student') return 'student';
-  if (focusProfile === 'exam_candidate') return 'exam';
-  return 'professional';
-}
 
 const GOAL_TYPES: { id: GoalTypeId; label: string; color: string }[] = [
   { id: 'study', label: 'Study', color: Colors.primaryLight },
@@ -47,12 +16,7 @@ const GOAL_TYPES: { id: GoalTypeId; label: string; color: string }[] = [
 ];
 
 export default function Goals() {
-  const { focusProfile } = useOnboarding();
-  const { goals: realGoals, createGoal } = useGoals();
-
-  // Path-specific seed cards are illustrative only — they disappear the moment
-  // the user has any real goal, so they never sit alongside real data.
-  const goals: DisplayGoal[] = realGoals.length > 0 ? realGoals : GOAL_CARDS[toPathKey(focusProfile)];
+  const { goals, createGoal } = useGoals();
 
   const [sheetOpen, setSheetOpen] = useState(false);
   const [goalType, setGoalType] = useState<GoalTypeId>('study');
@@ -94,20 +58,27 @@ export default function Goals() {
           </Pressable>
         </View>
 
-        <View style={styles.list}>
-          {goals.map((goal, i) => (
-            <View key={`${goal.title}-${i}`} style={styles.card}>
-              <View style={styles.cardHeaderRow}>
-                <Text style={[styles.tag, { color: goal.color }]}>{goal.tag.toUpperCase()}</Text>
-                <Text style={styles.pct}>{goal.pct}%</Text>
+        {goals.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateTitle}>No goals yet</Text>
+            <Text style={styles.emptyStateSub}>Tap "New goal" to start tracking one.</Text>
+          </View>
+        ) : (
+          <View style={styles.list}>
+            {goals.map((goal) => (
+              <View key={goal.id} style={styles.card}>
+                <View style={styles.cardHeaderRow}>
+                  <Text style={[styles.tag, { color: goal.color }]}>{goal.tag.toUpperCase()}</Text>
+                  <Text style={styles.pct}>{goal.pct}%</Text>
+                </View>
+                <Text style={styles.cardTitle}>{goal.title}</Text>
+                <View style={styles.progressTrack}>
+                  <View style={[styles.progressFill, { width: `${goal.pct}%`, backgroundColor: goal.color }]} />
+                </View>
               </View>
-              <Text style={styles.cardTitle}>{goal.title}</Text>
-              <View style={styles.progressTrack}>
-                <View style={[styles.progressFill, { width: `${goal.pct}%`, backgroundColor: goal.color }]} />
-              </View>
-            </View>
-          ))}
-        </View>
+            ))}
+          </View>
+        )}
       </View>
 
       <Modal visible={sheetOpen} transparent animationType="slide" onRequestClose={() => setSheetOpen(false)}>
@@ -195,6 +166,24 @@ const styles = StyleSheet.create({
   },
   list: {
     gap: 11,
+  },
+  emptyState: {
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 16,
+    paddingVertical: 28,
+    alignItems: 'center',
+  },
+  emptyStateTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  emptyStateSub: {
+    fontSize: 13,
+    color: Colors.textMuted,
+    marginTop: 4,
   },
   card: {
     backgroundColor: Colors.white,

@@ -16,6 +16,9 @@ export const Routes = {
   GOALS:      '/(app)/goals',
   HABITS:     '/habits',
   CERT_TRACKER: '/cert-tracker',
+  CLASSES:    '/classes',
+  SYLLABI:    '/syllabi',
+  EXAMS:      '/exams',
 } as const;
 
 export type AppRoute = (typeof Routes)[keyof typeof Routes];
