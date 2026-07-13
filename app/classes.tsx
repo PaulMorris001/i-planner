@@ -14,7 +14,7 @@ const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 function classDaysLabel(item: ClassItem): string {
   if (!item.recurring) return 'One time';
   if (item.freq === 'monthly') return 'Monthly';
-  return item.dayIdxs.map((i) => DAY_SHORT[i]).join(' · ');
+  return (item.dayIdxs ?? []).map((i) => DAY_SHORT[i]).join(' · ');
 }
 
 export default function Classes() {

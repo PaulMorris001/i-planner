@@ -16,4 +16,9 @@ export const env = {
   // GOOGLE_APPLICATION_CREDENTIALS pointing at a service account key file.
   firebaseServiceAccountJson: process.env.FIREBASE_SERVICE_ACCOUNT_JSON,
   firebaseProjectId: process.env.FIREBASE_PROJECT_ID,
+  // Google Calendar OAuth (backend-relay flow — see routes/googleOAuth.routes.ts).
+  googleOAuthClientId: required('GOOGLE_OAUTH_CLIENT_ID'),
+  googleOAuthClientSecret: required('GOOGLE_OAUTH_CLIENT_SECRET'),
+  googleOAuthStateSecret: required('GOOGLE_OAUTH_STATE_SECRET'),
+  backendPublicUrl: required('BACKEND_PUBLIC_URL'),
 };

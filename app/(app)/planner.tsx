@@ -30,7 +30,7 @@ function formatTodayDate(date: Date): string {
 function classDaysShortLabel(item: ClassItem): string {
   if (!item.recurring) return 'One time';
   if (item.freq === 'monthly') return 'Monthly';
-  return item.dayIdxs.map((i) => DAY_SHORT[i]).join('/');
+  return (item.dayIdxs ?? []).map((i) => DAY_SHORT[i]).join('/');
 }
 
 type DayItem =
@@ -48,6 +48,7 @@ export default function Planner() {
     calendarGateDismissed,
     loading: settingsLoading,
     connectAppleCalendar,
+    connectGoogleCalendar,
     dismissCalendarGate,
   } = useSettings();
 
@@ -62,7 +63,7 @@ export default function Planner() {
         color: COURSE_COLORS[idx % COURSE_COLORS.length],
         soft: COURSE_SOFT_COLORS[idx % COURSE_SOFT_COLORS.length],
       }))
-      .filter(({ item }) => item.dayIdxs.includes(dayIdx));
+      .filter(({ item }) => (item.dayIdxs ?? []).includes(dayIdx));
 
   const buildDayItems = (dayIdx: number, taskList: Task[]): DayItem[] => {
     const classItems: DayItem[] = classesForDay(dayIdx)
@@ -157,7 +158,12 @@ export default function Planner() {
               );
             }
           }}
-          onConnectGoogle={() => Alert.alert('Coming soon', 'Google Calendar sync is on the way.')}
+          onConnectGoogle={async () => {
+            const ok = await connectGoogleCalendar();
+            if (!ok) {
+              Alert.alert("Couldn't connect calendar", 'Something went wrong finishing the Google sign-in. Try again.');
+            }
+          }}
           onSkip={dismissCalendarGate}
         />
       </ScreenWrapper>

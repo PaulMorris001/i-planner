@@ -4,13 +4,20 @@
     "slug": "i-planner",
     "version": "1.0.0",
     "orientation": "portrait",
-    "scheme": "iplanner",
+    "icon": "./assets/images/icon.png",
+    "scheme": [
+      "iplanner",
+      "com.googleusercontent.apps.706469705840-kut758c4rurlqevdepel7e30o5qnps4g",
+      "com.googleusercontent.apps.706469705840-7gnh59mkb7nsi8t3cofbv2d190nca57b"
+    ],
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.obitoventures.iplanner"
     },
     "android": {
+      "package": "com.obitoventures.iplanner",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -18,7 +25,11 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.READ_CALENDAR",
+        "android.permission.WRITE_CALENDAR"
+      ]
     },
     "web": {
       "output": "static",
@@ -50,6 +61,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "b7b0f10a-bc8b-4a7d-ad37-7a6693fe309c"
+      }
     }
   }
 }

@@ -68,7 +68,7 @@ function classLabel(item: ClassItem): string {
     return `One time · ${formatDate(new Date(item.startDate))}`;
   }
   const map: Record<ClassFrequency, string> = {
-    weekly:   `Weekly on ${DAY_FULL[item.dayIdxs[0] ?? 0]}`,
+    weekly:   `Weekly on ${DAY_FULL[item.dayIdxs?.[0] ?? 0]}`,
     weekdays: 'Weekdays',
     daily:    'Every day',
     monthly:  'Monthly',

@@ -5,6 +5,11 @@ export interface SettingsDocument extends Document {
   appleCalendarConnected: boolean;
   googleCalendarConnected: boolean;
   calendarGateDismissed: boolean;
+  // Google OAuth tokens — never exposed via toPublicSettings(). The client secret
+  // for the Google OAuth client itself lives only in backend env, not here.
+  googleAccessToken?: string;
+  googleRefreshToken?: string;
+  googleTokenExpiresAt?: Date;
 }
 
 const settingsSchema = new Schema<SettingsDocument>({
@@ -12,6 +17,9 @@ const settingsSchema = new Schema<SettingsDocument>({
   appleCalendarConnected: { type: Boolean, default: false },
   googleCalendarConnected: { type: Boolean, default: false },
   calendarGateDismissed: { type: Boolean, default: false },
+  googleAccessToken: { type: String },
+  googleRefreshToken: { type: String },
+  googleTokenExpiresAt: { type: Date },
 });
 
 export function toPublicSettings(doc: SettingsDocument | null) {

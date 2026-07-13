@@ -6,4 +6,10 @@ export const settingsService = {
 
   patch: (update: Partial<Settings>) =>
     authedRequest<Settings>('/settings', { method: 'PATCH', body: update }),
+
+  startGoogleConnect: () =>
+    authedRequest<{ url: string }>('/settings/calendar/google/start', { method: 'POST' }),
+
+  disconnectGoogle: () =>
+    authedRequest<Settings>('/settings/calendar/google/disconnect', { method: 'POST' }),
 };

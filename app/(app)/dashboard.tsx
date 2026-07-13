@@ -25,7 +25,7 @@ const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 function classDaysLabel(item: ClassItem): string {
   if (!item.recurring) return 'One time';
   if (item.freq === 'monthly') return 'Monthly';
-  return item.dayIdxs.map((i) => DAY_SHORT[i]).join(' · ');
+  return (item.dayIdxs ?? []).map((i) => DAY_SHORT[i]).join(' · ');
 }
 
 type PathKey = 'student' | 'exam' | 'professional';
@@ -70,7 +70,7 @@ export default function Dashboard() {
   // Classes happening today, matched against the real current weekday.
   const todayIdx = weekdayIndexMonday(new Date());
   const todaysClasses = plan.classes
-    .filter((c) => c.dayIdxs.includes(todayIdx))
+    .filter((c) => (c.dayIdxs ?? []).includes(todayIdx))
     .sort((a, b) => parseTimeToMinutes(a.time) - parseTimeToMinutes(b.time));
 
   // Most-recently-created first — class ids are Date.now() timestamps, so a
