@@ -9,4 +9,9 @@ export const habitService = {
 
   toggleToday: (id: string) =>
     authedRequest<Habit>(`/habits/${id}/toggle-today`, { method: 'PATCH' }),
+
+  update: (id: string, patch: Partial<NewHabitInput>) =>
+    authedRequest<Habit>(`/habits/${id}`, { method: 'PATCH', body: patch }),
+
+  remove: (id: string) => authedRequest<void>(`/habits/${id}`, { method: 'DELETE' }),
 };

@@ -10,6 +10,8 @@ interface HabitsContextValue {
   loading: boolean;
   createHabit: (input: NewHabitInput) => Promise<void>;
   toggleToday: (id: string) => Promise<void>;
+  updateHabit: (id: string, patch: Partial<NewHabitInput>) => Promise<void>;
+  deleteHabit: (id: string) => Promise<void>;
 }
 
 const HabitsContext = createContext<HabitsContextValue | null>(null);
@@ -79,8 +81,31 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const updateHabit = async (id: string, patch: Partial<NewHabitInput>) => {
+    const prevHabits = habits;
+    setHabits((prev) => prev.map((h) => (h.id === id ? { ...h, ...patch } : h)));
+    try {
+      const updated = await habitService.update(id, patch);
+      setHabits((prev) => prev.map((h) => (h.id === id ? updated : h)));
+    } catch (err) {
+      setHabits(prevHabits);
+      throw err;
+    }
+  };
+
+  const deleteHabit = async (id: string) => {
+    const prevHabits = habits;
+    setHabits((prev) => prev.filter((h) => h.id !== id));
+    try {
+      await habitService.remove(id);
+    } catch (err) {
+      setHabits(prevHabits);
+      throw err;
+    }
+  };
+
   return (
-    <HabitsContext.Provider value={{ habits, loading, createHabit, toggleToday }}>
+    <HabitsContext.Provider value={{ habits, loading, createHabit, toggleToday, updateHabit, deleteHabit }}>
       {children}
     </HabitsContext.Provider>
   );

@@ -1,19 +1,19 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   View,
   Text,
   TextInput,
   Pressable,
-  Modal,
   ActivityIndicator,
   Alert,
   ScrollView,
   StyleSheet,
 } from 'react-native';
+import { BottomSheetModal } from '@/components/ui/BottomSheetModal';
 import { Colors, Spacing } from '@/constants/theme';
 import { TaskCategories } from '@/constants/taskMeta';
 import { goalService } from '@/services/goal.service';
-import type { GoalTypeId, NewGoalInput } from '@/types/goal.types';
+import type { Goal, GoalTypeId, NewGoalInput } from '@/types/goal.types';
 
 const GOAL_TYPES: { id: GoalTypeId; label: string; color: string }[] = [
   { id: 'study', label: 'Study', color: Colors.primaryLight },
@@ -34,9 +34,11 @@ interface NewGoalModalProps {
   visible: boolean;
   onClose: () => void;
   onCreate: (input: NewGoalInput) => Promise<void>;
+  editingGoal?: Goal | null;
+  onSave?: (id: string, patch: { title: string; type: GoalTypeId; tag: string; color: string }) => Promise<void>;
 }
 
-export function NewGoalModal({ visible, onClose, onCreate }: NewGoalModalProps) {
+export function NewGoalModal({ visible, onClose, onCreate, editingGoal, onSave }: NewGoalModalProps) {
   const [step, setStep] = useState<Step>('form');
   const [goalType, setGoalType] = useState<GoalTypeId>('study');
   const [goalName, setGoalName] = useState('');
@@ -53,9 +55,35 @@ export function NewGoalModal({ visible, onClose, onCreate }: NewGoalModalProps) 
     setSubmitting(false);
   };
 
+  useEffect(() => {
+    if (!visible) return;
+    if (editingGoal) {
+      setGoalType(editingGoal.type);
+      setGoalName(editingGoal.title);
+    } else {
+      reset();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, editingGoal]);
+
   const handleClose = () => {
     onClose();
     reset();
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingGoal || !onSave || !canGenerate) return;
+    const type = GOAL_TYPES.find((t) => t.id === goalType)!;
+    setSubmitting(true);
+    try {
+      await onSave(editingGoal.id, { title: goalName.trim(), type: type.id, tag: type.label, color: type.color });
+      handleClose();
+    } catch (err) {
+      console.error('[NewGoalModal] failed to save goal', err);
+      Alert.alert("Couldn't save goal", 'Check your connection and try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleGenerate = async () => {
@@ -112,14 +140,10 @@ export function NewGoalModal({ visible, onClose, onCreate }: NewGoalModalProps) 
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
-      <Pressable style={styles.overlay} onPress={handleClose} />
-      <View style={styles.sheet}>
-        <View style={styles.handle} />
-
+    <BottomSheetModal visible={visible} onClose={handleClose} maxHeightPct={85}>
         {step === 'form' && (
           <>
-            <Text style={styles.sheetTitle}>New goal</Text>
+            <Text style={styles.sheetTitle}>{editingGoal ? 'Edit goal' : 'New goal'}</Text>
 
             <Text style={styles.sheetEyebrow}>Type</Text>
             <View style={styles.typeRow}>
@@ -151,12 +175,12 @@ export function NewGoalModal({ visible, onClose, onCreate }: NewGoalModalProps) 
             />
 
             <Pressable
-              style={[styles.primaryButton, !canGenerate && styles.primaryButtonDisabled]}
-              disabled={!canGenerate}
-              onPress={handleGenerate}
+              style={[styles.primaryButton, (!canGenerate || submitting) && styles.primaryButtonDisabled]}
+              disabled={!canGenerate || submitting}
+              onPress={editingGoal ? handleSaveEdit : handleGenerate}
             >
-              <Text style={[styles.primaryButtonText, !canGenerate && styles.primaryButtonTextDisabled]}>
-                Generate plan
+              <Text style={[styles.primaryButtonText, (!canGenerate || submitting) && styles.primaryButtonTextDisabled]}>
+                {editingGoal ? (submitting ? 'Saving…' : 'Save changes') : 'Generate plan'}
               </Text>
             </Pressable>
           </>
@@ -218,41 +242,11 @@ export function NewGoalModal({ visible, onClose, onCreate }: NewGoalModalProps) 
             </View>
           </>
         )}
-      </View>
-    </Modal>
+    </BottomSheetModal>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(20,18,40,0.4)',
-  },
-  sheet: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    maxHeight: '85%',
-    backgroundColor: Colors.offWhite,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: Spacing.md,
-    paddingTop: 14,
-    paddingBottom: 30,
-  },
-  handle: {
-    width: 38,
-    height: 4,
-    borderRadius: 999,
-    backgroundColor: Colors.border,
-    alignSelf: 'center',
-    marginBottom: 16,
-  },
   sheetTitle: {
     fontSize: 19,
     fontWeight: '800',

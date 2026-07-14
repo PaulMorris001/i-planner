@@ -1,8 +1,10 @@
-import { useState } from 'react';
-import { Modal, View, Text, TextInput, Pressable, TouchableOpacity, ScrollView, StyleSheet, Platform } from 'react-native';
+import { useEffect, useState } from 'react';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Platform } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { BottomSheetModal } from '@/components/ui/BottomSheetModal';
 import { Colors, Spacing, Radius } from '@/constants/theme';
 import { weekdayIndexMonday } from '@/utils/date';
+import { parseTimeToMinutes } from '@/utils/time';
 import type { ClassItem, ClassFrequency } from '@/types/plan.types';
 
 const CLASS_FREQ_OPTIONS: { key: ClassFrequency; label: string }[] = [
@@ -20,13 +22,21 @@ function formatTime(date: Date): string {
   return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
+function parseTimeToDate(time: string): Date {
+  const minutes = parseTimeToMinutes(time);
+  const d = new Date();
+  d.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
+  return d;
+}
+
 interface AddClassModalProps {
   visible: boolean;
   onClose: () => void;
   onAdd: (item: ClassItem) => void;
+  editingClass?: ClassItem | null;
 }
 
-export function AddClassModal({ visible, onClose, onAdd }: AddClassModalProps) {
+export function AddClassModal({ visible, onClose, onAdd, editingClass }: AddClassModalProps) {
   const [className, setClassName] = useState('');
   const [startDate, setStartDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -42,6 +52,20 @@ export function AddClassModal({ visible, onClose, onAdd }: AddClassModalProps) {
     setFreq('weekly');
     setTime(null);
   };
+
+  useEffect(() => {
+    if (!visible) return;
+    if (editingClass) {
+      setClassName(editingClass.courseName);
+      setStartDate(new Date(editingClass.startDate));
+      setRecurring(editingClass.recurring);
+      setFreq(editingClass.freq);
+      setTime(editingClass.time ? parseTimeToDate(editingClass.time) : null);
+    } else {
+      reset();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, editingClass]);
 
   const handleClose = () => {
     onClose();
@@ -61,7 +85,7 @@ export function AddClassModal({ visible, onClose, onAdd }: AddClassModalProps) {
       dayIdxs = [startWd];
     }
     const item: ClassItem = {
-      id:         Date.now().toString(),
+      id:         editingClass?.id ?? Date.now().toString(),
       courseName: className.trim(),
       startDate:  startDate.toISOString(),
       recurring,
@@ -74,12 +98,9 @@ export function AddClassModal({ visible, onClose, onAdd }: AddClassModalProps) {
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
-      <Pressable style={styles.overlay} onPress={handleClose} />
-      <View style={styles.sheet}>
-        <View style={styles.handle} />
+    <BottomSheetModal visible={visible} onClose={handleClose} maxHeightPct={88}>
         <View style={styles.sheetHeaderRow}>
-          <Text style={styles.sheetTitle}>Add a class</Text>
+          <Text style={styles.sheetTitle}>{editingClass ? 'Edit class' : 'Add a class'}</Text>
           <TouchableOpacity style={styles.closeBtn} onPress={handleClose}>
             <Text style={styles.closeBtnText}>✕</Text>
           </TouchableOpacity>
@@ -159,30 +180,14 @@ export function AddClassModal({ visible, onClose, onAdd }: AddClassModalProps) {
           )}
 
           <TouchableOpacity style={styles.sheetSaveBtn} onPress={handleAdd} activeOpacity={0.85}>
-            <Text style={styles.sheetSaveBtnText}>Add class</Text>
+            <Text style={styles.sheetSaveBtnText}>{editingClass ? 'Save changes' : 'Add class'}</Text>
           </TouchableOpacity>
         </ScrollView>
-      </View>
-    </Modal>
+    </BottomSheetModal>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(20,18,40,0.4)',
-  },
-  sheet: {
-    position: 'absolute', left: 0, right: 0, bottom: 0,
-    maxHeight: '88%',
-    backgroundColor: Colors.offWhite,
-    borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    paddingHorizontal: Spacing.md, paddingTop: 14, paddingBottom: 30,
-  },
-  handle: {
-    width: 38, height: 4, borderRadius: 999,
-    backgroundColor: Colors.border, alignSelf: 'center', marginBottom: 16,
-  },
   sheetHeaderRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14,
   },

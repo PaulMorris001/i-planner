@@ -1,12 +1,14 @@
-import { useState } from 'react';
-import { Modal, View, Text, TextInput, Pressable, Switch, ScrollView, StyleSheet, Platform } from 'react-native';
+import { useEffect, useState } from 'react';
+import { View, Text, TextInput, Pressable, Switch, ScrollView, StyleSheet, Platform } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { BottomSheetModal } from '@/components/ui/BottomSheetModal';
 import { useNewTaskModal } from '@/contexts/NewTaskModalContext';
 import { useTasks } from '@/hooks/useTasks';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors, Spacing } from '@/constants/theme';
 import { TaskCategories, TaskCategoryId, TaskPriorities, TaskPriorityId } from '@/constants/taskMeta';
 import { weekdayIndexMonday } from '@/utils/date';
+import { parseTimeToMinutes } from '@/utils/time';
 
 const CATEGORY_ORDER: TaskCategoryId[] = ['academic', 'career', 'personal', 'financial', 'exam', 'habit', 'other'];
 const PRIORITY_ORDER: TaskPriorityId[] = ['high', 'medium', 'low'];
@@ -23,9 +25,16 @@ function formatDate(date: Date): string {
   return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+function parseTimeToDate(time: string): Date {
+  const minutes = parseTimeToMinutes(time);
+  const d = new Date();
+  d.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
+  return d;
+}
+
 export function NewTaskModal() {
-  const { isOpen, close } = useNewTaskModal();
-  const { createTask } = useTasks();
+  const { isOpen, editingTask, close } = useNewTaskModal();
+  const { createTask, updateTask } = useTasks();
 
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState<TaskCategoryId>('academic');
@@ -50,6 +59,22 @@ export function NewTaskModal() {
     setNotes('');
   };
 
+  useEffect(() => {
+    if (!isOpen) return;
+    if (editingTask) {
+      setTitle(editingTask.title);
+      setCategory(editingTask.category);
+      setPriority(editingTask.priority);
+      setDueTime(editingTask.time ? parseTimeToDate(editingTask.time) : null);
+      setDueDate(editingTask.dueDate ? new Date(editingTask.dueDate) : null);
+      setRecurring(editingTask.recurring);
+      setNotes(editingTask.notes);
+    } else {
+      reset();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, editingTask]);
+
   const handleClose = () => {
     close();
     reset();
@@ -59,7 +84,7 @@ export function NewTaskModal() {
     if (!canSave) return;
     setSubmitting(true);
     try {
-      await createTask({
+      const patch = {
         title: title.trim(),
         category,
         priority,
@@ -69,22 +94,24 @@ export function NewTaskModal() {
         dueDate: dueDate ? dueDate.toISOString() : '',
         recurring,
         notes: notes.trim(),
-      });
+      };
+      if (editingTask) {
+        await updateTask(editingTask.id, patch);
+      } else {
+        await createTask(patch);
+      }
       handleClose();
     } catch (err) {
-      console.error('[NewTaskModal] failed to create task', err);
+      console.error('[NewTaskModal] failed to save task', err);
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <Modal visible={isOpen} transparent animationType="slide" onRequestClose={handleClose}>
-      <Pressable style={styles.overlay} onPress={handleClose} />
-      <View style={styles.sheet}>
-        <View style={styles.handle} />
+    <BottomSheetModal visible={isOpen} onClose={handleClose}>
         <View style={styles.headerRow}>
-          <Text style={styles.title}>New task</Text>
+          <Text style={styles.title}>{editingTask ? 'Edit task' : 'New task'}</Text>
           <Pressable style={styles.closeButton} onPress={handleClose}>
             <IconSymbol name="xmark" color={Colors.textSecondary} size={17} />
           </Pressable>
@@ -229,45 +256,17 @@ export function NewTaskModal() {
               disabled={!canSave}
               onPress={handleCreate}
             >
-              <Text style={[styles.saveButtonText, !canSave && styles.saveButtonTextDisabled]}>Create task</Text>
+              <Text style={[styles.saveButtonText, !canSave && styles.saveButtonTextDisabled]}>
+                {editingTask ? 'Save changes' : 'Create task'}
+              </Text>
             </Pressable>
           </View>
         </ScrollView>
-      </View>
-    </Modal>
+    </BottomSheetModal>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(20,18,40,0.4)',
-  },
-  sheet: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    maxHeight: '90%',
-    backgroundColor: Colors.offWhite,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: Spacing.md,
-    paddingTop: 14,
-    paddingBottom: 30,
-  },
-  handle: {
-    width: 38,
-    height: 4,
-    borderRadius: 999,
-    backgroundColor: Colors.border,
-    alignSelf: 'center',
-    marginBottom: 16,
-  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -4,12 +4,15 @@ import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { GreetingHeader } from '@/components/ui/GreetingHeader';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { CalendarConnectGate } from '@/components/plan/CalendarConnectGate';
+import { ItemActionSheet } from '@/components/ui/ItemActionSheet';
 import { Colors, Spacing } from '@/constants/theme';
 import { TaskCategories, TaskPriorities, TaskPriorityId } from '@/constants/taskMeta';
 import { COURSE_COLORS, COURSE_SOFT_COLORS } from '@/constants/classColors';
 import { useTasks } from '@/hooks/useTasks';
 import { usePlan } from '@/hooks/usePlan';
 import { useSettings } from '@/hooks/useSettings';
+import { useNewTaskModal } from '@/contexts/NewTaskModalContext';
+import { confirmDelete } from '@/utils/confirmDelete';
 import { weekdayIndexMonday } from '@/utils/date';
 import { parseTimeToMinutes } from '@/utils/time';
 import type { Task } from '@/types/task.types';
@@ -40,8 +43,10 @@ type DayItem =
 export default function Planner() {
   const [view, setView] = useState<'day' | 'week'>('day');
   const [courseFilter, setCourseFilter] = useState<string | null>(null);
-  const { tasks, toggleDone } = useTasks();
+  const [actionSheetTarget, setActionSheetTarget] = useState<Task | null>(null);
+  const { tasks, toggleDone, removeTask } = useTasks();
   const { plan } = usePlan();
+  const { openForEdit } = useNewTaskModal();
   const {
     appleCalendarConnected,
     googleCalendarConnected,
@@ -51,6 +56,14 @@ export default function Planner() {
     connectGoogleCalendar,
     dismissCalendarGate,
   } = useSettings();
+
+  const handleDeleteTask = (task: Task) => {
+    confirmDelete(task.title, () => {
+      removeTask(task.id).catch((err) => {
+        console.error('[Planner] failed to delete task', err);
+      });
+    });
+  };
 
   const today = new Date();
   const todayIdx = weekdayIndexMonday(today);
@@ -88,7 +101,12 @@ export default function Planner() {
     const category = TaskCategories[task.category];
     const priority = TaskPriorities[task.priority];
     return (
-      <Pressable key={`task-${task.id}`} style={styles.taskRow} onPress={() => toggleDone(task.id)}>
+      <Pressable
+        key={`task-${task.id}`}
+        style={styles.taskRow}
+        onPress={() => toggleDone(task.id)}
+        onLongPress={() => setActionSheetTarget(task)}
+      >
         <View
           style={[
             styles.checkbox,
@@ -123,6 +141,12 @@ export default function Planner() {
             {!!task.time && <Text style={styles.time}>{task.time}</Text>}
           </View>
         </View>
+        <Pressable
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          onPress={() => setActionSheetTarget(task)}
+        >
+          <IconSymbol name="ellipsis" color={Colors.textMuted} size={18} />
+        </Pressable>
       </Pressable>
     );
   };
@@ -265,6 +289,7 @@ export default function Planner() {
                           key={`wk-task-${task.id}`}
                           style={styles.weekTaskRow}
                           onPress={() => toggleDone(task.id)}
+                          onLongPress={() => setActionSheetTarget(task)}
                         >
                           <View style={[styles.weekTaskBar, { backgroundColor: category.color }]} />
                           <View style={{ flex: 1 }}>
@@ -283,6 +308,12 @@ export default function Planner() {
                               <IconSymbol name="checkmark" color={Colors.white} size={12} />
                             </View>
                           )}
+                          <Pressable
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            onPress={() => setActionSheetTarget(task)}
+                          >
+                            <IconSymbol name="ellipsis" color={Colors.textMuted} size={16} />
+                          </Pressable>
                         </Pressable>
                       );
                     })
@@ -293,6 +324,13 @@ export default function Planner() {
           </View>
         )}
       </View>
+
+      <ItemActionSheet
+        visible={!!actionSheetTarget}
+        onClose={() => setActionSheetTarget(null)}
+        onEdit={() => actionSheetTarget && openForEdit(actionSheetTarget)}
+        onDelete={() => actionSheetTarget && handleDeleteTask(actionSheetTarget)}
+      />
     </ScreenWrapper>
   );
 }

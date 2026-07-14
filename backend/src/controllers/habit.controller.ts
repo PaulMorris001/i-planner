@@ -32,6 +32,24 @@ export async function createHabit(req: AuthedRequest, res: Response) {
   res.status(201).json(toPublicHabit(habit));
 }
 
+export async function updateHabit(req: AuthedRequest, res: Response) {
+  const habit = await findOwnedOrThrow(Habit, req.params.id, req.userId!);
+
+  const { name, category, freq } = req.body ?? {};
+  if (name !== undefined) habit.name = name;
+  if (category !== undefined) habit.category = category;
+  if (freq !== undefined && VALID_FREQS.includes(freq)) habit.freq = freq;
+
+  await habit.save();
+  res.json(toPublicHabit(habit));
+}
+
+export async function deleteHabit(req: AuthedRequest, res: Response) {
+  const habit = await findOwnedOrThrow(Habit, req.params.id, req.userId!);
+  await habit.deleteOne();
+  res.status(204).send();
+}
+
 export async function toggleHabitToday(req: AuthedRequest, res: Response) {
   // Validates id format + ownership (404s cleanly on either), same as every
   // other owned-doc lookup.

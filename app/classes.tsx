@@ -4,9 +4,11 @@ import { useRouter } from 'expo-router';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { AddClassModal } from '@/components/plan/AddClassModal';
+import { ItemActionSheet } from '@/components/ui/ItemActionSheet';
 import { Colors, Spacing } from '@/constants/theme';
 import { COURSE_COLORS } from '@/constants/classColors';
 import { usePlan } from '@/hooks/usePlan';
+import { confirmDelete } from '@/utils/confirmDelete';
 import type { ClassItem } from '@/types/plan.types';
 
 const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -21,18 +23,26 @@ export default function Classes() {
   const router = useRouter();
   const { plan, savePlan } = usePlan();
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingClass, setEditingClass] = useState<ClassItem | null>(null);
+  const [actionSheetTarget, setActionSheetTarget] = useState<ClassItem | null>(null);
 
   // Most-recently-created first — class ids are Date.now() timestamps, so a
   // numeric sort on id doubles as a creation-order sort. Matches the
   // Dashboard's "My Classes" ordering.
   const classes = [...plan.classes].sort((a, b) => Number(b.id) - Number(a.id));
 
-  const handleAddClass = async (item: ClassItem) => {
+  const handleAddOrSaveClass = async (item: ClassItem) => {
+    const isEdit = plan.classes.some((c) => c.id === item.id);
     try {
-      await savePlan({ ...plan, classes: [...plan.classes, item] });
+      await savePlan({
+        ...plan,
+        classes: isEdit
+          ? plan.classes.map((c) => (c.id === item.id ? item : c))
+          : [...plan.classes, item],
+      });
     } catch (err) {
-      console.error('[Classes] failed to add class', err);
-      Alert.alert("Couldn't add class", 'Check your connection and try again.');
+      console.error('[Classes] failed to save class', err);
+      Alert.alert("Couldn't save class", 'Check your connection and try again.');
     }
   };
 
@@ -45,6 +55,10 @@ export default function Classes() {
       console.error('[Classes] failed to remove class', err);
       Alert.alert("Couldn't remove class", 'Check your connection and try again.');
     }
+  };
+
+  const handleDeleteClass = (item: ClassItem) => {
+    confirmDelete(item.courseName, () => handleRemove(item.id));
   };
 
   return (
@@ -66,16 +80,20 @@ export default function Classes() {
           classes.map((c) => {
             const color = COURSE_COLORS[plan.classes.indexOf(c) % COURSE_COLORS.length];
             return (
-              <View key={c.id} style={styles.classRow}>
+              <Pressable
+                key={c.id}
+                style={styles.classRow}
+                onLongPress={() => setActionSheetTarget(c)}
+              >
                 <View style={[styles.classBar, { backgroundColor: color }]} />
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={styles.classRowTitle} numberOfLines={1}>{c.courseName}</Text>
                   <Text style={styles.classRowMeta}>{classDaysLabel(c)}{c.time ? ` · ${c.time}` : ''}</Text>
                 </View>
-                <Pressable onPress={() => handleRemove(c.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Text style={styles.removeText}>✕</Text>
+                <Pressable onPress={() => setActionSheetTarget(c)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <IconSymbol name="ellipsis" color={Colors.textMuted} size={18} />
                 </Pressable>
-              </View>
+              </Pressable>
             );
           })
         )}
@@ -86,7 +104,22 @@ export default function Classes() {
         </Pressable>
       </View>
 
-      <AddClassModal visible={modalOpen} onClose={() => setModalOpen(false)} onAdd={handleAddClass} />
+      <AddClassModal
+        visible={modalOpen || !!editingClass}
+        onClose={() => {
+          setModalOpen(false);
+          setEditingClass(null);
+        }}
+        onAdd={handleAddOrSaveClass}
+        editingClass={editingClass}
+      />
+
+      <ItemActionSheet
+        visible={!!actionSheetTarget}
+        onClose={() => setActionSheetTarget(null)}
+        onEdit={() => actionSheetTarget && setEditingClass(actionSheetTarget)}
+        onDelete={() => actionSheetTarget && handleDeleteClass(actionSheetTarget)}
+      />
     </ScreenWrapper>
   );
 }
@@ -156,11 +189,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.textMuted,
     marginTop: 2,
-  },
-  removeText: {
-    fontSize: 13,
-    color: Colors.textMuted,
-    padding: 4,
   },
   addButton: {
     flexDirection: 'row',

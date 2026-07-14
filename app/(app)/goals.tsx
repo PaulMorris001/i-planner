@@ -1,21 +1,58 @@
-import { useState } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { View, Text, Pressable, StyleSheet, Animated, Easing } from 'react-native';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { GreetingHeader } from '@/components/ui/GreetingHeader';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { NewGoalModal } from '@/components/goal/NewGoalModal';
+import { ItemActionSheet } from '@/components/ui/ItemActionSheet';
+import { confirmDelete } from '@/utils/confirmDelete';
 import { Colors, Spacing } from '@/constants/theme';
 import { useGoals } from '@/hooks/useGoals';
-import type { Milestone } from '@/types/goal.types';
+import type { Goal, Milestone } from '@/types/goal.types';
+
+function AnimatedProgressFill({ pct, color }: { pct: number; color: string }) {
+  const widthAnim = useRef(new Animated.Value(pct)).current;
+
+  useEffect(() => {
+    Animated.timing(widthAnim, {
+      toValue: pct,
+      duration: 450,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false, // width isn't animatable via the native driver
+    }).start();
+  }, [pct, widthAnim]);
+
+  const width = widthAnim.interpolate({
+    inputRange: [0, 100],
+    outputRange: ['0%', '100%'],
+    extrapolate: 'clamp',
+  });
+
+  return <Animated.View style={[styles.progressFill, { width, backgroundColor: color }]} />;
+}
 
 export default function Goals() {
-  const { goals, createGoal, updateGoal } = useGoals();
+  const { goals, createGoal, updateGoal, deleteGoal } = useGoals();
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [actionSheetTarget, setActionSheetTarget] = useState<Goal | null>(null);
+  const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
 
   const toggleMilestone = (goalId: string, milestones: Milestone[], milestoneId: string) => {
     const updated = milestones.map((m) => (m.id === milestoneId ? { ...m, done: !m.done } : m));
     updateGoal(goalId, { milestones: updated }).catch((err) => {
       console.error('[Goals] failed to update milestone', err);
+    });
+  };
+
+  const handleSaveGoal = async (id: string, patch: { title: string; type: Goal['type']; tag: string; color: string }) => {
+    await updateGoal(id, patch);
+  };
+
+  const handleDeleteGoal = (goal: Goal) => {
+    confirmDelete(goal.title, () => {
+      deleteGoal(goal.id).catch((err) => {
+        console.error('[Goals] failed to delete goal', err);
+      });
     });
   };
 
@@ -40,14 +77,26 @@ export default function Goals() {
         ) : (
           <View style={styles.list}>
             {goals.map((goal) => (
-              <View key={goal.id} style={styles.card}>
+              <Pressable
+                key={goal.id}
+                style={styles.card}
+                onLongPress={() => setActionSheetTarget(goal)}
+              >
                 <View style={styles.cardHeaderRow}>
                   <Text style={[styles.tag, { color: goal.color }]}>{goal.tag.toUpperCase()}</Text>
-                  <Text style={styles.pct}>{goal.pct}%</Text>
+                  <View style={styles.cardHeaderRight}>
+                    <Text style={styles.pct}>{goal.pct}%</Text>
+                    <Pressable
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      onPress={() => setActionSheetTarget(goal)}
+                    >
+                      <IconSymbol name="ellipsis" color={Colors.textMuted} size={18} />
+                    </Pressable>
+                  </View>
                 </View>
                 <Text style={styles.cardTitle}>{goal.title}</Text>
                 <View style={styles.progressTrack}>
-                  <View style={[styles.progressFill, { width: `${goal.pct}%`, backgroundColor: goal.color }]} />
+                  <AnimatedProgressFill pct={goal.pct} color={goal.color} />
                 </View>
 
                 {goal.milestones.length > 0 && (
@@ -71,13 +120,29 @@ export default function Goals() {
                     ))}
                   </View>
                 )}
-              </View>
+              </Pressable>
             ))}
           </View>
         )}
       </View>
 
-      <NewGoalModal visible={sheetOpen} onClose={() => setSheetOpen(false)} onCreate={createGoal} />
+      <NewGoalModal
+        visible={sheetOpen || !!editingGoal}
+        onClose={() => {
+          setSheetOpen(false);
+          setEditingGoal(null);
+        }}
+        onCreate={createGoal}
+        editingGoal={editingGoal}
+        onSave={handleSaveGoal}
+      />
+
+      <ItemActionSheet
+        visible={!!actionSheetTarget}
+        onClose={() => setActionSheetTarget(null)}
+        onEdit={() => actionSheetTarget && setEditingGoal(actionSheetTarget)}
+        onDelete={() => actionSheetTarget && handleDeleteGoal(actionSheetTarget)}
+      />
     </ScreenWrapper>
   );
 }
@@ -149,6 +214,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  cardHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   tag: {
     fontSize: 11.5,

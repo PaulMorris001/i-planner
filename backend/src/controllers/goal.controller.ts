@@ -56,23 +56,40 @@ export async function createGoal(req: AuthedRequest, res: Response) {
 export async function updateGoal(req: AuthedRequest, res: Response) {
   const goal = await findOwnedOrThrow(Goal, req.params.id, req.userId!);
 
-  const { title, tag, color, milestones } = req.body ?? {};
+  const { title, tag, color, type, milestones } = req.body ?? {};
   if (title !== undefined) goal.title = title;
   if (tag !== undefined) goal.tag = tag;
   if (color !== undefined) goal.color = color;
+  if (type !== undefined) goal.type = type;
   if (Array.isArray(milestones)) {
-    goal.milestones.splice(
-      0,
-      goal.milestones.length,
-      ...milestones
-        .filter((m): m is { title: string; done?: boolean; dueLabel?: string } => !!m?.title)
-        .map((m) => ({ title: m.title, done: !!m.done, dueLabel: m.dueLabel ?? '' }))
+    // Preserve _id for milestones the client references by id (existing ones being
+    // toggled/edited) — rebuilding every subdocument from scratch on every save
+    // reassigns fresh ids app-wide, which churns React's list keys on the client for
+    // every milestone, not just the one that changed.
+    const incoming = milestones.filter(
+      (m): m is { id?: string; title: string; done?: boolean; dueLabel?: string } => !!m?.title
     );
+    const nextMilestones = incoming.map((m) => {
+      const existing = m.id ? goal.milestones.id(m.id) : null;
+      return {
+        ...(existing ? { _id: existing._id } : {}),
+        title: m.title,
+        done: !!m.done,
+        dueLabel: m.dueLabel ?? '',
+      };
+    });
+    goal.milestones.splice(0, goal.milestones.length, ...nextMilestones);
     goal.pct = pctFromMilestones(goal.milestones);
   }
 
   await goal.save();
   res.json(toPublicGoal(goal));
+}
+
+export async function deleteGoal(req: AuthedRequest, res: Response) {
+  const goal = await findOwnedOrThrow(Goal, req.params.id, req.userId!);
+  await goal.deleteOne();
+  res.status(204).send();
 }
 
 export async function generateMilestones(req: AuthedRequest, res: Response) {

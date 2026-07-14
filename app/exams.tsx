@@ -4,8 +4,10 @@ import { useRouter } from 'expo-router';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { AddExamModal } from '@/components/plan/AddExamModal';
+import { ItemActionSheet } from '@/components/ui/ItemActionSheet';
 import { Colors, Spacing } from '@/constants/theme';
 import { usePlan } from '@/hooks/usePlan';
+import { confirmDelete } from '@/utils/confirmDelete';
 import type { Exam } from '@/types/plan.types';
 
 function formatShortDate(iso: string): string {
@@ -16,18 +18,25 @@ export default function Exams() {
   const router = useRouter();
   const { examPlan, saveExamPlan } = usePlan();
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingExam, setEditingExam] = useState<Exam | null>(null);
+  const [actionSheetTarget, setActionSheetTarget] = useState<Exam | null>(null);
 
   // Soonest-upcoming first — matches the Dashboard's "My Exams" ordering.
   const exams = [...examPlan.exams].sort(
     (a, b) => new Date(a.examDate).getTime() - new Date(b.examDate).getTime()
   );
 
-  const handleAddExam = async (exam: Exam) => {
+  const handleAddOrSaveExam = async (exam: Exam) => {
+    const isEdit = examPlan.exams.some((e) => e.id === exam.id);
     try {
-      await saveExamPlan({ exams: [...examPlan.exams, exam] });
+      await saveExamPlan({
+        exams: isEdit
+          ? examPlan.exams.map((e) => (e.id === exam.id ? exam : e))
+          : [...examPlan.exams, exam],
+      });
     } catch (err) {
-      console.error('[Exams] failed to add exam', err);
-      Alert.alert("Couldn't add exam", 'Check your connection and try again.');
+      console.error('[Exams] failed to save exam', err);
+      Alert.alert("Couldn't save exam", 'Check your connection and try again.');
     }
   };
 
@@ -40,6 +49,10 @@ export default function Exams() {
       console.error('[Exams] failed to remove exam', err);
       Alert.alert("Couldn't remove exam", 'Check your connection and try again.');
     }
+  };
+
+  const handleDeleteExam = (exam: Exam) => {
+    confirmDelete(exam.name, () => handleRemove(exam.id));
   };
 
   return (
@@ -59,7 +72,11 @@ export default function Exams() {
           <Text style={styles.emptyText}>No exams added yet.</Text>
         ) : (
           exams.map((exam) => (
-            <View key={exam.id} style={styles.examRow}>
+            <Pressable
+              key={exam.id}
+              style={styles.examRow}
+              onLongPress={() => setActionSheetTarget(exam)}
+            >
               <View style={styles.examBar} />
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={styles.examRowTitle} numberOfLines={1}>{exam.name}</Text>
@@ -68,10 +85,10 @@ export default function Exams() {
                   {formatShortDate(exam.examDate)}
                 </Text>
               </View>
-              <Pressable onPress={() => handleRemove(exam.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Text style={styles.removeText}>✕</Text>
+              <Pressable onPress={() => setActionSheetTarget(exam)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <IconSymbol name="ellipsis" color={Colors.textMuted} size={18} />
               </Pressable>
-            </View>
+            </Pressable>
           ))
         )}
 
@@ -81,7 +98,22 @@ export default function Exams() {
         </Pressable>
       </View>
 
-      <AddExamModal visible={modalOpen} onClose={() => setModalOpen(false)} onAdd={handleAddExam} />
+      <AddExamModal
+        visible={modalOpen || !!editingExam}
+        onClose={() => {
+          setModalOpen(false);
+          setEditingExam(null);
+        }}
+        onAdd={handleAddOrSaveExam}
+        editingExam={editingExam}
+      />
+
+      <ItemActionSheet
+        visible={!!actionSheetTarget}
+        onClose={() => setActionSheetTarget(null)}
+        onEdit={() => actionSheetTarget && setEditingExam(actionSheetTarget)}
+        onDelete={() => actionSheetTarget && handleDeleteExam(actionSheetTarget)}
+      />
     </ScreenWrapper>
   );
 }
@@ -152,11 +184,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.textMuted,
     marginTop: 2,
-  },
-  removeText: {
-    fontSize: 13,
-    color: Colors.textMuted,
-    padding: 4,
   },
   addButton: {
     flexDirection: 'row',

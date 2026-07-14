@@ -1,12 +1,15 @@
 import { useState } from 'react';
-import { View, Text, TextInput, Pressable, Modal, StyleSheet } from 'react-native';
+import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
+import { BottomSheetModal } from '@/components/ui/BottomSheetModal';
+import { ItemActionSheet } from '@/components/ui/ItemActionSheet';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors, Spacing } from '@/constants/theme';
 import { TaskCategories, TaskCategoryId } from '@/constants/taskMeta';
 import { useHabits } from '@/hooks/useHabits';
-import type { HabitFrequency } from '@/types/habit.types';
+import { confirmDelete } from '@/utils/confirmDelete';
+import type { Habit, HabitFrequency } from '@/types/habit.types';
 
 const DAY_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
@@ -43,9 +46,11 @@ function mondayOfCurrentWeek(): Date {
 
 export default function Habits() {
   const router = useRouter();
-  const { habits, createHabit, toggleToday } = useHabits();
+  const { habits, createHabit, toggleToday, updateHabit, deleteHabit } = useHabits();
 
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [editingHabit, setEditingHabit] = useState<Habit | null>(null);
+  const [actionSheetTarget, setActionSheetTarget] = useState<Habit | null>(null);
   const [habitName, setHabitName] = useState('');
   const [habitCategory, setHabitCategory] = useState<TaskCategoryId>('academic');
   const [habitFreq, setHabitFreq] = useState<HabitFrequency>('daily');
@@ -56,23 +61,49 @@ export default function Habits() {
   const monday = mondayOfCurrentWeek();
 
   const openSheet = () => {
+    setEditingHabit(null);
     setHabitName('');
     setHabitCategory('academic');
     setHabitFreq('daily');
     setSheetOpen(true);
   };
 
+  const openSheetForEdit = (habit: Habit) => {
+    setEditingHabit(habit);
+    setHabitName(habit.name);
+    setHabitCategory(habit.category);
+    setHabitFreq(habit.freq);
+    setSheetOpen(true);
+  };
+
+  const closeSheet = () => {
+    setSheetOpen(false);
+    setEditingHabit(null);
+  };
+
   const handleCreate = async () => {
     if (!canSave) return;
     setSubmitting(true);
     try {
-      await createHabit({ name: habitName.trim(), category: habitCategory, freq: habitFreq });
-      setSheetOpen(false);
+      if (editingHabit) {
+        await updateHabit(editingHabit.id, { name: habitName.trim(), category: habitCategory, freq: habitFreq });
+      } else {
+        await createHabit({ name: habitName.trim(), category: habitCategory, freq: habitFreq });
+      }
+      closeSheet();
     } catch (err) {
-      console.error('[Habits] failed to create habit', err);
+      console.error('[Habits] failed to save habit', err);
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleDeleteHabit = (habit: Habit) => {
+    confirmDelete(habit.name, () => {
+      deleteHabit(habit.id).catch((err) => {
+        console.error('[Habits] failed to delete habit', err);
+      });
+    });
   };
 
   return (
@@ -94,7 +125,11 @@ export default function Habits() {
           const createdDate = new Date(habit.createdAt);
           createdDate.setHours(0, 0, 0, 0);
           return (
-            <View key={habit.id} style={styles.card}>
+            <Pressable
+              key={habit.id}
+              style={styles.card}
+              onLongPress={() => setActionSheetTarget(habit)}
+            >
               <View style={styles.cardHeaderRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.habitName}>{habit.name}</Text>
@@ -117,6 +152,12 @@ export default function Habits() {
                   <Text style={[styles.ctaText, { color: done ? Colors.white : category.color }]}>
                     {done ? 'Done today' : 'Mark done'}
                   </Text>
+                </Pressable>
+                <Pressable
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  onPress={() => setActionSheetTarget(habit)}
+                >
+                  <IconSymbol name="ellipsis" color={Colors.textMuted} size={18} />
                 </Pressable>
               </View>
 
@@ -144,7 +185,7 @@ export default function Habits() {
                   );
                 })}
               </View>
-            </View>
+            </Pressable>
           );
         })}
 
@@ -154,11 +195,8 @@ export default function Habits() {
         </Pressable>
       </View>
 
-      <Modal visible={sheetOpen} transparent animationType="slide" onRequestClose={() => setSheetOpen(false)}>
-        <Pressable style={styles.overlay} onPress={() => setSheetOpen(false)} />
-        <View style={styles.sheet}>
-          <View style={styles.handle} />
-          <Text style={styles.sheetTitle}>New habit</Text>
+      <BottomSheetModal visible={sheetOpen} onClose={closeSheet}>
+          <Text style={styles.sheetTitle}>{editingHabit ? 'Edit habit' : 'New habit'}</Text>
 
           <TextInput
             value={habitName}
@@ -216,10 +254,18 @@ export default function Habits() {
             disabled={!canSave}
             onPress={handleCreate}
           >
-            <Text style={[styles.createButtonText, !canSave && styles.createButtonTextDisabled]}>Create habit</Text>
+            <Text style={[styles.createButtonText, !canSave && styles.createButtonTextDisabled]}>
+              {editingHabit ? 'Save changes' : 'Create habit'}
+            </Text>
           </Pressable>
-        </View>
-      </Modal>
+      </BottomSheetModal>
+
+      <ItemActionSheet
+        visible={!!actionSheetTarget}
+        onClose={() => setActionSheetTarget(null)}
+        onEdit={() => actionSheetTarget && openSheetForEdit(actionSheetTarget)}
+        onDelete={() => actionSheetTarget && handleDeleteHabit(actionSheetTarget)}
+      />
     </ScreenWrapper>
   );
 }
@@ -340,34 +386,6 @@ const styles = StyleSheet.create({
     fontSize: 14.5,
     fontWeight: '700',
     color: Colors.primaryLight,
-  },
-  overlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(20,18,40,0.4)',
-  },
-  sheet: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: Colors.offWhite,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: Spacing.md,
-    paddingTop: 14,
-    paddingBottom: 30,
-  },
-  handle: {
-    width: 38,
-    height: 4,
-    borderRadius: 999,
-    backgroundColor: Colors.border,
-    alignSelf: 'center',
-    marginBottom: 16,
   },
   sheetTitle: {
     fontSize: 19,

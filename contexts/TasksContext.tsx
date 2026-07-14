@@ -9,6 +9,7 @@ interface TasksContextValue {
   loading: boolean;
   createTask: (input: NewTaskInput) => Promise<void>;
   toggleDone: (id: string) => Promise<void>;
+  updateTask: (id: string, patch: Partial<NewTaskInput>) => Promise<void>;
   removeTask: (id: string) => Promise<void>;
 }
 
@@ -61,6 +62,18 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const updateTask = async (id: string, patch: Partial<NewTaskInput>) => {
+    const prevTasks = tasks;
+    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+    try {
+      const updated = await taskService.update(id, patch);
+      setTasks((prev) => prev.map((t) => (t.id === id ? updated : t)));
+    } catch (err) {
+      setTasks(prevTasks);
+      throw err;
+    }
+  };
+
   const removeTask = async (id: string) => {
     const prevTasks = tasks;
     setTasks((prev) => prev.filter((t) => t.id !== id));
@@ -73,7 +86,7 @@ export function TasksProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <TasksContext.Provider value={{ tasks, loading, createTask, toggleDone, removeTask }}>
+    <TasksContext.Provider value={{ tasks, loading, createTask, toggleDone, updateTask, removeTask }}>
       {children}
     </TasksContext.Provider>
   );

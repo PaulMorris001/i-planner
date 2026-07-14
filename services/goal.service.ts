@@ -15,4 +15,6 @@ export const goalService = {
       '/goals/generate-milestones',
       { method: 'POST', body: input }
     ),
+
+  remove: (id: string) => authedRequest<void>(`/goals/${id}`, { method: 'DELETE' }),
 };

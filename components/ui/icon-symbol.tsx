@@ -40,6 +40,8 @@ const MAPPING = {
   'doc.fill': 'insert-drive-file',
   'eye': 'visibility',
   'eye.slash': 'visibility-off',
+  'ellipsis': 'more-vert',
+  'trash': 'delete',
 } as IconMapping;
 
 /**

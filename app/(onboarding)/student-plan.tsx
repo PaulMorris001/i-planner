@@ -1,5 +1,5 @@
 import {
-  View, Text, StyleSheet, TouchableOpacity, Pressable, Modal,
+  View, Text, StyleSheet, TouchableOpacity, Pressable,
   TextInput, ScrollView, Alert, Platform,
 } from 'react-native';
 import { useState } from 'react';
@@ -8,6 +8,7 @@ import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/Button';
 import { AddClassModal } from '@/components/plan/AddClassModal';
+import { BottomSheetModal } from '@/components/ui/BottomSheetModal';
 import { Colors, Spacing, Typography, Radius } from '@/constants/theme';
 import { Routes } from '@/constants/routes';
 import { usePlan } from '@/hooks/usePlan';
@@ -478,10 +479,7 @@ export default function StudentPlan() {
       />
 
       {/* ── Add recruitment sheet ── */}
-      <Modal visible={recSheetOpen} transparent animationType="slide" onRequestClose={() => setRecSheetOpen(false)}>
-        <Pressable style={styles.overlay} onPress={() => setRecSheetOpen(false)} />
-        <View style={styles.sheet}>
-          <View style={styles.handle} />
+      <BottomSheetModal visible={recSheetOpen} onClose={() => setRecSheetOpen(false)} maxHeightPct={88}>
           <View style={styles.sheetHeaderRow}>
             <Text style={styles.sheetTitle}>Add a coffee chat or interview</Text>
             <TouchableOpacity style={styles.closeBtn} onPress={() => setRecSheetOpen(false)}>
@@ -535,14 +533,10 @@ export default function StudentPlan() {
               <Text style={styles.sheetSaveBtnText}>Add task</Text>
             </TouchableOpacity>
           </ScrollView>
-        </View>
-      </Modal>
+      </BottomSheetModal>
 
       {/* ── Add social sheet ── */}
-      <Modal visible={socialSheetOpen} transparent animationType="slide" onRequestClose={() => setSocialSheetOpen(false)}>
-        <Pressable style={styles.overlay} onPress={() => setSocialSheetOpen(false)} />
-        <View style={styles.sheet}>
-          <View style={styles.handle} />
+      <BottomSheetModal visible={socialSheetOpen} onClose={() => setSocialSheetOpen(false)} maxHeightPct={88}>
           <View style={styles.sheetHeaderRow}>
             <Text style={styles.sheetTitle}>Add a party or event</Text>
             <TouchableOpacity style={styles.closeBtn} onPress={() => setSocialSheetOpen(false)}>
@@ -577,14 +571,10 @@ export default function StudentPlan() {
               <Text style={styles.sheetSaveBtnText}>Add activity</Text>
             </TouchableOpacity>
           </ScrollView>
-        </View>
-      </Modal>
+      </BottomSheetModal>
 
       {/* ── Add routine sheet ── */}
-      <Modal visible={routineSheetOpen} transparent animationType="slide" onRequestClose={() => setRoutineSheetOpen(false)}>
-        <Pressable style={styles.overlay} onPress={() => setRoutineSheetOpen(false)} />
-        <View style={styles.sheet}>
-          <View style={styles.handle} />
+      <BottomSheetModal visible={routineSheetOpen} onClose={() => setRoutineSheetOpen(false)} maxHeightPct={88}>
           <View style={styles.sheetHeaderRow}>
             <Text style={styles.sheetTitle}>Add a routine block</Text>
             <TouchableOpacity style={styles.closeBtn} onPress={() => setRoutineSheetOpen(false)}>
@@ -621,8 +611,7 @@ export default function StudentPlan() {
               <Text style={styles.sheetSaveBtnText}>Add routine</Text>
             </TouchableOpacity>
           </ScrollView>
-        </View>
-      </Modal>
+      </BottomSheetModal>
     </View>
   );
 }
@@ -742,21 +731,6 @@ const styles = StyleSheet.create({
   summaryHint: { ...Typography.caption, color: Colors.success, fontWeight: '600', textAlign: 'center' },
 
   // ── Bottom sheets ──
-  overlay: {
-    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(20,18,40,0.4)',
-  },
-  sheet: {
-    position: 'absolute', left: 0, right: 0, bottom: 0,
-    maxHeight: '88%',
-    backgroundColor: Colors.offWhite,
-    borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    paddingHorizontal: Spacing.md, paddingTop: 14, paddingBottom: 30,
-  },
-  handle: {
-    width: 38, height: 4, borderRadius: 999,
-    backgroundColor: Colors.border, alignSelf: 'center', marginBottom: 16,
-  },
   sheetHeaderRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14,
   },

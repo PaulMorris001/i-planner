@@ -1,8 +1,11 @@
 import { createContext, useContext, useMemo, useState, ReactNode } from 'react';
+import type { Task } from '@/types/task.types';
 
 interface NewTaskModalContextValue {
   isOpen: boolean;
+  editingTask: Task | null;
   open: () => void;
+  openForEdit: (task: Task) => void;
   close: () => void;
 }
 
@@ -10,14 +13,26 @@ const NewTaskModalContext = createContext<NewTaskModalContextValue | null>(null)
 
 export function NewTaskModalProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   const value = useMemo(
     () => ({
       isOpen,
-      open: () => setIsOpen(true),
-      close: () => setIsOpen(false),
+      editingTask,
+      open: () => {
+        setEditingTask(null);
+        setIsOpen(true);
+      },
+      openForEdit: (task: Task) => {
+        setEditingTask(task);
+        setIsOpen(true);
+      },
+      close: () => {
+        setIsOpen(false);
+        setEditingTask(null);
+      },
     }),
-    [isOpen]
+    [isOpen, editingTask]
   );
 
   return <NewTaskModalContext.Provider value={value}>{children}</NewTaskModalContext.Provider>;
