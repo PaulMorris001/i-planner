@@ -126,7 +126,7 @@ export default function Dashboard() {
 
   return (
     <>
-    <ScreenWrapper backgroundColor={Colors.offWhite} scroll style={styles.scrollContent}>
+    <ScreenWrapper backgroundColor={Colors.offWhite} scroll style={styles.scrollContent} edges={['top', 'right', 'left']}>
       <GreetingHeader />
 
       <View style={styles.stack}>

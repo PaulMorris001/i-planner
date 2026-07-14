@@ -68,7 +68,7 @@ export default function Coach() {
   };
 
   return (
-    <ScreenWrapper backgroundColor={Colors.offWhite}>
+    <ScreenWrapper backgroundColor={Colors.offWhite} edges={['top', 'right', 'left']}>
       <View style={styles.root}>
         <View style={styles.headerArea}>
           <View style={styles.headerRow}>

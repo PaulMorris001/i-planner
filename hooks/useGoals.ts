@@ -28,7 +28,7 @@ export function useGoals() {
 
   const createGoal = async (input: NewGoalInput) => {
     const tempId = `temp-${Date.now()}`;
-    setGoals((prev) => [...prev, { ...input, id: tempId, pct: 0 }]);
+    setGoals((prev) => [...prev, { ...input, id: tempId, pct: 0, milestones: [] }]);
     try {
       const created = await goalService.create(input);
       setGoals((prev) => prev.map((g) => (g.id === tempId ? created : g)));
@@ -38,5 +38,20 @@ export function useGoals() {
     }
   };
 
-  return { goals, loading, createGoal };
+  const updateGoal = async (
+    id: string,
+    patch: Partial<Pick<Goal, 'milestones' | 'title' | 'tag' | 'color'>>
+  ) => {
+    const prevGoals = goals;
+    setGoals((prev) => prev.map((g) => (g.id === id ? { ...g, ...patch } : g)));
+    try {
+      const updated = await goalService.update(id, patch);
+      setGoals((prev) => prev.map((g) => (g.id === id ? updated : g)));
+    } catch (err) {
+      setGoals(prevGoals);
+      throw err;
+    }
+  };
+
+  return { goals, loading, createGoal, updateGoal };
 }

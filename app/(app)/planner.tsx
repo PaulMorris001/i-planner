@@ -146,7 +146,7 @@ export default function Planner() {
   const calendarConnected = appleCalendarConnected || googleCalendarConnected;
   if (!settingsLoading && !calendarConnected && !calendarGateDismissed) {
     return (
-      <ScreenWrapper backgroundColor={Colors.offWhite}>
+      <ScreenWrapper backgroundColor={Colors.offWhite} edges={['top', 'right', 'left']}>
         <GreetingHeader />
         <CalendarConnectGate
           onConnectApple={async () => {
@@ -171,7 +171,7 @@ export default function Planner() {
   }
 
   return (
-    <ScreenWrapper backgroundColor={Colors.offWhite} scroll style={styles.scrollContent}>
+    <ScreenWrapper backgroundColor={Colors.offWhite} scroll style={styles.scrollContent} edges={['top', 'right', 'left']}>
       <GreetingHeader />
 
       <View style={styles.body}>

@@ -5,7 +5,7 @@ import {
   StyleSheet,
   ViewStyle,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Edge, SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/theme';
 
 interface ScreenWrapperProps {
@@ -13,6 +13,7 @@ interface ScreenWrapperProps {
   scroll?: boolean;
   style?: ViewStyle;
   backgroundColor?: string;
+  edges?: Edge[];
 }
 
 export function ScreenWrapper({
@@ -20,9 +21,10 @@ export function ScreenWrapper({
   scroll = false,
   style,
   backgroundColor = Colors.white,
+  edges = ['top', 'right', 'bottom', 'left'],
 }: ScreenWrapperProps) {
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor }]}>
+    <SafeAreaView style={[styles.safe, { backgroundColor }]} edges={edges}>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -36,7 +38,7 @@ export function ScreenWrapper({
             {children}
           </ScrollView>
         ) : (
-          <SafeAreaView style={[styles.flex, style]}>
+          <SafeAreaView style={[styles.flex, style]} edges={edges}>
             {children}
           </SafeAreaView>
         )}

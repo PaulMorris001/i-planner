@@ -58,7 +58,7 @@ export default function Profile() {
   const currentPathLabel = PATH_OPTIONS.find((o) => o.id === currentPath)?.label ?? 'Professional';
 
   return (
-    <ScreenWrapper backgroundColor={Colors.offWhite} scroll style={styles.scrollContent}>
+    <ScreenWrapper backgroundColor={Colors.offWhite} scroll style={styles.scrollContent} edges={['top', 'right', 'left']}>
       <View style={styles.body}>
         <Text style={styles.pageTitle}>Profile & settings</Text>
 

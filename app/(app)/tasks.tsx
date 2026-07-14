@@ -4,7 +4,7 @@ import { Colors, Spacing, Typography } from '@/constants/theme';
 
 export default function Tasks() {
   return (
-    <ScreenWrapper backgroundColor={Colors.offWhite}>
+    <ScreenWrapper backgroundColor={Colors.offWhite} edges={['top', 'right', 'left']}>
       <View style={styles.root}>
         <Text style={styles.title}>Tasks</Text>
         <Text style={styles.sub}>Your task list goes here.</Text>

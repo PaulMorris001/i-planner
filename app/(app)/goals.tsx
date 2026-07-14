@@ -1,58 +1,32 @@
 import { useState } from 'react';
-import { View, Text, TextInput, Pressable, Modal, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { GreetingHeader } from '@/components/ui/GreetingHeader';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { NewGoalModal } from '@/components/goal/NewGoalModal';
 import { Colors, Spacing } from '@/constants/theme';
 import { useGoals } from '@/hooks/useGoals';
-import { TaskCategories } from '@/constants/taskMeta';
-import type { GoalTypeId } from '@/types/goal.types';
-
-const GOAL_TYPES: { id: GoalTypeId; label: string; color: string }[] = [
-  { id: 'study', label: 'Study', color: Colors.primaryLight },
-  { id: 'career', label: 'Career', color: TaskCategories.career.color },
-  { id: 'personal', label: 'Personal', color: TaskCategories.personal.color },
-  { id: 'habit', label: 'Habit', color: TaskCategories.habit.color },
-];
+import type { Milestone } from '@/types/goal.types';
 
 export default function Goals() {
-  const { goals, createGoal } = useGoals();
-
+  const { goals, createGoal, updateGoal } = useGoals();
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [goalType, setGoalType] = useState<GoalTypeId>('study');
-  const [goalName, setGoalName] = useState('');
-  const [submitting, setSubmitting] = useState(false);
 
-  const canSave = goalName.trim().length > 0 && !submitting;
-
-  const openSheet = () => {
-    setGoalType('study');
-    setGoalName('');
-    setSheetOpen(true);
-  };
-
-  const handleCreate = async () => {
-    if (!canSave) return;
-    const type = GOAL_TYPES.find((t) => t.id === goalType)!;
-    setSubmitting(true);
-    try {
-      await createGoal({ type: type.id, tag: type.label, title: goalName.trim(), color: type.color });
-      setSheetOpen(false);
-    } catch (err) {
-      console.error('[Goals] failed to create goal', err);
-    } finally {
-      setSubmitting(false);
-    }
+  const toggleMilestone = (goalId: string, milestones: Milestone[], milestoneId: string) => {
+    const updated = milestones.map((m) => (m.id === milestoneId ? { ...m, done: !m.done } : m));
+    updateGoal(goalId, { milestones: updated }).catch((err) => {
+      console.error('[Goals] failed to update milestone', err);
+    });
   };
 
   return (
-    <ScreenWrapper backgroundColor={Colors.offWhite} scroll style={styles.scrollContent}>
+    <ScreenWrapper backgroundColor={Colors.offWhite} scroll style={styles.scrollContent} edges={['top', 'right', 'left']}>
       <GreetingHeader />
 
       <View style={styles.body}>
         <View style={styles.headerRow}>
           <Text style={styles.eyebrow}>ACTIVE GOALS</Text>
-          <Pressable style={styles.newGoalButton} onPress={openSheet}>
+          <Pressable style={styles.newGoalButton} onPress={() => setSheetOpen(true)}>
             <IconSymbol name="plus" color={Colors.primaryLight} size={15} />
             <Text style={styles.newGoalText}>New goal</Text>
           </Pressable>
@@ -75,56 +49,35 @@ export default function Goals() {
                 <View style={styles.progressTrack}>
                   <View style={[styles.progressFill, { width: `${goal.pct}%`, backgroundColor: goal.color }]} />
                 </View>
+
+                {goal.milestones.length > 0 && (
+                  <View style={styles.milestoneList}>
+                    {goal.milestones.map((m) => (
+                      <Pressable
+                        key={m.id}
+                        style={styles.milestoneRow}
+                        onPress={() => toggleMilestone(goal.id, goal.milestones, m.id)}
+                      >
+                        <View style={[styles.checkbox, m.done && { backgroundColor: goal.color, borderColor: goal.color }]}>
+                          {m.done && <Text style={styles.checkmark}>✓</Text>}
+                        </View>
+                        <View style={styles.milestoneTextBlock}>
+                          <Text style={[styles.milestoneTitle, m.done && styles.milestoneTitleDone]} numberOfLines={2}>
+                            {m.title}
+                          </Text>
+                          {!!m.dueLabel && <Text style={styles.milestoneDue}>{m.dueLabel}</Text>}
+                        </View>
+                      </Pressable>
+                    ))}
+                  </View>
+                )}
               </View>
             ))}
           </View>
         )}
       </View>
 
-      <Modal visible={sheetOpen} transparent animationType="slide" onRequestClose={() => setSheetOpen(false)}>
-        <Pressable style={styles.overlay} onPress={() => setSheetOpen(false)} />
-        <View style={styles.sheet}>
-          <View style={styles.handle} />
-          <Text style={styles.sheetTitle}>New goal</Text>
-
-          <Text style={styles.sheetEyebrow}>Type</Text>
-          <View style={styles.typeRow}>
-            {GOAL_TYPES.map((t) => {
-              const on = goalType === t.id;
-              return (
-                <Pressable
-                  key={t.id}
-                  style={[
-                    styles.typeChip,
-                    { backgroundColor: on ? t.color : Colors.white, borderColor: on ? t.color : Colors.border },
-                  ]}
-                  onPress={() => setGoalType(t.id)}
-                >
-                  <Text style={[styles.typeChipText, { color: on ? Colors.white : Colors.textSecondary }]}>
-                    {t.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-
-          <TextInput
-            value={goalName}
-            onChangeText={setGoalName}
-            placeholder="Name your goal (e.g. Finish CFA Level I)"
-            placeholderTextColor={Colors.textMuted}
-            style={styles.input}
-          />
-
-          <Pressable
-            style={[styles.createButton, !canSave && styles.createButtonDisabled]}
-            disabled={!canSave}
-            onPress={handleCreate}
-          >
-            <Text style={[styles.createButtonText, !canSave && styles.createButtonTextDisabled]}>Create goal</Text>
-          </Pressable>
-        </View>
-      </Modal>
+      <NewGoalModal visible={sheetOpen} onClose={() => setSheetOpen(false)} onCreate={createGoal} />
     </ScreenWrapper>
   );
 }
@@ -226,91 +179,46 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 999,
   },
-  overlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(20,18,40,0.4)',
+  milestoneList: {
+    marginTop: 14,
+    gap: 9,
   },
-  sheet: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: Colors.offWhite,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: Spacing.md,
-    paddingTop: 14,
-    paddingBottom: 30,
-  },
-  handle: {
-    width: 38,
-    height: 4,
-    borderRadius: 999,
-    backgroundColor: Colors.border,
-    alignSelf: 'center',
-    marginBottom: 16,
-  },
-  sheetTitle: {
-    fontSize: 19,
-    fontWeight: '800',
-    color: Colors.textPrimary,
-    letterSpacing: -0.3,
-  },
-  sheetEyebrow: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginTop: 16,
-    marginBottom: 10,
-  },
-  typeRow: {
+  milestoneRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+    alignItems: 'flex-start',
+    gap: 10,
   },
-  typeChip: {
-    borderWidth: 1.5,
-    borderRadius: 999,
-    paddingVertical: 9,
-    paddingHorizontal: 14,
-  },
-  typeChipText: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  input: {
-    marginTop: 16,
+  checkbox: {
+    width: 18,
+    height: 18,
+    borderRadius: 5,
     borderWidth: 1.5,
     borderColor: Colors.border,
-    borderRadius: 13,
-    padding: 14,
-    fontSize: 15,
-    color: Colors.textPrimary,
-    backgroundColor: Colors.white,
-  },
-  createButton: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 20,
-    backgroundColor: Colors.primaryLight,
-    borderRadius: 14,
-    paddingVertical: 15,
+    marginTop: 1,
   },
-  createButtonDisabled: {
-    backgroundColor: Colors.border,
-  },
-  createButtonText: {
-    fontSize: 16,
+  checkmark: {
+    fontSize: 11,
     fontWeight: '700',
     color: Colors.white,
   },
-  createButtonTextDisabled: {
+  milestoneTextBlock: {
+    flex: 1,
+    minWidth: 0,
+  },
+  milestoneTitle: {
+    fontSize: 13.5,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+  },
+  milestoneTitleDone: {
     color: Colors.textMuted,
+    textDecorationLine: 'line-through',
+  },
+  milestoneDue: {
+    fontSize: 11.5,
+    color: Colors.textMuted,
+    marginTop: 1,
   },
 });

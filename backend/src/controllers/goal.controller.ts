@@ -3,6 +3,18 @@ import { Goal, toPublicGoal } from '../models/Goal';
 import { AuthedRequest } from '../middleware/requireAuth';
 import { ApiError } from '../utils/ApiError';
 import { findOwnedOrThrow } from '../utils/ownedDoc';
+import { generateGoalMilestones } from '../services/goalMilestones';
+
+interface MilestoneDoc {
+  title: string;
+  done: boolean;
+  dueLabel: string;
+}
+
+function pctFromMilestones(milestones: { done: boolean }[]): number {
+  if (!milestones.length) return 0;
+  return Math.round((milestones.filter((m) => m.done).length / milestones.length) * 100);
+}
 
 export async function listGoals(req: AuthedRequest, res: Response) {
   const goals = await Goal.find({ firebaseUid: req.userId });
@@ -10,7 +22,7 @@ export async function listGoals(req: AuthedRequest, res: Response) {
 }
 
 export async function createGoal(req: AuthedRequest, res: Response) {
-  const { type, tag, title, color } = req.body ?? {};
+  const { type, tag, title, color, milestones } = req.body ?? {};
 
   if (!title || typeof title !== 'string' || !title.trim()) {
     throw new ApiError(400, 'Title is required.', 'general');
@@ -19,13 +31,23 @@ export async function createGoal(req: AuthedRequest, res: Response) {
     throw new ApiError(400, 'Type, tag and color are required.', 'general');
   }
 
+  const milestoneDocs: MilestoneDoc[] = Array.isArray(milestones)
+    ? milestones
+        .filter((m): m is { title: string; dueLabel?: string } => !!m?.title)
+        .map((m) => ({ title: m.title, done: false, dueLabel: m.dueLabel ?? '' }))
+    : [];
+
   const goal = await Goal.create({
     firebaseUid: req.userId,
     type,
     tag,
     title: title.trim(),
     color,
-    pct: 0,
+    milestones: milestoneDocs,
+    // Freshly created milestones are always undone, so pct is always 0 here
+    // regardless of count — pctFromMilestones is still used for consistency with
+    // updateGoal, where it does the real work.
+    pct: pctFromMilestones(milestoneDocs),
   });
 
   res.status(201).json(toPublicGoal(goal));
@@ -34,12 +56,34 @@ export async function createGoal(req: AuthedRequest, res: Response) {
 export async function updateGoal(req: AuthedRequest, res: Response) {
   const goal = await findOwnedOrThrow(Goal, req.params.id, req.userId!);
 
-  const { title, pct, tag, color } = req.body ?? {};
+  const { title, tag, color, milestones } = req.body ?? {};
   if (title !== undefined) goal.title = title;
-  if (pct !== undefined) goal.pct = Number(pct);
   if (tag !== undefined) goal.tag = tag;
   if (color !== undefined) goal.color = color;
+  if (Array.isArray(milestones)) {
+    goal.milestones.splice(
+      0,
+      goal.milestones.length,
+      ...milestones
+        .filter((m): m is { title: string; done?: boolean; dueLabel?: string } => !!m?.title)
+        .map((m) => ({ title: m.title, done: !!m.done, dueLabel: m.dueLabel ?? '' }))
+    );
+    goal.pct = pctFromMilestones(goal.milestones);
+  }
 
   await goal.save();
   res.json(toPublicGoal(goal));
+}
+
+export async function generateMilestones(req: AuthedRequest, res: Response) {
+  const { title, type } = req.body ?? {};
+  if (!title || typeof title !== 'string' || !title.trim()) {
+    throw new ApiError(400, 'Title is required.', 'general');
+  }
+  if (!type || typeof type !== 'string') {
+    throw new ApiError(400, 'Type is required.', 'general');
+  }
+
+  const suggestions = await generateGoalMilestones({ title: title.trim(), type });
+  res.json({ milestones: suggestions });
 }

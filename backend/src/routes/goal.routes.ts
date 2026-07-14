@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { listGoals, createGoal, updateGoal } from '../controllers/goal.controller';
+import { listGoals, createGoal, updateGoal, generateMilestones } from '../controllers/goal.controller';
 import { requireAuth } from '../middleware/requireAuth';
 import { asyncHandler } from '../utils/asyncHandler';
 
@@ -9,4 +9,5 @@ goalRouter.use(requireAuth);
 
 goalRouter.get('/', asyncHandler(listGoals));
 goalRouter.post('/', asyncHandler(createGoal));
+goalRouter.post('/generate-milestones', asyncHandler(generateMilestones));
 goalRouter.patch('/:id', asyncHandler(updateGoal));
