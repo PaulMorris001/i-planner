@@ -80,6 +80,15 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       } finally {
         setLoading(false);
       }
+      // Best-effort, fire-and-forget — lets Google Calendar sync place events at
+      // the correct local hour instead of UTC. Not reflected in local state since
+      // it's write-only from the client's perspective.
+      try {
+        const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        if (timeZone) settingsService.patch({ timeZone });
+      } catch (err) {
+        console.error('[SettingsProvider] failed to report timezone', err);
+      }
     });
     return unsubscribe;
   }, []);

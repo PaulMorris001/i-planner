@@ -4,7 +4,7 @@ import type { Settings } from '@/types/settings.types';
 export const settingsService = {
   get: () => authedRequest<Settings>('/settings'),
 
-  patch: (update: Partial<Settings>) =>
+  patch: (update: Partial<Settings> & { timeZone?: string }) =>
     authedRequest<Settings>('/settings', { method: 'PATCH', body: update }),
 
   startGoogleConnect: () =>

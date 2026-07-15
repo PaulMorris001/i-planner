@@ -41,23 +41,41 @@ function parseTime(time: string | undefined): { hour: number; minute: number } {
   return { hour, minute: parseInt(match[2], 10) };
 }
 
-function buildEventWindow(dateIso: string, time: string | undefined, durationMinutes: number) {
-  const { hour, minute } = parseTime(time);
-  const start = new Date(dateIso);
-  start.setHours(hour, minute, 0, 0);
-  const end = new Date(start.getTime() + durationMinutes * 60_000);
-  return { start, end };
+function pad(n: number): string {
+  return String(n).padStart(2, '0');
 }
 
-// Google rejects a recurring event's start/end without an explicit timeZone, even
-// when dateTime already carries a 'Z' offset — RRULE expansion needs a named zone
-// to apply DST correctly across occurrences. We don't currently capture the user's
-// real IANA timezone (class/task times are parsed server-side from a plain "9:00
-// AM"-style string with no zone info), so UTC is used for both the wall-clock math
-// above and this field — internally consistent, but a class time will show as its
-// literal hour in UTC on Google Calendar rather than the user's local hour.
-function toGoogleEventTime(date: Date): { dateTime: string; timeZone: string } {
-  return { dateTime: date.toISOString(), timeZone: 'UTC' };
+// Formats a UTC-arithmetic instant back into a floating "wall clock" string with
+// no offset — Date.UTC/getUTC* here is just deterministic minute arithmetic (start
+// + duration), never a real instant, so this is unaffected by the server's own TZ.
+function formatFloating(ms: number): string {
+  const d = new Date(ms);
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}T${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:00`;
+}
+
+// Builds floating (no-offset) local datetime strings for the event window. Paired
+// with an explicit IANA timeZone in toGoogleEventTime, Google interprets the
+// wall-clock hour/minute literally in the user's timezone rather than treating it
+// as a UTC instant — so a class set for "9:00 AM" lands at 9:00 AM local time,
+// not 9:00 AM UTC.
+function buildEventWindow(dateIso: string, time: string | undefined, durationMinutes: number) {
+  const { hour, minute } = parseTime(time);
+  const datePart = dateIso.slice(0, 10); // "YYYY-MM-DD"
+  const startMs = Date.UTC(
+    Number(datePart.slice(0, 4)),
+    Number(datePart.slice(5, 7)) - 1,
+    Number(datePart.slice(8, 10)),
+    hour,
+    minute
+  );
+  const endMs = startMs + durationMinutes * 60_000;
+  return { start: formatFloating(startMs), end: formatFloating(endMs) };
+}
+
+// Falls back to UTC when the device hasn't reported its timezone yet (e.g. an
+// existing user who hasn't opened the app since this was added).
+function toGoogleEventTime(floatingDateTime: string, timeZone: string): { dateTime: string; timeZone: string } {
+  return { dateTime: floatingDateTime, timeZone };
 }
 
 function buildRRule(freq: SyncableClassItem['freq'], dayIdxs: number[]): string | undefined {
@@ -188,10 +206,11 @@ export async function upsertClassEvents(
   if (!ctx) return undefined;
 
   const { start, end } = buildEventWindow(item.startDate, item.time, 60);
+  const timeZone = settings.timeZone || 'UTC';
   const body: Record<string, unknown> = {
     summary: item.courseName,
-    start: toGoogleEventTime(start),
-    end: toGoogleEventTime(end),
+    start: toGoogleEventTime(start, timeZone),
+    end: toGoogleEventTime(end, timeZone),
   };
   const rrule = item.recurring ? buildRRule(item.freq, item.dayIdxs) : undefined;
   if (rrule) body.recurrence = [rrule];
@@ -218,10 +237,11 @@ export async function upsertTaskEvent(
   if (!ctx) return undefined;
 
   const { start, end } = buildEventWindow(task.dueDate, task.time, 30);
+  const timeZone = settings.timeZone || 'UTC';
   const body: Record<string, unknown> = {
     summary: task.title,
-    start: toGoogleEventTime(start),
-    end: toGoogleEventTime(end),
+    start: toGoogleEventTime(start, timeZone),
+    end: toGoogleEventTime(end, timeZone),
   };
   if (task.notes) body.description = task.notes;
 

@@ -14,6 +14,9 @@ export interface SettingsDocument extends Document {
   // written to (created on first sync) — keeps synced events isolated from the
   // user's primary calendar. Not exposed via toPublicSettings(); purely internal.
   googleCalendarId?: string;
+  // IANA timezone captured from the device (e.g. "America/New_York") — used so
+  // synced Google Calendar events land at the correct local hour instead of UTC.
+  timeZone?: string;
 }
 
 const settingsSchema = new Schema<SettingsDocument>({
@@ -25,6 +28,7 @@ const settingsSchema = new Schema<SettingsDocument>({
   googleRefreshToken: { type: String },
   googleTokenExpiresAt: { type: Date },
   googleCalendarId: { type: String },
+  timeZone: { type: String },
 });
 
 export function toPublicSettings(doc: SettingsDocument | null) {
