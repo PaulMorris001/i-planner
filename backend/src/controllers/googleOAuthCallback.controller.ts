@@ -1,9 +1,52 @@
 import { Request, Response } from 'express';
-import { Settings } from '../models/Settings';
+import { Settings, SettingsDocument } from '../models/Settings';
+import { Plan } from '../models/Plan';
+import { Task } from '../models/Task';
 import { env } from '../config/env';
 import { verifyState } from '../utils/googleOAuthState';
+import { upsertClassEvents, upsertTaskEvent, SyncableClassItem } from '../services/googleCalendarSync';
 
 const APP_REDIRECT = 'iplanner://oauth2redirect';
+
+interface ClassRecord extends SyncableClassItem {
+  id: string;
+}
+
+// Classes/tasks created before the user connected Google still need to end up on
+// the calendar — run the same upsert used by the live sync paths across everything
+// that already exists. Best-effort: a failure here shouldn't break the OAuth flow
+// the user is actively waiting on.
+async function backfillGoogleSync(firebaseUid: string, settings: SettingsDocument) {
+  try {
+    const plan = await Plan.findOne({ firebaseUid, pathType: 'student' });
+    const data = plan?.data as { classes?: ClassRecord[] } | undefined;
+    const classes = Array.isArray(data?.classes) ? data.classes : [];
+
+    let classesChanged = false;
+    for (const item of classes) {
+      const eventId = await upsertClassEvents(settings, item);
+      if (eventId !== item.googleEventId) {
+        item.googleEventId = eventId;
+        classesChanged = true;
+      }
+    }
+    if (classesChanged && plan) {
+      plan.markModified('data');
+      await plan.save();
+    }
+
+    const tasks = await Task.find({ firebaseUid, dueDate: { $ne: '' } });
+    for (const task of tasks) {
+      const eventId = await upsertTaskEvent(settings, task);
+      if (eventId !== task.googleEventId) {
+        task.googleEventId = eventId;
+        await task.save();
+      }
+    }
+  } catch (err) {
+    console.error('[googleOAuthCallback] backfill failed', err);
+  }
+}
 
 interface GoogleTokenResponse {
   access_token: string;
@@ -51,7 +94,7 @@ export async function handleGoogleCalendarCallback(req: Request, res: Response) 
       return;
     }
 
-    await Settings.findOneAndUpdate(
+    const settings = await Settings.findOneAndUpdate(
       { firebaseUid: uid },
       {
         $set: {
@@ -65,6 +108,8 @@ export async function handleGoogleCalendarCallback(req: Request, res: Response) 
       },
       { upsert: true, new: true }
     );
+
+    await backfillGoogleSync(uid, settings);
 
     res.redirect(`${APP_REDIRECT}?status=success`);
   } catch (err) {

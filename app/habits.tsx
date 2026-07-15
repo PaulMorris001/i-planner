@@ -118,6 +118,13 @@ export default function Habits() {
         {doneToday} of {habits.length} done today
       </Text>
 
+      <View style={styles.topActionRow}>
+        <Pressable style={styles.newHabitButton} onPress={openSheet}>
+          <IconSymbol name="plus" color={Colors.primaryLight} size={18} />
+          <Text style={styles.newHabitText}>New habit</Text>
+        </Pressable>
+      </View>
+
       <View style={styles.list}>
         {habits.map((habit) => {
           const category = TaskCategories[habit.category];
@@ -188,11 +195,6 @@ export default function Habits() {
             </Pressable>
           );
         })}
-
-        <Pressable style={styles.newHabitButton} onPress={openSheet}>
-          <IconSymbol name="plus" color={Colors.primaryLight} size={18} />
-          <Text style={styles.newHabitText}>New habit</Text>
-        </Pressable>
       </View>
 
       <BottomSheetModal visible={sheetOpen} onClose={closeSheet}>
@@ -301,8 +303,12 @@ const styles = StyleSheet.create({
     marginTop: 5,
     paddingHorizontal: Spacing.md,
   },
+  topActionRow: {
+    marginTop: 16,
+    paddingHorizontal: Spacing.md,
+  },
   list: {
-    marginTop: 20,
+    marginTop: 16,
     paddingHorizontal: Spacing.md,
     gap: 12,
   },

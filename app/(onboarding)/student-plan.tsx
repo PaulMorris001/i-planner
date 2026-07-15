@@ -13,6 +13,8 @@ import { Colors, Spacing, Typography, Radius } from '@/constants/theme';
 import { Routes } from '@/constants/routes';
 import { usePlan } from '@/hooks/usePlan';
 import { useOnboarding } from '@/hooks/useOnboarding';
+import { useSettings } from '@/hooks/useSettings';
+import { syncClassToAppleCalendar } from '@/utils/appleCalendarSync';
 import type {
   StudentPlan as StudentPlanType,
   ClassItem,
@@ -82,6 +84,7 @@ export default function StudentPlan() {
   const insets = useSafeAreaInsets();
   const { savePlan } = usePlan();
   const { completeOnboarding } = useOnboarding();
+  const { appleCalendarConnected } = useSettings();
 
   const [plan, setPlan] = useState<StudentPlanType>({
     classes:       [],
@@ -202,7 +205,16 @@ export default function StudentPlan() {
   const handleContinue = async () => {
     setLoading(true);
     try {
-      await savePlan(plan);
+      // Onboarding builds classes purely in local state and saves once here, so
+      // Apple sync (best-effort — syncClassToAppleCalendar never throws) happens
+      // right before the single savePlan call rather than at each addClass.
+      const syncedClasses = await Promise.all(
+        plan.classes.map(async (item) => ({
+          ...item,
+          appleEventIds: appleCalendarConnected ? await syncClassToAppleCalendar(item) : [],
+        }))
+      );
+      await savePlan({ ...plan, classes: syncedClasses });
       await completeOnboarding();
       router.replace(Routes.DASHBOARD);
     } catch (err) {

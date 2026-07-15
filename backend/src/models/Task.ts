@@ -12,11 +12,12 @@ export interface TaskDocument extends Document {
   done: boolean;
   recurring: boolean;
   notes: string;
+  appleEventId?: string;
+  googleEventId?: string;
 }
 
 const taskSchema = new Schema<TaskDocument>({
   firebaseUid: { type: String, required: true, index: true },
-  title: { type: String, required: true, trim: true },
   // category/priority are free-form strings rather than a Mongoose enum —
   // the canonical list lives in the frontend's constants/taskMeta.ts and this
   // backend doesn't share a types package with the app.
@@ -29,6 +30,10 @@ const taskSchema = new Schema<TaskDocument>({
   done: { type: Boolean, default: false },
   recurring: { type: Boolean, default: false },
   notes: { type: String, default: '' },
+  title: { type: String, required: true, trim: true },
+  // Calendar-sync event ids — only ever set when dueDate is non-empty.
+  appleEventId: { type: String },
+  googleEventId: { type: String },
 });
 
 export function toPublicTask(doc: TaskDocument) {
@@ -44,6 +49,8 @@ export function toPublicTask(doc: TaskDocument) {
     done: doc.done,
     recurring: doc.recurring,
     notes: doc.notes,
+    appleEventId: doc.appleEventId,
+    googleEventId: doc.googleEventId,
   };
 }
 

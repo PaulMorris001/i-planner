@@ -10,6 +10,10 @@ export interface SettingsDocument extends Document {
   googleAccessToken?: string;
   googleRefreshToken?: string;
   googleTokenExpiresAt?: Date;
+  // Id of the dedicated secondary "i-Planner" Google Calendar synced events are
+  // written to (created on first sync) — keeps synced events isolated from the
+  // user's primary calendar. Not exposed via toPublicSettings(); purely internal.
+  googleCalendarId?: string;
 }
 
 const settingsSchema = new Schema<SettingsDocument>({
@@ -20,6 +24,7 @@ const settingsSchema = new Schema<SettingsDocument>({
   googleAccessToken: { type: String },
   googleRefreshToken: { type: String },
   googleTokenExpiresAt: { type: Date },
+  googleCalendarId: { type: String },
 });
 
 export function toPublicSettings(doc: SettingsDocument | null) {

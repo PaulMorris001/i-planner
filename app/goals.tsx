@@ -6,6 +6,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { NewGoalModal } from '@/components/goal/NewGoalModal';
 import { ItemActionSheet } from '@/components/ui/ItemActionSheet';
 import { AnimatedProgressBar } from '@/components/ui/AnimatedProgressBar';
+import { GoalsSkeleton } from '@/components/ui/GoalsSkeleton';
 import { confirmDelete } from '@/utils/confirmDelete';
 import { Colors, Spacing } from '@/constants/theme';
 import { useGoals } from '@/hooks/useGoals';
@@ -13,7 +14,7 @@ import type { Goal, Milestone } from '@/types/goal.types';
 
 export default function Goals() {
   const router = useRouter();
-  const { goals, createGoal, updateGoal, deleteGoal } = useGoals();
+  const { goals, loading, createGoal, updateGoal, deleteGoal } = useGoals();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [actionSheetTarget, setActionSheetTarget] = useState<Goal | null>(null);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
@@ -56,7 +57,9 @@ export default function Goals() {
           </Pressable>
         </View>
 
-        {goals.length === 0 ? (
+        {loading ? (
+          <GoalsSkeleton />
+        ) : goals.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyStateTitle}>No goals yet</Text>
             <Text style={styles.emptyStateSub}>Tap "New goal" to start tracking one.</Text>

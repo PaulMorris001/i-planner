@@ -4,7 +4,11 @@ import { AuthedRequest } from '../middleware/requireAuth';
 import { env } from '../config/env';
 import { signState } from '../utils/googleOAuthState';
 
-const GOOGLE_CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
+// Write scope — needed to create the dedicated sync calendar and write events to it,
+// not just read. Requesting this broader scope means the OAuth consent screen's
+// configured scopes in Google Cloud Console must include it (see plan notes); any
+// user connected under the old readonly scope will need to reconnect once.
+const GOOGLE_CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar';
 
 export async function getSettings(req: AuthedRequest, res: Response) {
   const settings = await Settings.findOne({ firebaseUid: req.userId });
@@ -52,7 +56,12 @@ export async function disconnectGoogleCalendar(req: AuthedRequest, res: Response
     { firebaseUid: req.userId },
     {
       $set: { googleCalendarConnected: false },
-      $unset: { googleAccessToken: '', googleRefreshToken: '', googleTokenExpiresAt: '' },
+      $unset: {
+        googleAccessToken: '',
+        googleRefreshToken: '',
+        googleTokenExpiresAt: '',
+        googleCalendarId: '',
+      },
     },
     { upsert: true, new: true }
   );

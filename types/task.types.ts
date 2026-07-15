@@ -12,6 +12,10 @@ export interface Task {
   done: boolean;
   recurring: boolean;
   notes: string;
+  // Calendar-sync event ids — only ever set when dueDate is non-empty (a task
+  // with no fixed date has nothing to sync to a calendar).
+  appleEventId?: string;
+  googleEventId?: string;
 }
 
 export type NewTaskInput = Omit<Task, 'id' | 'done'>;

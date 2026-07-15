@@ -1,80 +1,99 @@
-import { useState } from 'react';
-import { View, Text, Pressable, StyleSheet, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
-import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { GreetingHeader } from '@/components/ui/GreetingHeader';
-import { AddClassModal } from '@/components/plan/AddClassModal';
-import { AddExamModal } from '@/components/plan/AddExamModal';
-import { ExamCarousel } from '@/components/plan/ExamCarousel';
-import { DashboardSkeleton } from '@/components/ui/DashboardSkeleton';
-import { AnimatedProgressBar } from '@/components/ui/AnimatedProgressBar';
-import { Colors, Spacing } from '@/constants/theme';
-import { Routes } from '@/constants/routes';
-import { usePlan } from '@/hooks/usePlan';
-import { useOnboarding } from '@/hooks/useOnboarding';
-import { useHabits } from '@/hooks/useHabits';
-import { useTasks } from '@/hooks/useTasks';
-import { useGoals } from '@/hooks/useGoals';
-import { TaskCategories } from '@/constants/taskMeta';
-import { COURSE_COLORS } from '@/constants/classColors';
-import { DUMMY_SYLLABI } from '@/constants/dummySyllabi';
-import { weekdayIndexMonday } from '@/utils/date';
-import { parseTimeToMinutes } from '@/utils/time';
-import type { ClassItem, Exam, ExamPlan as ExamPlanType } from '@/types/plan.types';
+import { GoalSummaryModal } from "@/components/goal/GoalSummaryModal";
+import { ScreenWrapper } from "@/components/layout/ScreenWrapper";
+import { AddClassModal } from "@/components/plan/AddClassModal";
+import { AddExamModal } from "@/components/plan/AddExamModal";
+import { ExamCarousel } from "@/components/plan/ExamCarousel";
+import { AnimatedProgressBar } from "@/components/ui/AnimatedProgressBar";
+import { DashboardSkeleton } from "@/components/ui/DashboardSkeleton";
+import { GreetingHeader } from "@/components/ui/GreetingHeader";
+import { IconSymbol } from "@/components/ui/icon-symbol";
+import { COURSE_COLORS } from "@/constants/classColors";
+import { DUMMY_SYLLABI } from "@/constants/dummySyllabi";
+import { Routes } from "@/constants/routes";
+import { TaskCategories } from "@/constants/taskMeta";
+import { Colors, Spacing } from "@/constants/theme";
+import { useGoals } from "@/hooks/useGoals";
+import { useHabits } from "@/hooks/useHabits";
+import { useOnboarding } from "@/hooks/useOnboarding";
+import { usePlan } from "@/hooks/usePlan";
+import { useSettings } from "@/hooks/useSettings";
+import { useTasks } from "@/hooks/useTasks";
+import type {
+  ClassItem,
+  Exam,
+  ExamPlan as ExamPlanType,
+} from "@/types/plan.types";
+import { formatMonthYear, weekdayIndexMonday } from "@/utils/date";
+import { parseTimeToMinutes } from "@/utils/time";
+import { syncClassToAppleCalendar } from "@/utils/appleCalendarSync";
+import { useRouter } from "expo-router";
+import { useState } from "react";
+import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 
-const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const DAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 function classDaysLabel(item: ClassItem): string {
-  if (!item.recurring) return 'One time';
-  if (item.freq === 'monthly') return 'Monthly';
-  return (item.dayIdxs ?? []).map((i) => DAY_SHORT[i]).join(' · ');
+  if (!item.recurring) return "One time";
+  if (item.freq === "monthly") return "Monthly";
+  return (item.dayIdxs ?? []).map((i) => DAY_SHORT[i]).join(" · ");
 }
 
-type PathKey = 'student' | 'exam' | 'professional';
+type PathKey = "student" | "exam" | "professional";
 
 function toPathKey(focusProfile: string | null): PathKey {
-  if (focusProfile === 'student') return 'student';
-  if (focusProfile === 'exam_candidate') return 'exam';
-  return 'professional';
+  if (focusProfile === "student") return "student";
+  if (focusProfile === "exam_candidate") return "exam";
+  return "professional";
 }
 
 const AI_TIP: Record<PathKey, string> = {
-  student: 'Case Memo 1 is due in 3 days — want me to block study time?',
+  student: "Case Memo 1 is due in 3 days — want me to block study time?",
   exam: "You're on Week 4. Want a quick quiz on this week's topics?",
-  professional: 'Your first action is due in 2 days. Want a reminder?',
+  professional: "Your first action is due in 2 days. Want a reminder?",
 };
 
-const EXAM_WEEK_TASKS: { title: string; status: 'done' | 'active' | 'todo'; meta?: string }[] = [
-  { title: 'Mutual fund structures', status: 'done' },
-  { title: 'ETFs & closed-end funds', status: 'active', meta: 'Today · 2h' },
-  { title: 'UITs & annuities', status: 'todo' },
+const EXAM_WEEK_TASKS: {
+  title: string;
+  status: "done" | "active" | "todo";
+  meta?: string;
+}[] = [
+  { title: "Mutual fund structures", status: "done" },
+  { title: "ETFs & closed-end funds", status: "active", meta: "Today · 2h" },
+  { title: "UITs & annuities", status: "todo" },
 ];
 
 function formatShortDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
-
-function formatMonthYear(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  return new Date(iso).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
 }
 
 export default function Dashboard() {
   const router = useRouter();
-  const { professionalPlan, plan, examPlan, savePlan, saveExamPlan, loading: planLoading } = usePlan();
+  const {
+    plan,
+    examPlan,
+    savePlan,
+    saveExamPlan,
+    loading: planLoading,
+  } = usePlan();
   const { focusProfile } = useOnboarding();
+  const { appleCalendarConnected } = useSettings();
   const { habits, loading: habitsLoading } = useHabits();
   const { tasks, loading: tasksLoading } = useTasks();
   const { goals, loading: goalsLoading } = useGoals();
-  const dashboardLoading = planLoading || habitsLoading || tasksLoading || goalsLoading;
-  const careerGoal = goals.find((g) => g.type === 'career');
-  const careerMilestonesDone = careerGoal?.milestones.filter((m) => m.done).length ?? 0;
+  const dashboardLoading =
+    planLoading || habitsLoading || tasksLoading || goalsLoading;
+  const careerGoal = goals.find((g) => g.type === "career");
+  const careerMilestonesDone =
+    careerGoal?.milestones.filter((m) => m.done).length ?? 0;
   const nextCareerMilestone = careerGoal?.milestones.find((m) => !m.done);
-  const financialGoal = professionalPlan.financialGoals[0];
   const habitsDoneToday = habits.filter((h) => h.doneToday).length;
 
   const [classModalOpen, setClassModalOpen] = useState(false);
   const [examModalOpen, setExamModalOpen] = useState(false);
+  const [goalSummaryOpen, setGoalSummaryOpen] = useState(false);
 
   const pathKey = toPathKey(focusProfile);
 
@@ -90,15 +109,18 @@ export default function Dashboard() {
 
   // Most-recently-created first — class ids are Date.now() timestamps, so a
   // numeric sort on id doubles as a creation-order sort.
-  const recentClasses = [...plan.classes].sort((a, b) => Number(b.id) - Number(a.id));
+  const recentClasses = [...plan.classes].sort(
+    (a, b) => Number(b.id) - Number(a.id),
+  );
   const visibleClasses = recentClasses.slice(0, 3);
 
   const handleAddClass = async (item: ClassItem) => {
+    const appleEventIds = appleCalendarConnected ? await syncClassToAppleCalendar(item) : [];
     try {
-      await savePlan({ ...plan, classes: [...plan.classes, item] });
+      await savePlan({ ...plan, classes: [...plan.classes, { ...item, appleEventIds }] });
     } catch (err) {
-      console.error('[Dashboard] failed to add class', err);
-      Alert.alert("Couldn't add class", 'Check your connection and try again.');
+      console.error("[Dashboard] failed to add class", err);
+      Alert.alert("Couldn't add class", "Check your connection and try again.");
     }
   };
 
@@ -107,8 +129,11 @@ export default function Dashboard() {
       const updated: ExamPlanType = { exams: [...examPlan.exams, exam] };
       await saveExamPlan(updated);
     } catch (err) {
-      console.error('[Dashboard] failed to add exam', err);
-      Alert.alert("Couldn't save your exam", 'Check your connection and try again.');
+      console.error("[Dashboard] failed to add exam", err);
+      Alert.alert(
+        "Couldn't save your exam",
+        "Check your connection and try again.",
+      );
     }
   };
 
@@ -127,7 +152,11 @@ export default function Dashboard() {
       .map((o) => ({ title: o.title, date: o.date, dotColor: Colors.warning })),
     ...tasks
       .filter((t) => !!t.dueDate && !t.done)
-      .map((t) => ({ title: t.title, date: t.dueDate, dotColor: TaskCategories[t.category].color })),
+      .map((t) => ({
+        title: t.title,
+        date: t.dueDate,
+        dotColor: TaskCategories[t.category].color,
+      })),
   ]
     .filter((item) => new Date(item.date).getTime() >= Date.now())
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
@@ -136,448 +165,680 @@ export default function Dashboard() {
   // Soonest-upcoming first — feeds both the countdown carousel and the "My
   // Exams" list below.
   const sortedExams = [...examPlan.exams].sort(
-    (a, b) => new Date(a.examDate).getTime() - new Date(b.examDate).getTime()
+    (a, b) => new Date(a.examDate).getTime() - new Date(b.examDate).getTime(),
   );
 
   return (
     <>
-    <ScreenWrapper backgroundColor={Colors.offWhite} scroll style={styles.scrollContent} edges={['top', 'right', 'left']}>
-      <GreetingHeader />
+      <ScreenWrapper
+        backgroundColor={Colors.offWhite}
+        scroll
+        style={styles.scrollContent}
+        edges={["top", "right", "left"]}
+      >
+        <GreetingHeader />
 
-      {dashboardLoading ? (
-        <DashboardSkeleton />
-      ) : (
-      <View style={styles.stack}>
-        {pathKey === 'student' ? (
-          <>
-            {/* Study streak + Up next */}
-            <View style={styles.statsRow}>
-              <View style={styles.statCard}>
-                <Text style={styles.statLabel}>Study streak</Text>
-                <View style={styles.statValueRow}>
-                  <Text style={styles.statValue}>5</Text>
-                  <Text style={styles.statUnit}>days</Text>
-                </View>
-              </View>
-              <View style={styles.statCard}>
-                <Text style={styles.statLabel}>Up next</Text>
-                {studentUpcoming.length > 0 ? (
-                  <>
-                    <Text style={styles.statNextTitle} numberOfLines={1}>
-                      {studentUpcoming[0].title}
-                    </Text>
-                    <Text style={styles.statNextDate}>{formatShortDate(studentUpcoming[0].date)}</Text>
-                  </>
-                ) : (
-                  <Text style={styles.statNextTitle}>Nothing scheduled</Text>
-                )}
-              </View>
-            </View>
-
-            {/* Today's Classes */}
-            <View style={styles.card}>
-              <Text style={styles.todayTitle}>Today's Classes</Text>
-              {todaysClasses.length > 0 ? (
-                <View style={{ gap: 8, marginTop: 11 }}>
-                  {todaysClasses.map((c) => {
-                    const color = COURSE_COLORS[plan.classes.indexOf(c) % COURSE_COLORS.length];
-                    return (
-                      <View key={c.id} style={styles.classRow}>
-                        <View style={[styles.classBar, { backgroundColor: color }]} />
-                        <Text style={styles.classRowTitle} numberOfLines={1}>{c.courseName}</Text>
-                        <Text style={styles.classRowTime}>{c.time}</Text>
-                      </View>
-                    );
-                  })}
-                </View>
-              ) : (
-                <Text style={[styles.noClassText, { marginTop: 10 }]}>No classes scheduled today.</Text>
-              )}
-            </View>
-
-            {/* My Classes */}
-            <View style={styles.card}>
-              <View style={styles.rowBetween}>
-                <Text style={styles.todayTitle}>My Classes</Text>
-                <Pressable style={styles.addClassBtn} onPress={() => setClassModalOpen(true)}>
-                  <IconSymbol name="plus" color={Colors.primaryLight} size={13} />
-                  <Text style={styles.addClassBtnText}>Add Class</Text>
-                </Pressable>
-              </View>
-              {visibleClasses.length > 0 ? (
-                <View style={{ gap: 8, marginTop: 11 }}>
-                  {visibleClasses.map((c) => {
-                    const color = COURSE_COLORS[plan.classes.indexOf(c) % COURSE_COLORS.length];
-                    return (
-                      <View key={c.id} style={styles.classRow}>
-                        <View style={[styles.classBar, { backgroundColor: color }]} />
-                        <View style={{ flex: 1, minWidth: 0 }}>
-                          <Text style={styles.classRowTitle} numberOfLines={1}>{c.courseName}</Text>
-                          <Text style={styles.classRowMeta}>{classDaysLabel(c)}{c.time ? ` · ${c.time}` : ''}</Text>
-                        </View>
-                      </View>
-                    );
-                  })}
-                  {plan.classes.length > 3 && (
-                    <Pressable style={styles.viewAllRow} onPress={() => router.push(Routes.CLASSES)}>
-                      <Text style={styles.viewAllText}>View all {plan.classes.length} classes</Text>
-                      <IconSymbol name="chevron.right" color={Colors.primaryLight} size={14} />
-                    </Pressable>
-                  )}
-                </View>
-              ) : (
-                <Text style={[styles.noClassText, { marginTop: 10 }]}>No classes added yet.</Text>
-              )}
-            </View>
-
-            {/* My Syllabi (coming soon — dummy data for now) */}
-            <View style={styles.card}>
-              <View style={styles.rowBetween}>
-                <Text style={styles.todayTitle}>My Syllabi</Text>
-                <Pressable
-                  style={styles.addClassBtn}
-                  onPress={() => Alert.alert('Coming soon', 'Syllabus upload & AI parsing is on the way.')}
-                >
-                  <IconSymbol name="plus" color={Colors.primaryLight} size={13} />
-                  <Text style={styles.addClassBtnText}>Add Syllabus</Text>
-                </Pressable>
-              </View>
-              {DUMMY_SYLLABI.length > 0 ? (
-                <View style={{ gap: 8, marginTop: 11 }}>
-                  {DUMMY_SYLLABI.slice(0, 3).map((sy) => (
-                    <View key={sy.id} style={styles.syllabusRow}>
-                      <View style={styles.syllabusIconBox}>
-                        <IconSymbol name="doc.fill" color={Colors.primaryLight} size={15} />
-                      </View>
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text style={styles.classRowTitle} numberOfLines={1}>{sy.courseName}</Text>
-                        <Text style={styles.classRowMeta} numberOfLines={1}>{sy.fileName}</Text>
-                      </View>
+        {dashboardLoading ? (
+          <DashboardSkeleton />
+        ) : (
+          <View style={styles.stack}>
+            {pathKey === "student" ? (
+              <>
+                {/* Study streak + Up next */}
+                <View style={styles.statsRow}>
+                  <View style={[styles.statCard, { flex: 1.3 }]}>
+                    <Text style={styles.statLabel}>Study streak</Text>
+                    <View style={styles.statValueRow}>
+                      <Text style={styles.statValue}>5</Text>
+                      <Text style={styles.statUnit}>days</Text>
                     </View>
-                  ))}
-                  {DUMMY_SYLLABI.length > 3 && (
-                    <Pressable style={styles.viewAllRow} onPress={() => router.push(Routes.SYLLABI)}>
-                      <Text style={styles.viewAllText}>View all {DUMMY_SYLLABI.length} syllabi</Text>
-                      <IconSymbol name="chevron.right" color={Colors.primaryLight} size={14} />
-                    </Pressable>
-                  )}
-                </View>
-              ) : (
-                <Text style={[styles.noClassText, { marginTop: 10 }]}>No syllabi yet.</Text>
-              )}
-            </View>
-
-            {/* This week's goal */}
-            <View style={styles.card}>
-              <View style={styles.rowBetween}>
-                <Text style={styles.weekGoalTitle}>This week's goal</Text>
-                <Text style={styles.mono}>60%</Text>
-              </View>
-              <Text style={styles.weekGoalSub}>Finish Corporate Finance modules 1–3</Text>
-              <View style={styles.progressTrack}>
-                <View style={[styles.progressFill, { width: '60%', backgroundColor: Colors.primaryLight }]} />
-              </View>
-            </View>
-
-            {/* Upcoming */}
-            <View style={{ gap: 9 }}>
-              <Text style={styles.eyebrowMuted}>UPCOMING</Text>
-              {studentUpcoming.length === 0 && (
-                <Text style={styles.noClassText}>
-                  Nothing coming up — add recruitment tasks or other items from onboarding.
-                </Text>
-              )}
-              {studentUpcoming.map((item) => (
-                <View key={`${item.title}-${item.date}`} style={styles.upcomingRow}>
-                  <View style={[styles.upcomingDot, { backgroundColor: item.dotColor }]} />
-                  <Text style={styles.upcomingTitle} numberOfLines={1}>
-                    {item.title}
-                  </Text>
-                  <Text style={styles.upcomingDate}>{formatShortDate(item.date)}</Text>
-                </View>
-              ))}
-            </View>
-          </>
-        ) : pathKey === 'exam' ? (
-          <>
-            {/* Countdown carousel — one big card per exam, auto-rotating */}
-            {sortedExams.length > 0 ? (
-              <ExamCarousel exams={sortedExams} onTrackPress={() => router.push(Routes.CERT_TRACKER)} />
-            ) : (
-              <View style={styles.card}>
-                <Text style={styles.eyebrowMuted}>EXAM COUNTDOWN</Text>
-                <Pressable style={styles.placeholderRow} onPress={() => setExamModalOpen(true)}>
-                  <View style={styles.dashedIconBox}>
-                    <IconSymbol name="plus" color={Colors.textMuted} size={19} />
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.placeholderTitle}>No exam added yet</Text>
-                    <Text style={styles.placeholderSub}>
-                      Tap to set up your exam and generate a study plan.
-                    </Text>
-                  </View>
-                </Pressable>
-              </View>
-            )}
-
-            {/* My Exams */}
-            <View style={styles.card}>
-              <View style={styles.rowBetween}>
-                <Text style={styles.todayTitle}>My Exams</Text>
-                <Pressable style={styles.addClassBtn} onPress={() => setExamModalOpen(true)}>
-                  <IconSymbol name="plus" color={Colors.primaryLight} size={13} />
-                  <Text style={styles.addClassBtnText}>Add Exam</Text>
-                </Pressable>
-              </View>
-              {sortedExams.length > 0 ? (
-                <View style={{ gap: 8, marginTop: 11 }}>
-                  {sortedExams.slice(0, 3).map((exam) => (
-                    <View key={exam.id} style={styles.classRow}>
-                      <View style={[styles.classBar, { backgroundColor: '#8B3FD1' }]} />
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text style={styles.classRowTitle} numberOfLines={1}>{exam.name}</Text>
-                        <Text style={styles.classRowMeta}>
-                          {exam.weeksRemaining} week{exam.weeksRemaining > 1 ? 's' : ''} · {exam.hoursPerWeek}h/week
+                  <View style={[styles.statCard, { flex: 0.7 }]}>
+                    <Text style={styles.statLabel}>Up next</Text>
+                    {studentUpcoming.length > 0 ? (
+                      <>
+                        <Text style={styles.statNextTitle} numberOfLines={1}>
+                          {studentUpcoming[0].title}
                         </Text>
-                      </View>
-                      <Text style={styles.classRowTime}>{formatShortDate(exam.examDate)}</Text>
+                        <Text style={styles.statNextDate}>
+                          {formatShortDate(studentUpcoming[0].date)}
+                        </Text>
+                      </>
+                    ) : (
+                      <Text style={styles.statNextTitle}>
+                        Nothing scheduled
+                      </Text>
+                    )}
+                  </View>
+                </View>
+
+                {/* Today's Classes */}
+                <View style={styles.card}>
+                  <Text style={styles.todayTitle}>Today's Classes</Text>
+                  {todaysClasses.length > 0 ? (
+                    <View style={{ gap: 8, marginTop: 11 }}>
+                      {todaysClasses.map((c) => {
+                        const color =
+                          COURSE_COLORS[
+                            plan.classes.indexOf(c) % COURSE_COLORS.length
+                          ];
+                        return (
+                          <View key={c.id} style={styles.classRow}>
+                            <View
+                              style={[
+                                styles.classBar,
+                                { backgroundColor: color },
+                              ]}
+                            />
+                            <Text
+                              style={styles.classRowTitle}
+                              numberOfLines={1}
+                            >
+                              {c.courseName}
+                            </Text>
+                            <Text style={styles.classRowTime}>{c.time}</Text>
+                          </View>
+                        );
+                      })}
                     </View>
-                  ))}
-                  {sortedExams.length > 3 && (
-                    <Pressable style={styles.viewAllRow} onPress={() => router.push(Routes.EXAMS)}>
-                      <Text style={styles.viewAllText}>View all {sortedExams.length} exams</Text>
-                      <IconSymbol name="chevron.right" color={Colors.primaryLight} size={14} />
-                    </Pressable>
+                  ) : (
+                    <Text style={[styles.noClassText, { marginTop: 10 }]}>
+                      No classes scheduled today.
+                    </Text>
                   )}
                 </View>
-              ) : (
-                <Text style={[styles.noClassText, { marginTop: 10 }]}>No exams added yet.</Text>
-              )}
-            </View>
 
-            {/* This week */}
-            <View style={styles.card}>
-              <View style={styles.rowBetween}>
-                <Text style={styles.todayTitle}>This week — Week 4</Text>
-                <Text style={[styles.examPill, { color: TaskCategories.exam.color, backgroundColor: TaskCategories.exam.soft }]}>
-                  8h planned
-                </Text>
-              </View>
-              <Text style={styles.weekTopic}>Packaged Products & Funds</Text>
-              <View style={{ gap: 7, marginTop: 11 }}>
-                {EXAM_WEEK_TASKS.map((task) => (
-                  <View key={task.title} style={styles.examTaskRow}>
+                {/* My Classes */}
+                <View style={styles.card}>
+                  <View style={styles.rowBetween}>
+                    <Text style={styles.todayTitle}>My Classes</Text>
+                    <Pressable
+                      style={styles.addClassBtn}
+                      onPress={() => setClassModalOpen(true)}
+                    >
+                      <IconSymbol
+                        name="plus"
+                        color={Colors.primaryLight}
+                        size={13}
+                      />
+                      <Text style={styles.addClassBtnText}>Add Class</Text>
+                    </Pressable>
+                  </View>
+                  {visibleClasses.length > 0 ? (
+                    <View style={{ gap: 8, marginTop: 11 }}>
+                      {visibleClasses.map((c) => {
+                        const color =
+                          COURSE_COLORS[
+                            plan.classes.indexOf(c) % COURSE_COLORS.length
+                          ];
+                        return (
+                          <View key={c.id} style={styles.classRow}>
+                            <View
+                              style={[
+                                styles.classBar,
+                                { backgroundColor: color },
+                              ]}
+                            />
+                            <View style={{ flex: 1, minWidth: 0 }}>
+                              <Text
+                                style={styles.classRowTitle}
+                                numberOfLines={1}
+                              >
+                                {c.courseName}
+                              </Text>
+                              <Text style={styles.classRowMeta}>
+                                {classDaysLabel(c)}
+                                {c.time ? ` · ${c.time}` : ""}
+                              </Text>
+                            </View>
+                          </View>
+                        );
+                      })}
+                      {plan.classes.length > 3 && (
+                        <Pressable
+                          style={styles.viewAllRow}
+                          onPress={() => router.push(Routes.CLASSES)}
+                        >
+                          <Text style={styles.viewAllText}>
+                            View all {plan.classes.length} classes
+                          </Text>
+                          <IconSymbol
+                            name="chevron.right"
+                            color={Colors.primaryLight}
+                            size={14}
+                          />
+                        </Pressable>
+                      )}
+                    </View>
+                  ) : (
+                    <Text style={[styles.noClassText, { marginTop: 10 }]}>
+                      No classes added yet.
+                    </Text>
+                  )}
+                </View>
+
+                {/* My Syllabi (coming soon — dummy data for now) */}
+                <View style={styles.card}>
+                  <View style={styles.rowBetween}>
+                    <Text style={styles.todayTitle}>My Syllabi</Text>
+                    <Pressable
+                      style={styles.addClassBtn}
+                      onPress={() =>
+                        Alert.alert(
+                          "Coming soon",
+                          "Syllabus upload & AI parsing is on the way.",
+                        )
+                      }
+                    >
+                      <IconSymbol
+                        name="plus"
+                        color={Colors.primaryLight}
+                        size={13}
+                      />
+                      <Text style={styles.addClassBtnText}>Add Syllabus</Text>
+                    </Pressable>
+                  </View>
+                  {DUMMY_SYLLABI.length > 0 ? (
+                    <View style={{ gap: 8, marginTop: 11 }}>
+                      {DUMMY_SYLLABI.slice(0, 3).map((sy) => (
+                        <View key={sy.id} style={styles.syllabusRow}>
+                          <View style={styles.syllabusIconBox}>
+                            <IconSymbol
+                              name="doc.fill"
+                              color={Colors.primaryLight}
+                              size={15}
+                            />
+                          </View>
+                          <View style={{ flex: 1, minWidth: 0 }}>
+                            <Text
+                              style={styles.classRowTitle}
+                              numberOfLines={1}
+                            >
+                              {sy.courseName}
+                            </Text>
+                            <Text style={styles.classRowMeta} numberOfLines={1}>
+                              {sy.fileName}
+                            </Text>
+                          </View>
+                        </View>
+                      ))}
+                      {DUMMY_SYLLABI.length > 3 && (
+                        <Pressable
+                          style={styles.viewAllRow}
+                          onPress={() => router.push(Routes.SYLLABI)}
+                        >
+                          <Text style={styles.viewAllText}>
+                            View all {DUMMY_SYLLABI.length} syllabi
+                          </Text>
+                          <IconSymbol
+                            name="chevron.right"
+                            color={Colors.primaryLight}
+                            size={14}
+                          />
+                        </Pressable>
+                      )}
+                    </View>
+                  ) : (
+                    <Text style={[styles.noClassText, { marginTop: 10 }]}>
+                      No syllabi yet.
+                    </Text>
+                  )}
+                </View>
+
+                {/* This week's goal */}
+                <View style={styles.card}>
+                  <View style={styles.rowBetween}>
+                    <Text style={styles.weekGoalTitle}>This week's goal</Text>
+                    <Text style={styles.mono}>60%</Text>
+                  </View>
+                  <Text style={styles.weekGoalSub}>
+                    Finish Corporate Finance modules 1–3
+                  </Text>
+                  <View style={styles.progressTrack}>
                     <View
                       style={[
-                        styles.examTaskDot,
-                        task.status === 'done' && { backgroundColor: Colors.successSoft },
-                        task.status === 'active' && { borderWidth: 1.7, borderColor: Colors.primaryLight },
-                        task.status === 'todo' && { borderWidth: 1.7, borderColor: Colors.border },
+                        styles.progressFill,
+                        { width: "60%", backgroundColor: Colors.primaryLight },
                       ]}
-                    >
-                      {task.status === 'done' && <IconSymbol name="checkmark" color={Colors.success} size={11} />}
-                    </View>
-                    <Text
-                      style={[
-                        styles.examTaskTitle,
-                        task.status === 'active' && { color: Colors.textPrimary, fontWeight: '600' },
-                        task.status === 'todo' && { color: Colors.textMuted },
-                      ]}
-                    >
-                      {task.title}
-                    </Text>
-                    {task.meta && <Text style={styles.examTaskMeta}>{task.meta}</Text>}
+                    />
                   </View>
-                ))}
-              </View>
-            </View>
-
-            {/* Study streak + Next session */}
-            <View style={styles.statsRow}>
-              <View style={styles.statCard}>
-                <Text style={styles.statLabel}>Study streak</Text>
-                <View style={styles.statValueRow}>
-                  <Text style={styles.statValue}>12</Text>
-                  <Text style={styles.statUnit}>days</Text>
                 </View>
-              </View>
-              <View style={styles.statCard}>
-                <Text style={styles.statLabel}>Next session</Text>
-                <Text style={styles.statNextTitle}>Today</Text>
-                <Text style={styles.statNextDateMuted}>4:00 PM · 2h</Text>
-              </View>
-            </View>
 
-          </>
-        ) : (
-          <>
-            {/* Today's tasks + Weekly action */}
-            <View style={styles.statsRow}>
-              <View style={styles.statCard}>
-                <Text style={styles.statLabel}>Today's tasks</Text>
-                <View style={styles.statValueRow}>
-                  <Text style={styles.statValue}>{todaysTasksDone}</Text>
-                  <Text style={styles.statUnit}>/ {todaysTasks.length} done</Text>
-                </View>
-              </View>
-              <View style={styles.statCard}>
-                <Text style={styles.statLabel}>Weekly action</Text>
-                <Text style={styles.statNextTitle} numberOfLines={2}>
-                  {nextCareerMilestone?.title ?? 'Nothing this week'}
-                </Text>
-              </View>
-            </View>
-
-            {/* Career goal */}
-            <View style={styles.card}>
-              {careerGoal ? (
-                <>
-                  <View style={styles.rowBetween}>
-                    <Text style={styles.eyebrowGreen}>CAREER GOAL</Text>
-                    <Text style={styles.mono}>{careerMilestonesDone} / {careerGoal.milestones.length}</Text>
-                  </View>
-                  <Text style={styles.cardTitle}>{careerGoal.title}</Text>
-                  {!!(careerGoal.targetRole || careerGoal.targetIndustry || careerGoal.targetDate) && (
-                    <Text style={styles.goalMeta}>
-                      {[careerGoal.targetRole, careerGoal.targetIndustry, careerGoal.targetDate ? formatMonthYear(careerGoal.targetDate) : '']
-                        .filter(Boolean)
-                        .join(' · ')}
+                {/* Upcoming */}
+                <View style={{ gap: 9 }}>
+                  <Text style={styles.eyebrowMuted}>UPCOMING</Text>
+                  {studentUpcoming.length === 0 && (
+                    <Text style={styles.noClassText}>
+                      Nothing coming up — add recruitment tasks or other items
+                      from onboarding.
                     </Text>
                   )}
-
-                  <View style={[styles.rowBetween, { marginTop: 13 }]}>
-                    <Text style={styles.careerPct}>{careerGoal.pct}%</Text>
-                    <Text style={styles.goalMeta}>
-                      {careerMilestonesDone} / {careerGoal.milestones.length} milestones
-                    </Text>
-                  </View>
-                  <View style={styles.progressTrack}>
-                    <AnimatedProgressBar pct={careerGoal.pct} color={Colors.success} />
-                  </View>
-
-                  {nextCareerMilestone && (
-                    <View style={styles.weeklyActionRow}>
-                      <IconSymbol name="clock" color={Colors.textSecondary} size={16} />
+                  {studentUpcoming.map((item) => (
+                    <View
+                      key={`${item.title}-${item.date}`}
+                      style={styles.upcomingRow}
+                    >
+                      <View
+                        style={[
+                          styles.upcomingDot,
+                          { backgroundColor: item.dotColor },
+                        ]}
+                      />
+                      <Text style={styles.upcomingTitle} numberOfLines={1}>
+                        {item.title}
+                      </Text>
+                      <Text style={styles.upcomingDate}>
+                        {formatShortDate(item.date)}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </>
+            ) : pathKey === "exam" ? (
+              <>
+                {/* Countdown carousel — one big card per exam, auto-rotating */}
+                {sortedExams.length > 0 ? (
+                  <ExamCarousel
+                    exams={sortedExams}
+                    onTrackPress={() => router.push(Routes.CERT_TRACKER)}
+                  />
+                ) : (
+                  <View style={styles.card}>
+                    <Text style={styles.eyebrowMuted}>EXAM COUNTDOWN</Text>
+                    <Pressable
+                      style={styles.placeholderRow}
+                      onPress={() => setExamModalOpen(true)}
+                    >
+                      <View style={styles.dashedIconBox}>
+                        <IconSymbol
+                          name="plus"
+                          color={Colors.textMuted}
+                          size={19}
+                        />
+                      </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.weeklyActionLabel}>WEEKLY CAREER ACTION</Text>
-                        <Text style={styles.weeklyActionTitle} numberOfLines={1}>
-                          {nextCareerMilestone.title}
+                        <Text style={styles.placeholderTitle}>
+                          No exam added yet
+                        </Text>
+                        <Text style={styles.placeholderSub}>
+                          Tap to set up your exam and generate a study plan.
                         </Text>
                       </View>
-                      <Pressable style={styles.viewButton} onPress={() => router.push(Routes.GOALS)}>
-                        <Text style={styles.viewButtonText}>View</Text>
-                      </Pressable>
-                    </View>
-                  )}
-                </>
-              ) : (
-                <>
-                  <Text style={styles.eyebrowMuted}>CAREER GOAL</Text>
-                  <Pressable style={styles.placeholderRow} onPress={() => router.push(Routes.GOALS)}>
-                    <View style={styles.dashedIconBox}>
-                      <IconSymbol name="plus" color={Colors.textMuted} size={19} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.placeholderTitle}>Set a career goal</Text>
-                      <Text style={styles.placeholderSub}>
-                        Add one from the Goals page to track it here.
-                      </Text>
-                    </View>
-                  </Pressable>
-                </>
-              )}
-            </View>
+                    </Pressable>
+                  </View>
+                )}
 
-            {/* Financial goal */}
-            <View style={styles.card}>
-              {financialGoal ? (
-                <>
+                {/* My Exams */}
+                <View style={styles.card}>
                   <View style={styles.rowBetween}>
-                    <Text style={styles.eyebrowGreen}>FINANCIAL GOAL</Text>
-                    <Text style={styles.mono}>1 / {professionalPlan.financialGoals.length}</Text>
+                    <Text style={styles.todayTitle}>My Exams</Text>
+                    <Pressable
+                      style={styles.addClassBtn}
+                      onPress={() => setExamModalOpen(true)}
+                    >
+                      <IconSymbol
+                        name="plus"
+                        color={Colors.primaryLight}
+                        size={13}
+                      />
+                      <Text style={styles.addClassBtnText}>Add Exam</Text>
+                    </Pressable>
                   </View>
-                  <Text style={styles.cardTitle}>{financialGoal.goal}</Text>
-                  <Text style={styles.goalMeta}>
-                    {financialGoal.targetAmount ? `${financialGoal.targetAmount} · ` : ''}
-                    Target: {financialGoal.targetYear}
-                  </Text>
-                </>
-              ) : (
-                <>
-                  <Text style={styles.eyebrowMuted}>FINANCIAL GOAL</Text>
-                  <View style={styles.placeholderRow}>
-                    <View style={styles.dashedIconBox}>
-                      <IconSymbol name="plus" color={Colors.textMuted} size={19} />
+                  {sortedExams.length > 0 ? (
+                    <View style={{ gap: 8, marginTop: 11 }}>
+                      {sortedExams.slice(0, 3).map((exam) => (
+                        <View key={exam.id} style={styles.classRow}>
+                          <View
+                            style={[
+                              styles.classBar,
+                              { backgroundColor: "#8B3FD1" },
+                            ]}
+                          />
+                          <View style={{ flex: 1, minWidth: 0 }}>
+                            <Text
+                              style={styles.classRowTitle}
+                              numberOfLines={1}
+                            >
+                              {exam.name}
+                            </Text>
+                            <Text style={styles.classRowMeta}>
+                              {exam.weeksRemaining} week
+                              {exam.weeksRemaining > 1 ? "s" : ""} ·{" "}
+                              {exam.hoursPerWeek}h/week
+                            </Text>
+                          </View>
+                          <Text style={styles.classRowTime}>
+                            {formatShortDate(exam.examDate)}
+                          </Text>
+                        </View>
+                      ))}
+                      {sortedExams.length > 3 && (
+                        <Pressable
+                          style={styles.viewAllRow}
+                          onPress={() => router.push(Routes.EXAMS)}
+                        >
+                          <Text style={styles.viewAllText}>
+                            View all {sortedExams.length} exams
+                          </Text>
+                          <IconSymbol
+                            name="chevron.right"
+                            color={Colors.primaryLight}
+                            size={14}
+                          />
+                        </Pressable>
+                      )}
                     </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.placeholderTitle}>Set a financial goal</Text>
-                      <Text style={styles.placeholderSub}>
-                        Add one from your profile to track it here.
+                  ) : (
+                    <Text style={[styles.noClassText, { marginTop: 10 }]}>
+                      No exams added yet.
+                    </Text>
+                  )}
+                </View>
+
+                {/* This week */}
+                <View style={styles.card}>
+                  <View style={styles.rowBetween}>
+                    <Text style={styles.todayTitle}>This week — Week 4</Text>
+                    <Text
+                      style={[
+                        styles.examPill,
+                        {
+                          color: TaskCategories.exam.color,
+                          backgroundColor: TaskCategories.exam.soft,
+                        },
+                      ]}
+                    >
+                      8h planned
+                    </Text>
+                  </View>
+                  <Text style={styles.weekTopic}>
+                    Packaged Products & Funds
+                  </Text>
+                  <View style={{ gap: 7, marginTop: 11 }}>
+                    {EXAM_WEEK_TASKS.map((task) => (
+                      <View key={task.title} style={styles.examTaskRow}>
+                        <View
+                          style={[
+                            styles.examTaskDot,
+                            task.status === "done" && {
+                              backgroundColor: Colors.successSoft,
+                            },
+                            task.status === "active" && {
+                              borderWidth: 1.7,
+                              borderColor: Colors.primaryLight,
+                            },
+                            task.status === "todo" && {
+                              borderWidth: 1.7,
+                              borderColor: Colors.border,
+                            },
+                          ]}
+                        >
+                          {task.status === "done" && (
+                            <IconSymbol
+                              name="checkmark"
+                              color={Colors.success}
+                              size={11}
+                            />
+                          )}
+                        </View>
+                        <Text
+                          style={[
+                            styles.examTaskTitle,
+                            task.status === "active" && {
+                              color: Colors.textPrimary,
+                              fontWeight: "600",
+                            },
+                            task.status === "todo" && {
+                              color: Colors.textMuted,
+                            },
+                          ]}
+                        >
+                          {task.title}
+                        </Text>
+                        {task.meta && (
+                          <Text style={styles.examTaskMeta}>{task.meta}</Text>
+                        )}
+                      </View>
+                    ))}
+                  </View>
+                </View>
+
+                {/* Study streak + Next session */}
+                <View style={styles.statsRow}>
+                  <View style={[styles.statCard, { flex: 1.3 }]}>
+                    <Text style={styles.statLabel}>Study streak</Text>
+                    <View style={styles.statValueRow}>
+                      <Text style={styles.statValue}>12</Text>
+                      <Text style={styles.statUnit}>days</Text>
+                    </View>
+                  </View>
+                  <View style={[styles.statCard, { flex: 0.7 }]}>
+                    <Text style={styles.statLabel}>Next session</Text>
+                    <Text style={styles.statNextTitle}>Today</Text>
+                    <Text style={styles.statNextDateMuted}>4:00 PM · 2h</Text>
+                  </View>
+                </View>
+              </>
+            ) : (
+              <>
+                {/* Today's tasks + Weekly action */}
+                <View style={styles.statsRow}>
+                  <View style={styles.statCard}>
+                    <Text style={styles.statLabel}>Today's tasks</Text>
+                    <View style={styles.statValueRow}>
+                      <Text style={styles.statValue}>{todaysTasksDone}</Text>
+                      <Text style={styles.statUnit}>
+                        / {todaysTasks.length} done
                       </Text>
                     </View>
                   </View>
-                </>
-              )}
+                  <View style={styles.statCard}>
+                    <Text style={styles.statLabel}>Weekly action</Text>
+                    <Text style={styles.statNextTitle} numberOfLines={2}>
+                      {nextCareerMilestone?.title ?? "Nothing this week"}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Career goal */}
+                <View style={styles.card}>
+                  {careerGoal ? (
+                    <>
+                      <View style={styles.rowBetween}>
+                        <Text style={styles.eyebrowGreen}>CAREER GOAL</Text>
+                        <Text style={styles.mono}>
+                          {careerMilestonesDone} /{" "}
+                          {careerGoal.milestones.length}
+                        </Text>
+                      </View>
+                      <Text style={styles.cardTitle}>{careerGoal.title}</Text>
+                      {!!(
+                        careerGoal.targetRole ||
+                        careerGoal.targetIndustry ||
+                        careerGoal.targetDate
+                      ) && (
+                        <Text style={styles.goalMeta}>
+                          {[
+                            careerGoal.targetRole,
+                            careerGoal.targetIndustry,
+                            careerGoal.targetDate
+                              ? formatMonthYear(careerGoal.targetDate)
+                              : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </Text>
+                      )}
+
+                      <View style={[styles.rowBetween, { marginTop: 13 }]}>
+                        <Text style={styles.careerPct}>{careerGoal.pct}%</Text>
+                        <Text style={styles.goalMeta}>
+                          {careerMilestonesDone} /{" "}
+                          {careerGoal.milestones.length} milestones
+                        </Text>
+                      </View>
+                      <View style={styles.progressTrack}>
+                        <AnimatedProgressBar
+                          pct={careerGoal.pct}
+                          color={Colors.success}
+                        />
+                      </View>
+
+                      {nextCareerMilestone && (
+                        <View style={styles.weeklyActionRow}>
+                          <IconSymbol
+                            name="clock"
+                            color={Colors.textSecondary}
+                            size={16}
+                          />
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.weeklyActionLabel}>
+                              WEEKLY CAREER ACTION
+                            </Text>
+                            <Text
+                              style={styles.weeklyActionTitle}
+                              numberOfLines={1}
+                            >
+                              {nextCareerMilestone.title}
+                            </Text>
+                          </View>
+                          <Pressable
+                            style={styles.viewButton}
+                            onPress={() => setGoalSummaryOpen(true)}
+                          >
+                            <Text style={styles.viewButtonText}>View</Text>
+                          </Pressable>
+                        </View>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <Text style={styles.eyebrowMuted}>CAREER GOAL</Text>
+                      <Pressable
+                        style={styles.placeholderRow}
+                        onPress={() => router.push(Routes.GOALS)}
+                      >
+                        <View style={styles.dashedIconBox}>
+                          <IconSymbol
+                            name="plus"
+                            color={Colors.textMuted}
+                            size={19}
+                          />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.placeholderTitle}>
+                            Set a career goal
+                          </Text>
+                          <Text style={styles.placeholderSub}>
+                            Add one from the Goals page to track it here.
+                          </Text>
+                        </View>
+                      </Pressable>
+                    </>
+                  )}
+                </View>
+              </>
+            )}
+
+            {/* AI Coach */}
+            <Pressable
+              style={styles.coachCard}
+              onPress={() => router.push(Routes.COACH)}
+            >
+              <View style={styles.coachIconBox}>
+                <IconSymbol name="sparkles" color={Colors.white} size={22} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.coachEyebrow}>AI COACH</Text>
+                <Text style={styles.coachText}>{AI_TIP[pathKey]}</Text>
+              </View>
+              <IconSymbol
+                name="chevron.right"
+                color="rgba(255,255,255,0.6)"
+                size={20}
+              />
+            </Pressable>
+
+            {/* Habits */}
+            <Pressable
+              style={styles.habitsCard}
+              onPress={() => router.push(Routes.HABITS)}
+            >
+              <View style={styles.habitIconBox}>
+                <IconSymbol
+                  name="flame.fill"
+                  color={Colors.warning}
+                  size={21}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.habitEyebrow}>HABITS</Text>
+                <Text style={styles.habitText}>
+                  {habitsDoneToday} of {habits.length} done today
+                </Text>
+              </View>
+              <IconSymbol
+                name="chevron.right"
+                color={Colors.textMuted}
+                size={20}
+              />
+            </Pressable>
+
+            {/* Quick links */}
+            <View style={styles.quickLinksRow}>
+              <Pressable
+                style={styles.quickLinkCard}
+                onPress={() => router.push(Routes.PLANNER)}
+              >
+                <View
+                  style={[
+                    styles.quickLinkIconBox,
+                    { backgroundColor: Colors.infoSoft },
+                  ]}
+                >
+                  <IconSymbol
+                    name="calendar"
+                    color={Colors.primaryLight}
+                    size={20}
+                  />
+                </View>
+                <Text style={styles.quickLinkTitle}>Calendar</Text>
+                <Text style={styles.quickLinkSub}>Sync & timeline</Text>
+              </Pressable>
+              <Pressable
+                style={styles.quickLinkCard}
+                onPress={() => router.push(Routes.GOALS)}
+              >
+                <View
+                  style={[
+                    styles.quickLinkIconBox,
+                    { backgroundColor: Colors.successSoft },
+                  ]}
+                >
+                  <IconSymbol name="target" color={Colors.success} size={20} />
+                </View>
+                <Text style={styles.quickLinkTitle}>Goals</Text>
+                <Text style={styles.quickLinkSub}>Track & create</Text>
+              </Pressable>
             </View>
-          </>
+          </View>
         )}
-
-        {/* AI Coach */}
-        <Pressable style={styles.coachCard} onPress={() => router.push(Routes.COACH)}>
-          <View style={styles.coachIconBox}>
-            <IconSymbol name="sparkles" color={Colors.white} size={22} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.coachEyebrow}>AI COACH</Text>
-            <Text style={styles.coachText}>{AI_TIP[pathKey]}</Text>
-          </View>
-          <IconSymbol name="chevron.right" color="rgba(255,255,255,0.6)" size={20} />
-        </Pressable>
-
-        {/* Habits */}
-        <Pressable style={styles.habitsCard} onPress={() => router.push(Routes.HABITS)}>
-          <View style={styles.habitIconBox}>
-            <IconSymbol name="flame.fill" color={Colors.warning} size={21} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.habitEyebrow}>HABITS</Text>
-            <Text style={styles.habitText}>
-              {habitsDoneToday} of {habits.length} done today
-            </Text>
-          </View>
-          <IconSymbol name="chevron.right" color={Colors.textMuted} size={20} />
-        </Pressable>
-
-        {/* Quick links */}
-        <View style={styles.quickLinksRow}>
-          <Pressable style={styles.quickLinkCard} onPress={() => router.push(Routes.PLANNER)}>
-            <View style={[styles.quickLinkIconBox, { backgroundColor: Colors.infoSoft }]}>
-              <IconSymbol name="calendar" color={Colors.primaryLight} size={20} />
-            </View>
-            <Text style={styles.quickLinkTitle}>Calendar</Text>
-            <Text style={styles.quickLinkSub}>Sync & timeline</Text>
-          </Pressable>
-          <Pressable style={styles.quickLinkCard} onPress={() => router.push(Routes.GOALS)}>
-            <View style={[styles.quickLinkIconBox, { backgroundColor: Colors.successSoft }]}>
-              <IconSymbol name="target" color={Colors.success} size={20} />
-            </View>
-            <Text style={styles.quickLinkTitle}>Goals</Text>
-            <Text style={styles.quickLinkSub}>Track & create</Text>
-          </Pressable>
-        </View>
-      </View>
-      )}
-    </ScreenWrapper>
-    <AddClassModal
-      visible={classModalOpen}
-      onClose={() => setClassModalOpen(false)}
-      onAdd={handleAddClass}
-    />
-    <AddExamModal
-      visible={examModalOpen}
-      onClose={() => setExamModalOpen(false)}
-      onAdd={handleAddExam}
-    />
+      </ScreenWrapper>
+      <AddClassModal
+        visible={classModalOpen}
+        onClose={() => setClassModalOpen(false)}
+        onAdd={handleAddClass}
+      />
+      <AddExamModal
+        visible={examModalOpen}
+        onClose={() => setExamModalOpen(false)}
+        onAdd={handleAddExam}
+      />
+      <GoalSummaryModal
+        visible={goalSummaryOpen}
+        onClose={() => setGoalSummaryOpen(false)}
+        goal={careerGoal ?? null}
+      />
     </>
   );
 }
@@ -599,32 +860,32 @@ const styles = StyleSheet.create({
     padding: 17,
   },
   rowBetween: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   eyebrowGreen: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: "700",
     color: Colors.success,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
     letterSpacing: 0.5,
   },
   eyebrowMuted: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: "700",
     color: Colors.textMuted,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
     letterSpacing: 0.4,
   },
   mono: {
     fontSize: 12.5,
-    fontWeight: '700',
+    fontWeight: "700",
     color: Colors.textSecondary,
   },
   cardTitle: {
     fontSize: 16.5,
-    fontWeight: '700',
+    fontWeight: "700",
     color: Colors.textPrimary,
     marginTop: 7,
     lineHeight: 21,
@@ -636,13 +897,13 @@ const styles = StyleSheet.create({
   },
   careerPct: {
     fontSize: 22,
-    fontWeight: '800',
+    fontWeight: "800",
     color: Colors.success,
     letterSpacing: -0.4,
   },
   weeklyActionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
     backgroundColor: Colors.offWhite,
     borderRadius: 12,
@@ -651,14 +912,14 @@ const styles = StyleSheet.create({
   },
   weeklyActionLabel: {
     fontSize: 10.5,
-    fontWeight: '700',
+    fontWeight: "700",
     color: Colors.textMuted,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
     letterSpacing: 0.4,
   },
   weeklyActionTitle: {
     fontSize: 13.5,
-    fontWeight: '600',
+    fontWeight: "600",
     color: Colors.textPrimary,
     marginTop: 2,
   },
@@ -670,12 +931,12 @@ const styles = StyleSheet.create({
   },
   viewButtonText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: "700",
     color: Colors.primaryLight,
   },
   placeholderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 11,
     marginTop: 13,
   },
@@ -685,14 +946,14 @@ const styles = StyleSheet.create({
     borderRadius: 11,
     backgroundColor: Colors.offWhite,
     borderWidth: 1,
-    borderStyle: 'dashed',
+    borderStyle: "dashed",
     borderColor: Colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   placeholderTitle: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: "700",
     color: Colors.textPrimary,
   },
   placeholderSub: {
@@ -702,83 +963,84 @@ const styles = StyleSheet.create({
     lineHeight: 17,
   },
   statsRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 11,
   },
   statCard: {
     flex: 1,
+    minWidth: 0,
     backgroundColor: Colors.white,
     borderWidth: 1,
     borderColor: Colors.border,
     borderRadius: 17,
-    padding: 15,
+    padding: 12,
   },
   statLabel: {
     fontSize: 12,
     color: Colors.textMuted,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   statValueRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
+    flexDirection: "row",
+    alignItems: "baseline",
     gap: 5,
     marginTop: 7,
   },
   statValue: {
     fontSize: 27,
-    fontWeight: '800',
+    fontWeight: "800",
     color: Colors.textPrimary,
     letterSpacing: -0.5,
   },
   statUnit: {
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: "600",
     color: Colors.textSecondary,
   },
   statNextTitle: {
     fontSize: 14.5,
-    fontWeight: '700',
+    fontWeight: "700",
     color: Colors.textPrimary,
     marginTop: 7,
     lineHeight: 18,
   },
   statNextDate: {
     fontSize: 12.5,
-    fontWeight: '700',
+    fontWeight: "700",
     color: Colors.warning,
     marginTop: 2,
   },
   statNextDateMuted: {
     fontSize: 12.5,
-    fontWeight: '600',
+    fontWeight: "600",
     color: Colors.textSecondary,
     marginTop: 1,
   },
   examPill: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: "700",
     paddingVertical: 4,
     paddingHorizontal: 9,
     borderRadius: 999,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   weekTopic: {
     fontSize: 14.5,
-    fontWeight: '600',
+    fontWeight: "600",
     color: Colors.textPrimary,
     marginTop: 11,
   },
   examTaskRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
   },
   examTaskDot: {
     width: 17,
     height: 17,
     borderRadius: 8.5,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   examTaskTitle: {
     flex: 1,
@@ -787,17 +1049,17 @@ const styles = StyleSheet.create({
   },
   examTaskMeta: {
     fontSize: 11.5,
-    fontWeight: '700',
+    fontWeight: "700",
     color: Colors.primaryLight,
   },
   todayTitle: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: "700",
     color: Colors.textPrimary,
   },
   addClassBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 5,
     backgroundColor: Colors.infoSoft,
     borderRadius: 999,
@@ -806,12 +1068,12 @@ const styles = StyleSheet.create({
   },
   addClassBtnText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: "700",
     color: Colors.primaryLight,
   },
   classRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 11,
     backgroundColor: Colors.offWhite,
     borderRadius: 12,
@@ -820,18 +1082,18 @@ const styles = StyleSheet.create({
   },
   classBar: {
     width: 4,
-    alignSelf: 'stretch',
+    alignSelf: "stretch",
     borderRadius: 2,
   },
   classRowTitle: {
     flex: 1,
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: "700",
     color: Colors.textPrimary,
   },
   classRowTime: {
     fontSize: 12.5,
-    fontWeight: '600',
+    fontWeight: "600",
     color: Colors.textSecondary,
   },
   classRowMeta: {
@@ -840,8 +1102,8 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   syllabusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 11,
     backgroundColor: Colors.offWhite,
     borderRadius: 12,
@@ -853,8 +1115,8 @@ const styles = StyleSheet.create({
     height: 30,
     borderRadius: 9,
     backgroundColor: Colors.infoSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   noClassText: {
     fontSize: 13,
@@ -862,20 +1124,20 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   viewAllRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 5,
     paddingVertical: 9,
   },
   viewAllText: {
     fontSize: 12.5,
-    fontWeight: '700',
+    fontWeight: "700",
     color: Colors.primaryLight,
   },
   weekGoalTitle: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: "700",
     color: Colors.textPrimary,
   },
   weekGoalSub: {
@@ -888,15 +1150,15 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: Colors.border,
     marginTop: 11,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   progressFill: {
-    height: '100%',
+    height: "100%",
     borderRadius: 999,
   },
   upcomingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 11,
     backgroundColor: Colors.white,
     borderWidth: 1,
@@ -913,17 +1175,17 @@ const styles = StyleSheet.create({
   upcomingTitle: {
     flex: 1,
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: "500",
     color: Colors.textPrimary,
   },
   upcomingDate: {
     fontSize: 12.5,
-    fontWeight: '700',
+    fontWeight: "700",
     color: Colors.textSecondary,
   },
   coachCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 13,
     backgroundColor: Colors.textPrimary,
     borderRadius: 17,
@@ -933,27 +1195,27 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 11,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(255,255,255,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   coachEyebrow: {
     fontSize: 11,
-    fontWeight: '700',
-    color: 'rgba(255,255,255,0.6)',
-    textTransform: 'uppercase',
+    fontWeight: "700",
+    color: "rgba(255,255,255,0.6)",
+    textTransform: "uppercase",
     letterSpacing: 0.5,
   },
   coachText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
     color: Colors.white,
     marginTop: 2,
     lineHeight: 19,
   },
   habitsCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 13,
     backgroundColor: Colors.white,
     borderWidth: 1,
@@ -966,24 +1228,24 @@ const styles = StyleSheet.create({
     height: 38,
     borderRadius: 11,
     backgroundColor: Colors.warningSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   habitEyebrow: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: "700",
     color: Colors.warning,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
     letterSpacing: 0.5,
   },
   habitText: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: "700",
     color: Colors.textPrimary,
     marginTop: 2,
   },
   quickLinksRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 11,
   },
   quickLinkCard: {
@@ -998,12 +1260,12 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   quickLinkTitle: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: "700",
     color: Colors.textPrimary,
     marginTop: 10,
   },

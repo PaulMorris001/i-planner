@@ -2,6 +2,8 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '@/config/firebase';
 import { taskService } from '@/services/task.service';
+import { useSettings } from '@/hooks/useSettings';
+import { syncTaskToAppleCalendar, deleteAppleEvents } from '@/utils/appleCalendarSync';
 import type { Task, NewTaskInput } from '@/types/task.types';
 
 interface TasksContextValue {
@@ -18,6 +20,7 @@ const TasksContext = createContext<TasksContextValue | null>(null);
 export function TasksProvider({ children }: { children: ReactNode }) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
+  const { appleCalendarConnected } = useSettings();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -40,8 +43,12 @@ export function TasksProvider({ children }: { children: ReactNode }) {
   const createTask = async (input: NewTaskInput) => {
     const tempId = `temp-${Date.now()}`;
     setTasks((prev) => [...prev, { ...input, id: tempId, done: false }]);
+    // Apple sync runs client-side (no server-reachable "Apple Calendar API") —
+    // sync first so the resulting event id rides along on the create request.
+    const appleEventId = appleCalendarConnected ? await syncTaskToAppleCalendar(input) : null;
+    const toCreate = appleEventId ? { ...input, appleEventId } : input;
     try {
-      const created = await taskService.create(input);
+      const created = await taskService.create(toCreate);
       setTasks((prev) => prev.map((t) => (t.id === tempId ? created : t)));
     } catch (err) {
       setTasks((prev) => prev.filter((t) => t.id !== tempId));
@@ -64,9 +71,21 @@ export function TasksProvider({ children }: { children: ReactNode }) {
 
   const updateTask = async (id: string, patch: Partial<NewTaskInput>) => {
     const prevTasks = tasks;
-    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+    const current = tasks.find((t) => t.id === id);
+
+    // Only resync the calendar event when a field that actually affects it changed —
+    // not for a bare done-toggle.
+    let finalPatch: Partial<NewTaskInput> = patch;
+    const calendarRelevant = (['title', 'dueDate', 'time', 'notes'] as const).some((k) => k in patch);
+    if (calendarRelevant && current && appleCalendarConnected) {
+      await deleteAppleEvents(current.appleEventId ? [current.appleEventId] : undefined);
+      const appleEventId = (await syncTaskToAppleCalendar({ ...current, ...patch })) ?? undefined;
+      finalPatch = { ...patch, appleEventId };
+    }
+
+    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...finalPatch } : t)));
     try {
-      const updated = await taskService.update(id, patch);
+      const updated = await taskService.update(id, finalPatch);
       setTasks((prev) => prev.map((t) => (t.id === id ? updated : t)));
     } catch (err) {
       setTasks(prevTasks);
@@ -76,13 +95,16 @@ export function TasksProvider({ children }: { children: ReactNode }) {
 
   const removeTask = async (id: string) => {
     const prevTasks = tasks;
+    const target = tasks.find((t) => t.id === id);
     setTasks((prev) => prev.filter((t) => t.id !== id));
     try {
       await taskService.remove(id);
     } catch (err) {
       setTasks(prevTasks);
       console.error('[TasksProvider] failed to remove task', err);
+      return;
     }
+    if (target?.appleEventId && appleCalendarConnected) await deleteAppleEvents([target.appleEventId]);
   };
 
   return (

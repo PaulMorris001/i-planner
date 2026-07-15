@@ -4,7 +4,46 @@ import * as Calendar from 'expo-calendar';
 import * as WebBrowser from 'expo-web-browser';
 import { auth } from '@/config/firebase';
 import { settingsService } from '@/services/settings.service';
+import { planService } from '@/services/plan.service';
+import { taskService } from '@/services/task.service';
+import { syncClassToAppleCalendar, syncTaskToAppleCalendar } from '@/utils/appleCalendarSync';
 import type { Settings } from '@/types/settings.types';
+import type { StudentPlan } from '@/types/plan.types';
+
+// Classes/tasks created before the user connected Apple Calendar still need to end
+// up on the device calendar — fetched directly via services (not usePlan()/
+// useTasks()) since SettingsProvider is mounted above TasksProvider, which is
+// scoped to the (app) tab group and wouldn't be in scope here. Runs in the
+// background — best-effort, never blocks the "connect" button.
+async function backfillAppleCalendar() {
+  try {
+    const [plan, tasks] = await Promise.all([
+      planService.get<StudentPlan>('student'),
+      taskService.list(),
+    ]);
+
+    if (plan?.classes?.length) {
+      let changed = false;
+      const classes = await Promise.all(
+        plan.classes.map(async (item) => {
+          if (item.appleEventIds?.length) return item;
+          const appleEventIds = await syncClassToAppleCalendar(item);
+          if (appleEventIds.length) changed = true;
+          return { ...item, appleEventIds };
+        })
+      );
+      if (changed) await planService.save('student', { ...plan, classes });
+    }
+
+    for (const task of tasks) {
+      if (task.appleEventId || !task.dueDate) continue;
+      const appleEventId = await syncTaskToAppleCalendar(task);
+      if (appleEventId) await taskService.update(task.id, { appleEventId });
+    }
+  } catch (err) {
+    console.error('[SettingsProvider] Apple Calendar backfill failed', err);
+  }
+}
 
 const DEFAULT_SETTINGS: Settings = {
   appleCalendarConnected: false,
@@ -16,6 +55,7 @@ interface SettingsContextValue extends Settings {
   loading: boolean;
   connectAppleCalendar: () => Promise<boolean>;
   connectGoogleCalendar: () => Promise<boolean>;
+  disconnectAppleCalendar: () => Promise<void>;
   disconnectGoogleCalendar: () => Promise<void>;
   dismissCalendarGate: () => Promise<void>;
 }
@@ -52,11 +92,26 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setSettings((s) => ({ ...s, appleCalendarConnected: true }));
     try {
       setSettings(await settingsService.patch({ appleCalendarConnected: true }));
+      backfillAppleCalendar();
       return true;
     } catch (err) {
       setSettings(prevSettings);
       console.error('[SettingsProvider] failed to save calendar connection', err);
       return false;
+    }
+  };
+
+  // Turns off future syncing from our side — we can't programmatically revoke the
+  // OS-level Calendar permission itself (only the user can, from device Settings),
+  // and we deliberately don't delete events already written to their calendar.
+  const disconnectAppleCalendar = async () => {
+    const prevSettings = settings;
+    setSettings((s) => ({ ...s, appleCalendarConnected: false }));
+    try {
+      setSettings(await settingsService.patch({ appleCalendarConnected: false }));
+    } catch (err) {
+      setSettings(prevSettings);
+      console.error('[SettingsProvider] failed to disconnect Apple Calendar', err);
     }
   };
 
@@ -107,6 +162,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         loading,
         connectAppleCalendar,
         connectGoogleCalendar,
+        disconnectAppleCalendar,
         disconnectGoogleCalendar,
         dismissCalendarGate,
       }}

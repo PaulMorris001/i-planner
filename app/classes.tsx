@@ -8,7 +8,9 @@ import { ItemActionSheet } from '@/components/ui/ItemActionSheet';
 import { Colors, Spacing } from '@/constants/theme';
 import { COURSE_COLORS } from '@/constants/classColors';
 import { usePlan } from '@/hooks/usePlan';
+import { useSettings } from '@/hooks/useSettings';
 import { confirmDelete } from '@/utils/confirmDelete';
+import { syncClassToAppleCalendar, deleteAppleEvents } from '@/utils/appleCalendarSync';
 import type { ClassItem } from '@/types/plan.types';
 
 const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -22,6 +24,7 @@ function classDaysLabel(item: ClassItem): string {
 export default function Classes() {
   const router = useRouter();
   const { plan, savePlan } = usePlan();
+  const { appleCalendarConnected } = useSettings();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingClass, setEditingClass] = useState<ClassItem | null>(null);
   const [actionSheetTarget, setActionSheetTarget] = useState<ClassItem | null>(null);
@@ -33,12 +36,25 @@ export default function Classes() {
 
   const handleAddOrSaveClass = async (item: ClassItem) => {
     const isEdit = plan.classes.some((c) => c.id === item.id);
+    let synced = item;
+    if (appleCalendarConnected) {
+      try {
+        // Best-effort — a calendar-write failure logs but never blocks the save.
+        if (isEdit) {
+          const prev = plan.classes.find((c) => c.id === item.id);
+          await deleteAppleEvents(prev?.appleEventIds);
+        }
+        synced = { ...item, appleEventIds: await syncClassToAppleCalendar(item) };
+      } catch (err) {
+        console.error('[Classes] failed to sync class to Apple Calendar', err);
+      }
+    }
     try {
       await savePlan({
         ...plan,
         classes: isEdit
-          ? plan.classes.map((c) => (c.id === item.id ? item : c))
-          : [...plan.classes, item],
+          ? plan.classes.map((c) => (c.id === synced.id ? synced : c))
+          : [...plan.classes, synced],
       });
     } catch (err) {
       console.error('[Classes] failed to save class', err);
@@ -48,8 +64,10 @@ export default function Classes() {
 
   const handleRemove = async (id: string) => {
     const prevClasses = plan.classes;
+    const removed = plan.classes.find((c) => c.id === id);
     try {
       await savePlan({ ...plan, classes: plan.classes.filter((c) => c.id !== id) });
+      if (appleCalendarConnected) await deleteAppleEvents(removed?.appleEventIds);
     } catch (err) {
       await savePlan({ ...plan, classes: prevClasses });
       console.error('[Classes] failed to remove class', err);

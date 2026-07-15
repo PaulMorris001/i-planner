@@ -4,6 +4,7 @@ import { OnboardingProvider } from '@/contexts/OnboardingContext';
 import { HabitsProvider } from '@/contexts/HabitsContext';
 import { PlanProvider } from '@/contexts/PlanContext';
 import { SettingsProvider } from '@/contexts/SettingsContext';
+import { GoalsProvider } from '@/contexts/GoalsContext';
 
 export default function RootLayout() {
   return (
@@ -11,8 +12,10 @@ export default function RootLayout() {
       <PlanProvider>
         <SettingsProvider>
           <HabitsProvider>
-            <StatusBar style="light" />
-            <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }} />
+            <GoalsProvider>
+              <StatusBar style="light" />
+              <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }} />
+            </GoalsProvider>
           </HabitsProvider>
         </SettingsProvider>
       </PlanProvider>

@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { View, Text, Pressable, Switch, StyleSheet } from 'react-native';
+import { View, Text, Pressable, Switch, StyleSheet, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { Button } from '@/components/ui/Button';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/hooks/useAuth';
 import { useOnboarding } from '@/hooks/useOnboarding';
+import { useSettings } from '@/hooks/useSettings';
 import { Colors, Spacing } from '@/constants/theme';
 import { Routes } from '@/constants/routes';
 
@@ -38,6 +39,14 @@ export default function Profile() {
   const router = useRouter();
   const { user, logout } = useAuth();
   const { focusProfile, setFocusProfile } = useOnboarding();
+  const {
+    appleCalendarConnected,
+    googleCalendarConnected,
+    connectAppleCalendar,
+    connectGoogleCalendar,
+    disconnectAppleCalendar,
+    disconnectGoogleCalendar,
+  } = useSettings();
 
   const [pathMenuOpen, setPathMenuOpen] = useState(false);
   const [consent, setConsent] = useState<Record<string, boolean>>({
@@ -53,6 +62,34 @@ export default function Profile() {
   const handleLogout = async () => {
     await logout();
     router.replace(Routes.WELCOME);
+  };
+
+  const handleConnectApple = async () => {
+    const ok = await connectAppleCalendar();
+    if (!ok) {
+      Alert.alert(
+        "Couldn't connect calendar",
+        'Calendar permission was denied. You can allow it later from your device settings.'
+      );
+    }
+  };
+
+  const handleConnectGoogle = async () => {
+    const ok = await connectGoogleCalendar();
+    if (!ok) {
+      Alert.alert("Couldn't connect calendar", 'Something went wrong finishing the Google sign-in. Try again.');
+    }
+  };
+
+  const confirmDisconnect = (calendarName: string, onConfirm: () => void) => {
+    Alert.alert(
+      `Disconnect ${calendarName}?`,
+      "New classes and tasks won't be added to your calendar anymore. Events already created will stay put.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Disconnect', style: 'destructive', onPress: onConfirm },
+      ]
+    );
   };
 
   const currentPathLabel = PATH_OPTIONS.find((o) => o.id === currentPath)?.label ?? 'Professional';
@@ -133,6 +170,57 @@ export default function Profile() {
           </View>
           <IconSymbol name="chevron.right" color={Colors.primaryLight} size={20} />
         </Pressable>
+
+        <Text style={[styles.eyebrow, { marginTop: Spacing.lg }]}>CALENDAR SYNC</Text>
+        <Text style={styles.sectionDesc}>
+          Classes and tasks with a due date get written to whichever calendars you connect here.
+        </Text>
+
+        <View style={styles.consentList}>
+          <View style={styles.calendarRow}>
+            <View style={styles.calendarIconBox}>
+              <IconSymbol name="calendar" color={Colors.textPrimary} size={17} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.consentLabel}>Apple Calendar</Text>
+              <Text style={styles.consentDesc}>{appleCalendarConnected ? 'Connected' : 'Not connected'}</Text>
+            </View>
+            <Pressable
+              style={[styles.calendarActionBtn, appleCalendarConnected && styles.calendarActionBtnDanger]}
+              onPress={() =>
+                appleCalendarConnected
+                  ? confirmDisconnect('Apple Calendar', disconnectAppleCalendar)
+                  : handleConnectApple()
+              }
+            >
+              <Text style={[styles.calendarActionText, appleCalendarConnected && styles.calendarActionTextDanger]}>
+                {appleCalendarConnected ? 'Disconnect' : 'Connect'}
+              </Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.calendarRow}>
+            <View style={styles.calendarIconBox}>
+              <Text style={styles.googleG}>G</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.consentLabel}>Google Calendar</Text>
+              <Text style={styles.consentDesc}>{googleCalendarConnected ? 'Connected' : 'Not connected'}</Text>
+            </View>
+            <Pressable
+              style={[styles.calendarActionBtn, googleCalendarConnected && styles.calendarActionBtnDanger]}
+              onPress={() =>
+                googleCalendarConnected
+                  ? confirmDisconnect('Google Calendar', disconnectGoogleCalendar)
+                  : handleConnectGoogle()
+              }
+            >
+              <Text style={[styles.calendarActionText, googleCalendarConnected && styles.calendarActionTextDanger]}>
+                {googleCalendarConnected ? 'Disconnect' : 'Connect'}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
 
         <Text style={[styles.eyebrow, { marginTop: Spacing.lg }]}>AI DATA ACCESS</Text>
         <Text style={styles.sectionDesc}>
@@ -371,6 +459,51 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     marginTop: 1,
     lineHeight: 17,
+  },
+  calendarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 15,
+    padding: 14,
+    paddingHorizontal: 16,
+  },
+  calendarIconBox: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: Colors.offWhite,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  googleG: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#4285F4',
+  },
+  calendarActionBtn: {
+    borderWidth: 1.5,
+    borderColor: Colors.primaryLight,
+    borderRadius: 999,
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+  },
+  calendarActionText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: Colors.primaryLight,
+  },
+  calendarActionBtnDanger: {
+    borderColor: Colors.border,
+    backgroundColor: Colors.offWhite,
+  },
+  calendarActionTextDanger: {
+    color: Colors.textMuted,
   },
   legalCard: {
     backgroundColor: Colors.white,
