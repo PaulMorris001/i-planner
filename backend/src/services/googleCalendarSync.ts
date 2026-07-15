@@ -49,6 +49,17 @@ function buildEventWindow(dateIso: string, time: string | undefined, durationMin
   return { start, end };
 }
 
+// Google rejects a recurring event's start/end without an explicit timeZone, even
+// when dateTime already carries a 'Z' offset — RRULE expansion needs a named zone
+// to apply DST correctly across occurrences. We don't currently capture the user's
+// real IANA timezone (class/task times are parsed server-side from a plain "9:00
+// AM"-style string with no zone info), so UTC is used for both the wall-clock math
+// above and this field — internally consistent, but a class time will show as its
+// literal hour in UTC on Google Calendar rather than the user's local hour.
+function toGoogleEventTime(date: Date): { dateTime: string; timeZone: string } {
+  return { dateTime: date.toISOString(), timeZone: 'UTC' };
+}
+
 function buildRRule(freq: SyncableClassItem['freq'], dayIdxs: number[]): string | undefined {
   if (freq === 'weekly' || freq === 'weekdays') {
     const days = dayIdxs.map(i => BYDAY[i]).filter(Boolean).join(',');
@@ -179,8 +190,8 @@ export async function upsertClassEvents(
   const { start, end } = buildEventWindow(item.startDate, item.time, 60);
   const body: Record<string, unknown> = {
     summary: item.courseName,
-    start: { dateTime: start.toISOString() },
-    end: { dateTime: end.toISOString() },
+    start: toGoogleEventTime(start),
+    end: toGoogleEventTime(end),
   };
   const rrule = item.recurring ? buildRRule(item.freq, item.dayIdxs) : undefined;
   if (rrule) body.recurrence = [rrule];
@@ -209,8 +220,8 @@ export async function upsertTaskEvent(
   const { start, end } = buildEventWindow(task.dueDate, task.time, 30);
   const body: Record<string, unknown> = {
     summary: task.title,
-    start: { dateTime: start.toISOString() },
-    end: { dateTime: end.toISOString() },
+    start: toGoogleEventTime(start),
+    end: toGoogleEventTime(end),
   };
   if (task.notes) body.description = task.notes;
 
