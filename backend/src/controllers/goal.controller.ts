@@ -22,7 +22,7 @@ export async function listGoals(req: AuthedRequest, res: Response) {
 }
 
 export async function createGoal(req: AuthedRequest, res: Response) {
-  const { type, tag, title, color, milestones } = req.body ?? {};
+  const { type, tag, title, color, milestones, targetRole, targetIndustry, targetDate } = req.body ?? {};
 
   if (!title || typeof title !== 'string' || !title.trim()) {
     throw new ApiError(400, 'Title is required.', 'general');
@@ -48,6 +48,9 @@ export async function createGoal(req: AuthedRequest, res: Response) {
     // regardless of count — pctFromMilestones is still used for consistency with
     // updateGoal, where it does the real work.
     pct: pctFromMilestones(milestoneDocs),
+    targetRole,
+    targetIndustry,
+    targetDate,
   });
 
   res.status(201).json(toPublicGoal(goal));
@@ -56,11 +59,14 @@ export async function createGoal(req: AuthedRequest, res: Response) {
 export async function updateGoal(req: AuthedRequest, res: Response) {
   const goal = await findOwnedOrThrow(Goal, req.params.id, req.userId!);
 
-  const { title, tag, color, type, milestones } = req.body ?? {};
+  const { title, tag, color, type, milestones, targetRole, targetIndustry, targetDate } = req.body ?? {};
   if (title !== undefined) goal.title = title;
   if (tag !== undefined) goal.tag = tag;
   if (color !== undefined) goal.color = color;
   if (type !== undefined) goal.type = type;
+  if (targetRole !== undefined) goal.targetRole = targetRole;
+  if (targetIndustry !== undefined) goal.targetIndustry = targetIndustry;
+  if (targetDate !== undefined) goal.targetDate = targetDate;
   if (Array.isArray(milestones)) {
     // Preserve _id for milestones the client references by id (existing ones being
     // toggled/edited) — rebuilding every subdocument from scratch on every save

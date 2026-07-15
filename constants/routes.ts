@@ -13,7 +13,7 @@ export const Routes = {
   TASKS:      '/(app)/tasks',
   COACH:      '/(app)/coach',
   PROFILE:    '/(app)/profile',
-  GOALS:      '/(app)/goals',
+  GOALS:      '/goals',
   HABITS:     '/habits',
   CERT_TRACKER: '/cert-tracker',
   CLASSES:    '/classes',

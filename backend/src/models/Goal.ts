@@ -14,6 +14,11 @@ export interface GoalDocument extends Document {
   color: string;
   pct: number;
   milestones: Types.DocumentArray<MilestoneDocument>;
+  // Career-goal-specific context (unused by other goal types) — shown as the
+  // "{role} · {industry} · {date}" subtitle on the Dashboard's Career Goal card.
+  targetRole?: string;
+  targetIndustry?: string;
+  targetDate?: string;
 }
 
 const milestoneSchema = new Schema<MilestoneDocument>({
@@ -38,6 +43,9 @@ const goalSchema = new Schema<GoalDocument>({
   // See goal.controller.ts.
   pct: { type: Number, default: 0 },
   milestones: { type: [milestoneSchema], default: [] },
+  targetRole: { type: String },
+  targetIndustry: { type: String },
+  targetDate: { type: String },
 });
 
 export function toPublicGoal(doc: GoalDocument) {
@@ -54,6 +62,9 @@ export function toPublicGoal(doc: GoalDocument) {
       done: m.done,
       dueLabel: m.dueLabel,
     })),
+    targetRole: doc.targetRole ?? '',
+    targetIndustry: doc.targetIndustry ?? '',
+    targetDate: doc.targetDate ?? '',
   };
 }
 

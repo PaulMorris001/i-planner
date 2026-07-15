@@ -47,7 +47,9 @@ export function useGoals() {
 
   const updateGoal = async (
     id: string,
-    patch: Partial<Pick<Goal, 'milestones' | 'title' | 'tag' | 'color' | 'type'>>
+    patch: Partial<
+      Pick<Goal, 'milestones' | 'title' | 'tag' | 'color' | 'type' | 'targetRole' | 'targetIndustry' | 'targetDate'>
+    >
   ) => {
     const prevGoals = goals;
     const optimisticPatch = patch.milestones

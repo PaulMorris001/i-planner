@@ -67,7 +67,6 @@ export default function AppLayout() {
               tabBarIcon: ({ color, size }) => <IconSymbol name="person.fill" color={color} size={size} />,
             }}
           />
-          <Tabs.Screen name="goals" options={{ href: null }} />
         </Tabs>
         <NewTaskModal />
       </NewTaskModalProvider>

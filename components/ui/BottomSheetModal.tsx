@@ -1,6 +1,7 @@
 import { ReactNode } from 'react';
-import { Modal, View, Pressable, KeyboardAvoidingView, Platform, StyleSheet } from 'react-native';
+import { Modal, View, Pressable, Animated, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useKeyboardOffset } from '@/hooks/useKeyboardOffset';
 import { Colors, Spacing } from '@/constants/theme';
 
 interface BottomSheetModalProps {
@@ -17,32 +18,30 @@ interface BottomSheetModalProps {
 //     flat hardcoded paddingBottom isn't enough on devices with a tall nav bar.
 //  2. Keyboard avoidance — RN's Modal renders in its own native window, so a
 //     KeyboardAvoidingView anywhere else in the app (e.g. ScreenWrapper) has no
-//     effect on content inside a Modal; each sheet needs its own.
-// The sheet is laid out via flexbox (not position:absolute) inside a flex:1,
-// justify-end KeyboardAvoidingView — shrinking that container's height when the
-// keyboard opens naturally pushes the sheet up above it.
+//     effect on content inside a Modal; each sheet needs its own. RN's own
+//     KeyboardAvoidingView doesn't reliably reset itself once the keyboard closes
+//     inside a Modal on Android (the sheet is left "floating" instead of settling
+//     back to the screen bottom) — useKeyboardOffset tracks the keyboard height
+//     manually instead, so "hidden" always means exactly 0, not a stale value.
 export function BottomSheetModal({ visible, onClose, children, maxHeightPct = 90 }: BottomSheetModalProps) {
   const insets = useSafeAreaInsets();
+  const keyboardOffset = useKeyboardOffset();
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.root}>
         <Pressable style={styles.overlay} onPress={onClose} />
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.avoidingContainer}
-          pointerEvents="box-none"
-        >
-          <View
+        <View style={styles.avoidingContainer} pointerEvents="box-none">
+          <Animated.View
             style={[
               styles.sheet,
-              { maxHeight: `${maxHeightPct}%`, paddingBottom: insets.bottom + 24 },
+              { maxHeight: `${maxHeightPct}%`, paddingBottom: insets.bottom + 24, marginBottom: keyboardOffset },
             ]}
           >
             <View style={styles.handle} />
             {children}
-          </View>
-        </KeyboardAvoidingView>
+          </Animated.View>
+        </View>
       </View>
     </Modal>
   );

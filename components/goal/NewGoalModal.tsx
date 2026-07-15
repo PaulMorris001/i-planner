@@ -8,12 +8,18 @@ import {
   Alert,
   ScrollView,
   StyleSheet,
+  Platform,
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { BottomSheetModal } from '@/components/ui/BottomSheetModal';
-import { Colors, Spacing } from '@/constants/theme';
+import { Colors, Spacing, Radius } from '@/constants/theme';
 import { TaskCategories } from '@/constants/taskMeta';
 import { goalService } from '@/services/goal.service';
 import type { Goal, GoalTypeId, NewGoalInput } from '@/types/goal.types';
+
+function formatDate(date: Date): string {
+  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
 
 const GOAL_TYPES: { id: GoalTypeId; label: string; color: string }[] = [
   { id: 'study', label: 'Study', color: Colors.primaryLight },
@@ -30,18 +36,31 @@ interface DraftMilestone {
 
 type Step = 'form' | 'generating' | 'review';
 
+interface CareerGoalFields {
+  targetRole?: string;
+  targetIndustry?: string;
+  targetDate?: string;
+}
+
 interface NewGoalModalProps {
   visible: boolean;
   onClose: () => void;
   onCreate: (input: NewGoalInput) => Promise<void>;
   editingGoal?: Goal | null;
-  onSave?: (id: string, patch: { title: string; type: GoalTypeId; tag: string; color: string }) => Promise<void>;
+  onSave?: (
+    id: string,
+    patch: { title: string; type: GoalTypeId; tag: string; color: string } & CareerGoalFields
+  ) => Promise<void>;
 }
 
 export function NewGoalModal({ visible, onClose, onCreate, editingGoal, onSave }: NewGoalModalProps) {
   const [step, setStep] = useState<Step>('form');
   const [goalType, setGoalType] = useState<GoalTypeId>('study');
   const [goalName, setGoalName] = useState('');
+  const [targetRole, setTargetRole] = useState('');
+  const [targetIndustry, setTargetIndustry] = useState('');
+  const [targetDate, setTargetDate] = useState<Date | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [milestones, setMilestones] = useState<DraftMilestone[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
@@ -51,6 +70,9 @@ export function NewGoalModal({ visible, onClose, onCreate, editingGoal, onSave }
     setStep('form');
     setGoalType('study');
     setGoalName('');
+    setTargetRole('');
+    setTargetIndustry('');
+    setTargetDate(null);
     setMilestones([]);
     setSubmitting(false);
   };
@@ -60,6 +82,9 @@ export function NewGoalModal({ visible, onClose, onCreate, editingGoal, onSave }
     if (editingGoal) {
       setGoalType(editingGoal.type);
       setGoalName(editingGoal.title);
+      setTargetRole(editingGoal.targetRole ?? '');
+      setTargetIndustry(editingGoal.targetIndustry ?? '');
+      setTargetDate(editingGoal.targetDate ? new Date(editingGoal.targetDate) : null);
     } else {
       reset();
     }
@@ -76,7 +101,19 @@ export function NewGoalModal({ visible, onClose, onCreate, editingGoal, onSave }
     const type = GOAL_TYPES.find((t) => t.id === goalType)!;
     setSubmitting(true);
     try {
-      await onSave(editingGoal.id, { title: goalName.trim(), type: type.id, tag: type.label, color: type.color });
+      await onSave(editingGoal.id, {
+        title: goalName.trim(),
+        type: type.id,
+        tag: type.label,
+        color: type.color,
+        ...(type.id === 'career'
+          ? {
+              targetRole: targetRole.trim(),
+              targetIndustry: targetIndustry.trim(),
+              targetDate: targetDate ? targetDate.toISOString() : '',
+            }
+          : {}),
+      });
       handleClose();
     } catch (err) {
       console.error('[NewGoalModal] failed to save goal', err);
@@ -129,6 +166,13 @@ export function NewGoalModal({ visible, onClose, onCreate, editingGoal, onSave }
         milestones: milestones
           .filter((m) => m.title.trim().length > 0)
           .map((m) => ({ title: m.title.trim(), dueLabel: m.dueLabel.trim() })),
+        ...(type.id === 'career'
+          ? {
+              targetRole: targetRole.trim(),
+              targetIndustry: targetIndustry.trim(),
+              targetDate: targetDate ? targetDate.toISOString() : '',
+            }
+          : {}),
       });
       handleClose();
     } catch (err) {
@@ -173,6 +217,43 @@ export function NewGoalModal({ visible, onClose, onCreate, editingGoal, onSave }
               placeholderTextColor={Colors.textMuted}
               style={styles.input}
             />
+
+            {goalType === 'career' && (
+              <>
+                <TextInput
+                  value={targetRole}
+                  onChangeText={setTargetRole}
+                  placeholder="Target role (e.g. Senior Product Manager)"
+                  placeholderTextColor={Colors.textMuted}
+                  style={styles.input}
+                />
+                <TextInput
+                  value={targetIndustry}
+                  onChangeText={setTargetIndustry}
+                  placeholder="Target industry (e.g. Fintech)"
+                  placeholderTextColor={Colors.textMuted}
+                  style={styles.input}
+                />
+                <Pressable style={styles.datePicker} onPress={() => setShowDatePicker(true)}>
+                  <Text style={styles.datePickerIcon}>📅</Text>
+                  <Text style={[styles.datePickerText, !targetDate && styles.datePickerPlaceholder]}>
+                    {targetDate ? formatDate(targetDate) : 'Target date (optional)'}
+                  </Text>
+                </Pressable>
+                {showDatePicker && (
+                  <DateTimePicker
+                    value={targetDate ?? new Date()}
+                    mode="date"
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    themeVariant="light"
+                    onChange={(_, date) => {
+                      if (Platform.OS === 'android') setShowDatePicker(false);
+                      if (date) setTargetDate(date);
+                    }}
+                  />
+                )}
+              </>
+            )}
 
             <Pressable
               style={[styles.primaryButton, (!canGenerate || submitting) && styles.primaryButtonDisabled]}
@@ -291,6 +372,31 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: Colors.textPrimary,
     backgroundColor: Colors.white,
+  },
+  datePicker: {
+    marginTop: 16,
+    height: 48,
+    borderRadius: Radius.md,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    backgroundColor: Colors.white,
+    paddingHorizontal: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  datePickerIcon: {
+    fontSize: 16,
+  },
+  datePickerText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+  },
+  datePickerPlaceholder: {
+    color: Colors.textMuted,
+    fontWeight: '400',
   },
   primaryButton: {
     alignItems: 'center',

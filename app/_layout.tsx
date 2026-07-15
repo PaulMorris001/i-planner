@@ -12,7 +12,7 @@ export default function RootLayout() {
         <SettingsProvider>
           <HabitsProvider>
             <StatusBar style="light" />
-            <Stack screenOptions={{ headerShown: false }} />
+            <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }} />
           </HabitsProvider>
         </SettingsProvider>
       </PlanProvider>

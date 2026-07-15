@@ -15,6 +15,10 @@ export interface Goal {
   color: string;
   pct: number;
   milestones: Milestone[];
+  // Career-goal-specific context (unused by other goal types).
+  targetRole?: string;
+  targetIndustry?: string;
+  targetDate?: string;
 }
 
 export type NewGoalInput = Omit<Goal, 'id' | 'pct' | 'milestones'> & {

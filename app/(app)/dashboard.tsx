@@ -7,12 +7,15 @@ import { GreetingHeader } from '@/components/ui/GreetingHeader';
 import { AddClassModal } from '@/components/plan/AddClassModal';
 import { AddExamModal } from '@/components/plan/AddExamModal';
 import { ExamCarousel } from '@/components/plan/ExamCarousel';
+import { DashboardSkeleton } from '@/components/ui/DashboardSkeleton';
+import { AnimatedProgressBar } from '@/components/ui/AnimatedProgressBar';
 import { Colors, Spacing } from '@/constants/theme';
 import { Routes } from '@/constants/routes';
 import { usePlan } from '@/hooks/usePlan';
 import { useOnboarding } from '@/hooks/useOnboarding';
 import { useHabits } from '@/hooks/useHabits';
 import { useTasks } from '@/hooks/useTasks';
+import { useGoals } from '@/hooks/useGoals';
 import { TaskCategories } from '@/constants/taskMeta';
 import { COURSE_COLORS } from '@/constants/classColors';
 import { DUMMY_SYLLABI } from '@/constants/dummySyllabi';
@@ -52,13 +55,21 @@ function formatShortDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+function formatMonthYear(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+}
+
 export default function Dashboard() {
   const router = useRouter();
-  const { professionalPlan, plan, examPlan, savePlan, saveExamPlan } = usePlan();
+  const { professionalPlan, plan, examPlan, savePlan, saveExamPlan, loading: planLoading } = usePlan();
   const { focusProfile } = useOnboarding();
-  const { habits } = useHabits();
-  const { tasks } = useTasks();
-  const careerGoal = professionalPlan.careerGoals[0];
+  const { habits, loading: habitsLoading } = useHabits();
+  const { tasks, loading: tasksLoading } = useTasks();
+  const { goals, loading: goalsLoading } = useGoals();
+  const dashboardLoading = planLoading || habitsLoading || tasksLoading || goalsLoading;
+  const careerGoal = goals.find((g) => g.type === 'career');
+  const careerMilestonesDone = careerGoal?.milestones.filter((m) => m.done).length ?? 0;
+  const nextCareerMilestone = careerGoal?.milestones.find((m) => !m.done);
   const financialGoal = professionalPlan.financialGoals[0];
   const habitsDoneToday = habits.filter((h) => h.doneToday).length;
 
@@ -72,6 +83,10 @@ export default function Dashboard() {
   const todaysClasses = plan.classes
     .filter((c) => (c.dayIdxs ?? []).includes(todayIdx))
     .sort((a, b) => parseTimeToMinutes(a.time) - parseTimeToMinutes(b.time));
+
+  // Today's task completion, for the Professional path's "Today's tasks" stat.
+  const todaysTasks = tasks.filter((t) => t.day === todayIdx);
+  const todaysTasksDone = todaysTasks.filter((t) => t.done).length;
 
   // Most-recently-created first — class ids are Date.now() timestamps, so a
   // numeric sort on id doubles as a creation-order sort.
@@ -129,6 +144,9 @@ export default function Dashboard() {
     <ScreenWrapper backgroundColor={Colors.offWhite} scroll style={styles.scrollContent} edges={['top', 'right', 'left']}>
       <GreetingHeader />
 
+      {dashboardLoading ? (
+        <DashboardSkeleton />
+      ) : (
       <View style={styles.stack}>
         {pathKey === 'student' ? (
           <>
@@ -393,31 +411,79 @@ export default function Dashboard() {
           </>
         ) : (
           <>
+            {/* Today's tasks + Weekly action */}
+            <View style={styles.statsRow}>
+              <View style={styles.statCard}>
+                <Text style={styles.statLabel}>Today's tasks</Text>
+                <View style={styles.statValueRow}>
+                  <Text style={styles.statValue}>{todaysTasksDone}</Text>
+                  <Text style={styles.statUnit}>/ {todaysTasks.length} done</Text>
+                </View>
+              </View>
+              <View style={styles.statCard}>
+                <Text style={styles.statLabel}>Weekly action</Text>
+                <Text style={styles.statNextTitle} numberOfLines={2}>
+                  {nextCareerMilestone?.title ?? 'Nothing this week'}
+                </Text>
+              </View>
+            </View>
+
             {/* Career goal */}
             <View style={styles.card}>
               {careerGoal ? (
                 <>
                   <View style={styles.rowBetween}>
                     <Text style={styles.eyebrowGreen}>CAREER GOAL</Text>
-                    <Text style={styles.mono}>1 / {professionalPlan.careerGoals.length}</Text>
+                    <Text style={styles.mono}>{careerMilestonesDone} / {careerGoal.milestones.length}</Text>
                   </View>
-                  <Text style={styles.cardTitle}>{careerGoal.goal}</Text>
-                  <Text style={styles.goalMeta}>Target: {careerGoal.targetYear}</Text>
+                  <Text style={styles.cardTitle}>{careerGoal.title}</Text>
+                  {!!(careerGoal.targetRole || careerGoal.targetIndustry || careerGoal.targetDate) && (
+                    <Text style={styles.goalMeta}>
+                      {[careerGoal.targetRole, careerGoal.targetIndustry, careerGoal.targetDate ? formatMonthYear(careerGoal.targetDate) : '']
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </Text>
+                  )}
+
+                  <View style={[styles.rowBetween, { marginTop: 13 }]}>
+                    <Text style={styles.careerPct}>{careerGoal.pct}%</Text>
+                    <Text style={styles.goalMeta}>
+                      {careerMilestonesDone} / {careerGoal.milestones.length} milestones
+                    </Text>
+                  </View>
+                  <View style={styles.progressTrack}>
+                    <AnimatedProgressBar pct={careerGoal.pct} color={Colors.success} />
+                  </View>
+
+                  {nextCareerMilestone && (
+                    <View style={styles.weeklyActionRow}>
+                      <IconSymbol name="clock" color={Colors.textSecondary} size={16} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.weeklyActionLabel}>WEEKLY CAREER ACTION</Text>
+                        <Text style={styles.weeklyActionTitle} numberOfLines={1}>
+                          {nextCareerMilestone.title}
+                        </Text>
+                      </View>
+                      <Pressable style={styles.viewButton} onPress={() => router.push(Routes.GOALS)}>
+                        <Text style={styles.viewButtonText}>View</Text>
+                      </Pressable>
+                    </View>
+                  )}
                 </>
               ) : (
                 <>
                   <Text style={styles.eyebrowMuted}>CAREER GOAL</Text>
-                  <View style={styles.placeholderRow}>
+                  <Pressable style={styles.placeholderRow} onPress={() => router.push(Routes.GOALS)}>
                     <View style={styles.dashedIconBox}>
                       <IconSymbol name="plus" color={Colors.textMuted} size={19} />
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.placeholderTitle}>Set a career goal</Text>
                       <Text style={styles.placeholderSub}>
-                        Add one from your profile to track it here.
+                        Add one from the Goals page to track it here.
                       </Text>
                     </View>
-                  </View>
+                  </Pressable>
                 </>
               )}
             </View>
@@ -500,6 +566,7 @@ export default function Dashboard() {
           </Pressable>
         </View>
       </View>
+      )}
     </ScreenWrapper>
     <AddClassModal
       visible={classModalOpen}
@@ -566,6 +633,45 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.textSecondary,
     marginTop: 4,
+  },
+  careerPct: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: Colors.success,
+    letterSpacing: -0.4,
+  },
+  weeklyActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: Colors.offWhite,
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 13,
+  },
+  weeklyActionLabel: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: Colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  weeklyActionTitle: {
+    fontSize: 13.5,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+    marginTop: 2,
+  },
+  viewButton: {
+    backgroundColor: Colors.infoSoft,
+    borderRadius: 999,
+    paddingVertical: 6,
+    paddingHorizontal: 13,
+  },
+  viewButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.primaryLight,
   },
   placeholderRow: {
     flexDirection: 'row',

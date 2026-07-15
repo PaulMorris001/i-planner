@@ -1,37 +1,18 @@
-import { useEffect, useRef, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, Animated, Easing } from 'react-native';
+import { useState } from 'react';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { useRouter } from 'expo-router';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
-import { GreetingHeader } from '@/components/ui/GreetingHeader';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { NewGoalModal } from '@/components/goal/NewGoalModal';
 import { ItemActionSheet } from '@/components/ui/ItemActionSheet';
+import { AnimatedProgressBar } from '@/components/ui/AnimatedProgressBar';
 import { confirmDelete } from '@/utils/confirmDelete';
 import { Colors, Spacing } from '@/constants/theme';
 import { useGoals } from '@/hooks/useGoals';
 import type { Goal, Milestone } from '@/types/goal.types';
 
-function AnimatedProgressFill({ pct, color }: { pct: number; color: string }) {
-  const widthAnim = useRef(new Animated.Value(pct)).current;
-
-  useEffect(() => {
-    Animated.timing(widthAnim, {
-      toValue: pct,
-      duration: 450,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: false, // width isn't animatable via the native driver
-    }).start();
-  }, [pct, widthAnim]);
-
-  const width = widthAnim.interpolate({
-    inputRange: [0, 100],
-    outputRange: ['0%', '100%'],
-    extrapolate: 'clamp',
-  });
-
-  return <Animated.View style={[styles.progressFill, { width, backgroundColor: color }]} />;
-}
-
 export default function Goals() {
+  const router = useRouter();
   const { goals, createGoal, updateGoal, deleteGoal } = useGoals();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [actionSheetTarget, setActionSheetTarget] = useState<Goal | null>(null);
@@ -44,7 +25,10 @@ export default function Goals() {
     });
   };
 
-  const handleSaveGoal = async (id: string, patch: { title: string; type: Goal['type']; tag: string; color: string }) => {
+  const handleSaveGoal = async (
+    id: string,
+    patch: { title: string; type: Goal['type']; tag: string; color: string; targetRole?: string; targetIndustry?: string; targetDate?: string }
+  ) => {
     await updateGoal(id, patch);
   };
 
@@ -58,7 +42,10 @@ export default function Goals() {
 
   return (
     <ScreenWrapper backgroundColor={Colors.offWhite} scroll style={styles.scrollContent} edges={['top', 'right', 'left']}>
-      <GreetingHeader />
+      <Pressable style={styles.backRow} onPress={() => router.back()}>
+        <IconSymbol name="chevron.left" color={Colors.textSecondary} size={18} />
+        <Text style={styles.backText}>Back</Text>
+      </Pressable>
 
       <View style={styles.body}>
         <View style={styles.headerRow}>
@@ -96,7 +83,7 @@ export default function Goals() {
                 </View>
                 <Text style={styles.cardTitle}>{goal.title}</Text>
                 <View style={styles.progressTrack}>
-                  <AnimatedProgressFill pct={goal.pct} color={goal.color} />
+                  <AnimatedProgressBar pct={goal.pct} color={goal.color} />
                 </View>
 
                 {goal.milestones.length > 0 && (
@@ -150,6 +137,19 @@ export default function Goals() {
 const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 40,
+  },
+  backRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.sm,
+    alignSelf: 'flex-start',
+  },
+  backText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textSecondary,
   },
   body: {
     marginTop: Spacing.md,
@@ -244,10 +244,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.border,
     marginTop: 11,
     overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 999,
   },
   milestoneList: {
     marginTop: 14,
