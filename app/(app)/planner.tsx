@@ -13,7 +13,7 @@ import { usePlan } from '@/hooks/usePlan';
 import { useSettings } from '@/hooks/useSettings';
 import { useNewTaskModal } from '@/contexts/NewTaskModalContext';
 import { confirmDelete } from '@/utils/confirmDelete';
-import { weekdayIndexMonday } from '@/utils/date';
+import { weekdayIndexMonday, taskOccursOnDay } from '@/utils/date';
 import { parseTimeToMinutes } from '@/utils/time';
 import type { Task } from '@/types/task.types';
 import type { ClassItem } from '@/types/plan.types';
@@ -35,6 +35,12 @@ function classDaysShortLabel(item: ClassItem): string {
   if (item.freq === 'monthly') return 'Monthly';
   return (item.dayIdxs ?? []).map((i) => DAY_SHORT[i]).join('/');
 }
+
+const TASK_FREQ_LABEL: Record<NonNullable<Task['freq']>, string> = {
+  weekly: 'Weekly',
+  weekdays: 'Weekdays',
+  daily: 'Daily',
+};
 
 type DayItem =
   | { kind: 'task'; time: number; task: Task }
@@ -90,11 +96,11 @@ export default function Planner() {
     return [...classItems, ...taskItems].sort((a, b) => a.time - b.time);
   };
 
-  const dayItems = buildDayItems(todayIdx, tasks.filter((t) => t.day === todayIdx));
+  const dayItems = buildDayItems(todayIdx, tasks.filter((t) => taskOccursOnDay(t, todayIdx)));
   const weekDays = DAY_FULL.map((label, i) => ({
     label,
     isToday: i === todayIdx,
-    items: buildDayItems(i, tasks.filter((t) => t.day === i)),
+    items: buildDayItems(i, tasks.filter((t) => taskOccursOnDay(t, i))),
   }));
 
   const renderTaskRow = (task: Task) => {
@@ -139,6 +145,9 @@ export default function Planner() {
               {priority.label}
             </Text>
             {!!task.time && <Text style={styles.time}>{task.time}</Text>}
+            {task.recurring && task.freq && (
+              <Text style={styles.time}>↻ {TASK_FREQ_LABEL[task.freq]}</Text>
+            )}
           </View>
         </View>
         <Pressable
@@ -301,7 +310,12 @@ export default function Planner() {
                             >
                               {task.title}
                             </Text>
-                            {!!task.time && <Text style={styles.weekTaskTime}>{task.time}</Text>}
+                            {(!!task.time || (task.recurring && task.freq)) && (
+                              <Text style={styles.weekTaskTime}>
+                                {task.time}
+                                {task.recurring && task.freq ? `${task.time ? ' · ' : ''}↻ ${TASK_FREQ_LABEL[task.freq]}` : ''}
+                              </Text>
+                            )}
                           </View>
                           {task.done && (
                             <View style={[styles.weekDoneCircle, { backgroundColor: category.color }]}>

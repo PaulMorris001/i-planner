@@ -23,7 +23,7 @@ import type {
   Exam,
   ExamPlan as ExamPlanType,
 } from "@/types/plan.types";
-import { formatMonthYear, weekdayIndexMonday } from "@/utils/date";
+import { formatMonthYear, weekdayIndexMonday, taskOccursOnDay } from "@/utils/date";
 import { parseTimeToMinutes } from "@/utils/time";
 import { syncClassToAppleCalendar } from "@/utils/appleCalendarSync";
 import { useRouter } from "expo-router";
@@ -104,7 +104,7 @@ export default function Dashboard() {
     .sort((a, b) => parseTimeToMinutes(a.time) - parseTimeToMinutes(b.time));
 
   // Today's task completion, for the Professional path's "Today's tasks" stat.
-  const todaysTasks = tasks.filter((t) => t.day === todayIdx);
+  const todaysTasks = tasks.filter((t) => taskOccursOnDay(t, todayIdx));
   const todaysTasksDone = todaysTasks.filter((t) => t.done).length;
 
   // Most-recently-created first — class ids are Date.now() timestamps, so a

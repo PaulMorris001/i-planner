@@ -6,7 +6,19 @@ import { ApiError } from '../utils/ApiError';
 import { findOwnedOrThrow } from '../utils/ownedDoc';
 import { deleteTaskEvent, upsertTaskEvent } from '../services/googleCalendarSync';
 
-async function syncTaskToGoogle(firebaseUid: string, task: { title: string; dueDate: string; time?: string; notes?: string; googleEventId?: string }) {
+async function syncTaskToGoogle(
+  firebaseUid: string,
+  task: {
+    title: string;
+    dueDate: string;
+    time?: string;
+    notes?: string;
+    recurring: boolean;
+    freq?: 'weekly' | 'weekdays' | 'daily';
+    dayIdxs?: number[];
+    googleEventId?: string;
+  }
+) {
   const settings = await Settings.findOne({ firebaseUid });
   if (!settings?.googleCalendarConnected) return undefined;
   // An edit that clears dueDate leaves nothing to sync — delete any existing
@@ -31,7 +43,8 @@ export async function listTasks(req: AuthedRequest, res: Response) {
 }
 
 export async function createTask(req: AuthedRequest, res: Response) {
-  const { title, category, priority, day, hour, time, dueDate, recurring, notes, appleEventId } = req.body ?? {};
+  const { title, category, priority, day, hour, time, dueDate, recurring, freq, dayIdxs, notes, appleEventIds } =
+    req.body ?? {};
 
   if (!title || typeof title !== 'string' || !title.trim()) {
     throw new ApiError(400, 'Title is required.', 'general');
@@ -50,10 +63,12 @@ export async function createTask(req: AuthedRequest, res: Response) {
     time: time ?? '',
     dueDate: dueDate ?? '',
     recurring: !!recurring,
+    freq: freq ?? undefined,
+    dayIdxs: Array.isArray(dayIdxs) ? dayIdxs : undefined,
     notes: notes ?? '',
     // Apple sync runs client-side — the frontend already created the device
-    // calendar event before this request and just wants the id persisted.
-    appleEventId: appleEventId ?? undefined,
+    // calendar event(s) before this request and just wants the ids persisted.
+    appleEventIds: Array.isArray(appleEventIds) ? appleEventIds : undefined,
   });
 
   task.googleEventId = await syncTaskToGoogle(req.userId!, task);
@@ -65,10 +80,12 @@ export async function createTask(req: AuthedRequest, res: Response) {
 export async function updateTask(req: AuthedRequest, res: Response) {
   const task = await findOwnedOrThrow(Task, req.params.id, req.userId!);
 
-  const { title, category, priority, day, hour, time, dueDate, done, recurring, notes, appleEventId } = req.body ?? {};
+  const {
+    title, category, priority, day, hour, time, dueDate, done, recurring, freq, dayIdxs, notes, appleEventIds,
+  } = req.body ?? {};
   // Google sync only cares about fields that actually affect the calendar event —
-  // a bare { done } toggle or an { appleEventId } id-persist patch shouldn't touch it.
-  const hasContentChange = [title, category, priority, day, hour, time, dueDate, recurring, notes]
+  // a bare { done } toggle or an { appleEventIds } id-persist patch shouldn't touch it.
+  const hasContentChange = [title, category, priority, day, hour, time, dueDate, recurring, freq, dayIdxs, notes]
     .some((v) => v !== undefined);
 
   if (title !== undefined) task.title = title;
@@ -80,8 +97,10 @@ export async function updateTask(req: AuthedRequest, res: Response) {
   if (dueDate !== undefined) task.dueDate = dueDate;
   if (done !== undefined) task.done = !!done;
   if (recurring !== undefined) task.recurring = !!recurring;
+  if (freq !== undefined) task.freq = freq;
+  if (dayIdxs !== undefined) task.dayIdxs = Array.isArray(dayIdxs) ? dayIdxs : undefined;
   if (notes !== undefined) task.notes = notes;
-  if (appleEventId !== undefined) task.appleEventId = appleEventId;
+  if (appleEventIds !== undefined) task.appleEventIds = Array.isArray(appleEventIds) ? appleEventIds : undefined;
 
   if (hasContentChange) {
     task.googleEventId = await syncTaskToGoogle(req.userId!, task);

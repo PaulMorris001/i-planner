@@ -29,6 +29,9 @@ export interface SyncableTaskItem {
   dueDate: string;
   time?: string;
   notes?: string;
+  recurring?: boolean;
+  freq?: 'weekly' | 'weekdays' | 'daily';
+  dayIdxs?: number[];
   googleEventId?: string;
 }
 
@@ -244,6 +247,8 @@ export async function upsertTaskEvent(
     end: toGoogleEventTime(end, timeZone),
   };
   if (task.notes) body.description = task.notes;
+  const rrule = task.recurring && task.freq ? buildRRule(task.freq, task.dayIdxs ?? []) : undefined;
+  if (rrule) body.recurrence = [rrule];
 
   return upsertEvent(ctx.accessToken, ctx.calendarId, task.googleEventId, body);
 }

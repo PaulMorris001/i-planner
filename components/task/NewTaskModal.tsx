@@ -9,9 +9,15 @@ import { Colors, Spacing } from '@/constants/theme';
 import { TaskCategories, TaskCategoryId, TaskPriorities, TaskPriorityId } from '@/constants/taskMeta';
 import { weekdayIndexMonday } from '@/utils/date';
 import { parseTimeToMinutes } from '@/utils/time';
+import type { TaskFrequency } from '@/types/task.types';
 
 const CATEGORY_ORDER: TaskCategoryId[] = ['academic', 'career', 'personal', 'financial', 'exam', 'habit', 'other'];
 const PRIORITY_ORDER: TaskPriorityId[] = ['high', 'medium', 'low'];
+const TASK_FREQ_OPTIONS: { key: TaskFrequency; label: string }[] = [
+  { key: 'weekly',   label: 'Weekly' },
+  { key: 'weekdays', label: 'Weekdays' },
+  { key: 'daily',    label: 'Every day' },
+];
 // Planner's day-of-week grouping, derived from the due date when one is set
 // rather than asked for separately (Monday-start, matching Planner's grid).
 // Falls back to Planner's fixed "today" column when no due date is picked.
@@ -44,6 +50,7 @@ export function NewTaskModal() {
   const [dueDate, setDueDate] = useState<Date | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [recurring, setRecurring] = useState(false);
+  const [freq, setFreq] = useState<TaskFrequency>('weekly');
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -56,6 +63,7 @@ export function NewTaskModal() {
     setDueTime(null);
     setDueDate(null);
     setRecurring(false);
+    setFreq('weekly');
     setNotes('');
   };
 
@@ -68,6 +76,7 @@ export function NewTaskModal() {
       setDueTime(editingTask.time ? parseTimeToDate(editingTask.time) : null);
       setDueDate(editingTask.dueDate ? new Date(editingTask.dueDate) : null);
       setRecurring(editingTask.recurring);
+      setFreq(editingTask.freq ?? 'weekly');
       setNotes(editingTask.notes);
     } else {
       reset();
@@ -84,15 +93,26 @@ export function NewTaskModal() {
     if (!canSave) return;
     setSubmitting(true);
     try {
+      const dueWd = dueDate ? weekdayIndexMonday(dueDate) : DEFAULT_DAY_INDEX;
+      // Mirrors AddClassModal's dayIdxs derivation — weekly recurs on the due
+      // date's own weekday, weekdays/daily span the grid the same way classes do.
+      let dayIdxs: number[] | undefined;
+      if (recurring) {
+        if (freq === 'weekly') dayIdxs = [dueWd];
+        else if (freq === 'weekdays') dayIdxs = [0, 1, 2, 3, 4];
+        else if (freq === 'daily') dayIdxs = [0, 1, 2, 3, 4, 5, 6];
+      }
       const patch = {
         title: title.trim(),
         category,
         priority,
-        day: dueDate ? weekdayIndexMonday(dueDate) : DEFAULT_DAY_INDEX,
+        day: dueWd,
         hour: dueTime ? dueTime.getHours() : 23,
         time: dueTime ? formatTime(dueTime) : '',
         dueDate: dueDate ? dueDate.toISOString() : '',
         recurring,
+        freq: recurring ? freq : undefined,
+        dayIdxs,
         notes: notes.trim(),
       };
       if (editingTask) {
@@ -236,6 +256,23 @@ export function NewTaskModal() {
               thumbColor={Colors.white}
             />
           </View>
+
+          {recurring && (
+            <View style={styles.freqChipRow}>
+              {TASK_FREQ_OPTIONS.map((f) => {
+                const on = freq === f.key;
+                return (
+                  <Pressable
+                    key={f.key}
+                    style={[styles.freqChip, on && styles.freqChipActive]}
+                    onPress={() => setFreq(f.key)}
+                  >
+                    <Text style={[styles.freqChipText, on && styles.freqChipTextActive]}>{f.label}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
 
           <Text style={styles.eyebrow}>Notes</Text>
           <TextInput
@@ -389,6 +426,34 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.textMuted,
     marginTop: 1,
+  },
+  freqChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 10,
+  },
+  freqChip: {
+    paddingHorizontal: 14,
+    height: 34,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.white,
+  },
+  freqChipActive: {
+    backgroundColor: Colors.primaryLight,
+    borderColor: Colors.primaryLight,
+  },
+  freqChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  freqChipTextActive: {
+    color: Colors.white,
   },
   footerRow: {
     flexDirection: 'row',

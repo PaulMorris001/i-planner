@@ -44,9 +44,9 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     const tempId = `temp-${Date.now()}`;
     setTasks((prev) => [...prev, { ...input, id: tempId, done: false }]);
     // Apple sync runs client-side (no server-reachable "Apple Calendar API") —
-    // sync first so the resulting event id rides along on the create request.
-    const appleEventId = appleCalendarConnected ? await syncTaskToAppleCalendar(input) : null;
-    const toCreate = appleEventId ? { ...input, appleEventId } : input;
+    // sync first so the resulting event id(s) ride along on the create request.
+    const appleEventIds = appleCalendarConnected ? await syncTaskToAppleCalendar(input) : [];
+    const toCreate = appleEventIds.length ? { ...input, appleEventIds } : input;
     try {
       const created = await taskService.create(toCreate);
       setTasks((prev) => prev.map((t) => (t.id === tempId ? created : t)));
@@ -76,11 +76,12 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     // Only resync the calendar event when a field that actually affects it changed —
     // not for a bare done-toggle.
     let finalPatch: Partial<NewTaskInput> = patch;
-    const calendarRelevant = (['title', 'dueDate', 'time', 'notes'] as const).some((k) => k in patch);
+    const calendarRelevant = (['title', 'dueDate', 'time', 'notes', 'recurring', 'freq', 'dayIdxs'] as const)
+      .some((k) => k in patch);
     if (calendarRelevant && current && appleCalendarConnected) {
-      await deleteAppleEvents(current.appleEventId ? [current.appleEventId] : undefined);
-      const appleEventId = (await syncTaskToAppleCalendar({ ...current, ...patch })) ?? undefined;
-      finalPatch = { ...patch, appleEventId };
+      await deleteAppleEvents(current.appleEventIds);
+      const appleEventIds = await syncTaskToAppleCalendar({ ...current, ...patch });
+      finalPatch = { ...patch, appleEventIds };
     }
 
     setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...finalPatch } : t)));
@@ -104,7 +105,7 @@ export function TasksProvider({ children }: { children: ReactNode }) {
       console.error('[TasksProvider] failed to remove task', err);
       return;
     }
-    if (target?.appleEventId && appleCalendarConnected) await deleteAppleEvents([target.appleEventId]);
+    if (target?.appleEventIds && appleCalendarConnected) await deleteAppleEvents(target.appleEventIds);
   };
 
   return (

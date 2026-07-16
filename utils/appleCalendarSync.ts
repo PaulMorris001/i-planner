@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import { weekdayIndexMonday } from '@/utils/date';
 import { parseTimeToMinutes } from '@/utils/time';
 import type { ClassItem } from '@/types/plan.types';
+import type { TaskFrequency } from '@/types/task.types';
 
 // expo-calendar is a native module — there's no server-reachable "Apple Calendar
 // API," so this sync runs client-side, unlike the Google side which is entirely
@@ -47,49 +48,75 @@ function nextOccurrenceOnWeekday(startDate: Date, weekdayIdx: number): Date {
   return d;
 }
 
-// expo-calendar's recurrenceRule doesn't reliably support multi-weekday rules
-// cross-platform, so weekly/weekdays classes get one event per dayIdxs entry
-// (hence the array return) rather than one event with a compound rule.
+interface RecurrenceInput {
+  title: string;
+  baseDateIso: string;
+  time: string | undefined;
+  durationMinutes: number;
+  recurring: boolean;
+  freq?: 'weekly' | 'weekdays' | 'daily' | 'monthly';
+  dayIdxs?: number[];
+  notes?: string;
+}
+
+// Shared by classes and tasks — expo-calendar's recurrenceRule doesn't reliably
+// support multi-weekday rules cross-platform, so weekly/weekdays entries get one
+// event per dayIdxs occurrence (hence the array return) rather than one event
+// with a compound rule. daily/monthly get a single event with a simple rule.
+async function createRecurringEvents(calendarId: string, input: RecurrenceInput): Promise<string[]> {
+  const { title, baseDateIso, time, durationMinutes, recurring, freq, dayIdxs, notes } = input;
+
+  if (!recurring || !freq) {
+    const { start, end } = eventWindow(baseDateIso, time, durationMinutes);
+    return [await Calendar.createEventAsync(calendarId, { title, startDate: start, endDate: end, notes })];
+  }
+
+  const eventIds: string[] = [];
+
+  if (freq === 'weekly' || freq === 'weekdays') {
+    for (const wd of dayIdxs ?? []) {
+      const occurrence = nextOccurrenceOnWeekday(new Date(baseDateIso), wd);
+      const { start, end } = eventWindow(occurrence.toISOString(), time, durationMinutes);
+      eventIds.push(
+        await Calendar.createEventAsync(calendarId, {
+          title,
+          startDate: start,
+          endDate: end,
+          notes,
+          recurrenceRule: { frequency: Calendar.Frequency.WEEKLY },
+        })
+      );
+    }
+  } else {
+    const { start, end } = eventWindow(baseDateIso, time, durationMinutes);
+    const frequency = freq === 'daily' ? Calendar.Frequency.DAILY : Calendar.Frequency.MONTHLY;
+    eventIds.push(
+      await Calendar.createEventAsync(calendarId, { title, startDate: start, endDate: end, notes, recurrenceRule: { frequency } })
+    );
+  }
+
+  return eventIds;
+}
+
 export async function syncClassToAppleCalendar(item: ClassItem): Promise<string[]> {
   if (!(await hasPermission())) return [];
   const calendarId = await getWritableCalendarId();
   if (!calendarId) return [];
 
-  const baseDate = new Date(item.startDate);
-  const eventIds: string[] = [];
-
   try {
-    if (!item.recurring) {
-      const { start, end } = eventWindow(item.startDate, item.time, 60);
-      eventIds.push(await Calendar.createEventAsync(calendarId, { title: item.courseName, startDate: start, endDate: end }));
-      return eventIds;
-    }
-
-    if (item.freq === 'weekly' || item.freq === 'weekdays') {
-      for (const wd of item.dayIdxs) {
-        const occurrence = nextOccurrenceOnWeekday(baseDate, wd);
-        const { start, end } = eventWindow(occurrence.toISOString(), item.time, 60);
-        eventIds.push(
-          await Calendar.createEventAsync(calendarId, {
-            title: item.courseName,
-            startDate: start,
-            endDate: end,
-            recurrenceRule: { frequency: Calendar.Frequency.WEEKLY },
-          })
-        );
-      }
-    } else {
-      const { start, end } = eventWindow(item.startDate, item.time, 60);
-      const frequency = item.freq === 'daily' ? Calendar.Frequency.DAILY : Calendar.Frequency.MONTHLY;
-      eventIds.push(
-        await Calendar.createEventAsync(calendarId, { title: item.courseName, startDate: start, endDate: end, recurrenceRule: { frequency } })
-      );
-    }
+    return await createRecurringEvents(calendarId, {
+      title: item.courseName,
+      baseDateIso: item.startDate,
+      time: item.time,
+      durationMinutes: 60,
+      recurring: item.recurring,
+      freq: item.freq,
+      dayIdxs: item.dayIdxs,
+    });
   } catch (err) {
     console.error('[appleCalendarSync] failed to sync class', err);
+    return [];
   }
-
-  return eventIds;
 }
 
 export async function deleteAppleEvents(eventIds: string[] | undefined): Promise<void> {
@@ -110,22 +137,28 @@ export async function syncTaskToAppleCalendar(task: {
   dueDate: string;
   time?: string;
   notes?: string;
-}): Promise<string | null> {
-  if (!task.dueDate) return null;
-  if (!(await hasPermission())) return null;
+  recurring?: boolean;
+  freq?: TaskFrequency;
+  dayIdxs?: number[];
+}): Promise<string[]> {
+  if (!task.dueDate) return [];
+  if (!(await hasPermission())) return [];
   const calendarId = await getWritableCalendarId();
-  if (!calendarId) return null;
+  if (!calendarId) return [];
 
   try {
-    const { start, end } = eventWindow(task.dueDate, task.time, 30);
-    return await Calendar.createEventAsync(calendarId, {
+    return await createRecurringEvents(calendarId, {
       title: task.title,
-      startDate: start,
-      endDate: end,
-      notes: task.notes || undefined,
+      baseDateIso: task.dueDate,
+      time: task.time,
+      durationMinutes: 30,
+      recurring: !!task.recurring,
+      freq: task.freq,
+      dayIdxs: task.dayIdxs,
+      notes: task.notes,
     });
   } catch (err) {
     console.error('[appleCalendarSync] failed to sync task', err);
-    return null;
+    return [];
   }
 }

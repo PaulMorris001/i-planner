@@ -36,9 +36,9 @@ async function backfillAppleCalendar() {
     }
 
     for (const task of tasks) {
-      if (task.appleEventId || !task.dueDate) continue;
-      const appleEventId = await syncTaskToAppleCalendar(task);
-      if (appleEventId) await taskService.update(task.id, { appleEventId });
+      if (task.appleEventIds?.length || !task.dueDate) continue;
+      const appleEventIds = await syncTaskToAppleCalendar(task);
+      if (appleEventIds.length) await taskService.update(task.id, { appleEventIds });
     }
   } catch (err) {
     console.error('[SettingsProvider] Apple Calendar backfill failed', err);

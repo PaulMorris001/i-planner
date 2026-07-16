@@ -11,8 +11,10 @@ export interface TaskDocument extends Document {
   dueDate: string;
   done: boolean;
   recurring: boolean;
+  freq?: 'weekly' | 'weekdays' | 'daily';
+  dayIdxs?: number[];
   notes: string;
-  appleEventId?: string;
+  appleEventIds?: string[];
   googleEventId?: string;
 }
 
@@ -29,10 +31,13 @@ const taskSchema = new Schema<TaskDocument>({
   dueDate: { type: String, default: '' },
   done: { type: Boolean, default: false },
   recurring: { type: Boolean, default: false },
+  // Only meaningful when recurring is true — see types/task.types.ts's TaskFrequency.
+  freq: { type: String },
+  dayIdxs: { type: [Number] },
   notes: { type: String, default: '' },
   title: { type: String, required: true, trim: true },
   // Calendar-sync event ids — only ever set when dueDate is non-empty.
-  appleEventId: { type: String },
+  appleEventIds: { type: [String] },
   googleEventId: { type: String },
 });
 
@@ -48,8 +53,10 @@ export function toPublicTask(doc: TaskDocument) {
     dueDate: doc.dueDate,
     done: doc.done,
     recurring: doc.recurring,
+    freq: doc.freq,
+    dayIdxs: doc.dayIdxs,
     notes: doc.notes,
-    appleEventId: doc.appleEventId,
+    appleEventIds: doc.appleEventIds,
     googleEventId: doc.googleEventId,
   };
 }
