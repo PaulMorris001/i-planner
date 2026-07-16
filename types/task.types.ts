@@ -26,6 +26,9 @@ export interface Task {
   // weekdays task gets one Apple event per dayIdxs occurrence.
   appleEventIds?: string[];
   googleEventId?: string;
+  // Locally-scheduled expo-notifications reminder ids — one per weekday
+  // occurrence for a 'weekdays' task, same reasoning as appleEventIds.
+  notificationIds?: string[];
 }
 
 export type NewTaskInput = Omit<Task, 'id' | 'done'>;

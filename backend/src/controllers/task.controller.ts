@@ -43,8 +43,9 @@ export async function listTasks(req: AuthedRequest, res: Response) {
 }
 
 export async function createTask(req: AuthedRequest, res: Response) {
-  const { title, category, priority, day, hour, time, dueDate, recurring, freq, dayIdxs, notes, appleEventIds } =
-    req.body ?? {};
+  const {
+    title, category, priority, day, hour, time, dueDate, recurring, freq, dayIdxs, notes, appleEventIds, notificationIds,
+  } = req.body ?? {};
 
   if (!title || typeof title !== 'string' || !title.trim()) {
     throw new ApiError(400, 'Title is required.', 'general');
@@ -66,9 +67,11 @@ export async function createTask(req: AuthedRequest, res: Response) {
     freq: freq ?? undefined,
     dayIdxs: Array.isArray(dayIdxs) ? dayIdxs : undefined,
     notes: notes ?? '',
-    // Apple sync runs client-side — the frontend already created the device
-    // calendar event(s) before this request and just wants the ids persisted.
+    // Apple sync and local notification scheduling both run client-side — the
+    // frontend already created the device calendar event(s)/reminder(s) before
+    // this request and just wants the ids persisted.
     appleEventIds: Array.isArray(appleEventIds) ? appleEventIds : undefined,
+    notificationIds: Array.isArray(notificationIds) ? notificationIds : undefined,
   });
 
   task.googleEventId = await syncTaskToGoogle(req.userId!, task);
@@ -82,6 +85,7 @@ export async function updateTask(req: AuthedRequest, res: Response) {
 
   const {
     title, category, priority, day, hour, time, dueDate, done, recurring, freq, dayIdxs, notes, appleEventIds,
+    notificationIds,
   } = req.body ?? {};
   // Google sync only cares about fields that actually affect the calendar event —
   // a bare { done } toggle or an { appleEventIds } id-persist patch shouldn't touch it.
@@ -101,6 +105,7 @@ export async function updateTask(req: AuthedRequest, res: Response) {
   if (dayIdxs !== undefined) task.dayIdxs = Array.isArray(dayIdxs) ? dayIdxs : undefined;
   if (notes !== undefined) task.notes = notes;
   if (appleEventIds !== undefined) task.appleEventIds = Array.isArray(appleEventIds) ? appleEventIds : undefined;
+  if (notificationIds !== undefined) task.notificationIds = Array.isArray(notificationIds) ? notificationIds : undefined;
 
   if (hasContentChange) {
     task.googleEventId = await syncTaskToGoogle(req.userId!, task);

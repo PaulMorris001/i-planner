@@ -56,7 +56,8 @@
         {
           "calendarPermission": "Allow $(PRODUCT_NAME) to access your calendar so it can plan around your schedule."
         }
-      ]
+      ],
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true,

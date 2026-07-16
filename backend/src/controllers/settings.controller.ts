@@ -19,11 +19,12 @@ export async function updateSettings(req: AuthedRequest, res: Response) {
   // googleCalendarConnected is intentionally not settable here — it's only ever
   // set by the OAuth callback (googleOAuthCallback.controller.ts), which verifies a
   // real token exchange first.
-  const { appleCalendarConnected, calendarGateDismissed, timeZone } = req.body ?? {};
+  const { appleCalendarConnected, calendarGateDismissed, taskRemindersEnabled, timeZone } = req.body ?? {};
 
   const update: Record<string, boolean | string> = {};
   if (appleCalendarConnected !== undefined) update.appleCalendarConnected = !!appleCalendarConnected;
   if (calendarGateDismissed !== undefined) update.calendarGateDismissed = !!calendarGateDismissed;
+  if (taskRemindersEnabled !== undefined) update.taskRemindersEnabled = !!taskRemindersEnabled;
   if (typeof timeZone === 'string' && timeZone) update.timeZone = timeZone;
 
   const settings = await Settings.findOneAndUpdate(

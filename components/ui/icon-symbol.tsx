@@ -42,6 +42,7 @@ const MAPPING = {
   'eye.slash': 'visibility-off',
   'ellipsis': 'more-vert',
   'trash': 'delete',
+  'bell.fill': 'notifications',
 } as IconMapping;
 
 /**

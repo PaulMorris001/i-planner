@@ -4,7 +4,14 @@ import { auth } from '@/config/firebase';
 import { taskService } from '@/services/task.service';
 import { useSettings } from '@/hooks/useSettings';
 import { syncTaskToAppleCalendar, deleteAppleEvents } from '@/utils/appleCalendarSync';
+import { scheduleTaskReminders, cancelTaskReminders } from '@/utils/taskNotifications';
 import type { Task, NewTaskInput } from '@/types/task.types';
+
+// Fields that affect what's scheduled — the same set for both the Apple Calendar
+// event and the local reminder notification (notes only affects the calendar
+// event's description, but reusing one set keeps this simple; an unnecessary
+// notes-only reschedule is harmless).
+const SYNC_RELEVANT_FIELDS = ['title', 'dueDate', 'time', 'notes', 'recurring', 'freq', 'dayIdxs'] as const;
 
 interface TasksContextValue {
   tasks: Task[];
@@ -20,7 +27,7 @@ const TasksContext = createContext<TasksContextValue | null>(null);
 export function TasksProvider({ children }: { children: ReactNode }) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
-  const { appleCalendarConnected } = useSettings();
+  const { appleCalendarConnected, taskRemindersEnabled } = useSettings();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -43,10 +50,15 @@ export function TasksProvider({ children }: { children: ReactNode }) {
   const createTask = async (input: NewTaskInput) => {
     const tempId = `temp-${Date.now()}`;
     setTasks((prev) => [...prev, { ...input, id: tempId, done: false }]);
-    // Apple sync runs client-side (no server-reachable "Apple Calendar API") —
-    // sync first so the resulting event id(s) ride along on the create request.
+    // Apple sync and reminder scheduling both run client-side — do both first so
+    // the resulting ids ride along on the create request.
     const appleEventIds = appleCalendarConnected ? await syncTaskToAppleCalendar(input) : [];
-    const toCreate = appleEventIds.length ? { ...input, appleEventIds } : input;
+    const notificationIds = taskRemindersEnabled ? await scheduleTaskReminders(input) : [];
+    const toCreate = {
+      ...input,
+      ...(appleEventIds.length ? { appleEventIds } : {}),
+      ...(notificationIds.length ? { notificationIds } : {}),
+    };
     try {
       const created = await taskService.create(toCreate);
       setTasks((prev) => prev.map((t) => (t.id === tempId ? created : t)));
@@ -60,11 +72,24 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     const target = tasks.find((t) => t.id === id);
     if (!target) return;
     const nextDone = !target.done;
-    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, done: nextDone } : t)));
+
+    // A completed task doesn't need a reminder anymore; un-completing one that
+    // still has a future due date/time should get its reminder back.
+    let notificationIds = target.notificationIds;
+    if (taskRemindersEnabled) {
+      if (nextDone) {
+        await cancelTaskReminders(target.notificationIds);
+        notificationIds = [];
+      } else {
+        notificationIds = await scheduleTaskReminders(target);
+      }
+    }
+
+    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, done: nextDone, notificationIds } : t)));
     try {
-      await taskService.update(id, { done: nextDone });
+      await taskService.update(id, { done: nextDone, notificationIds });
     } catch (err) {
-      setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, done: !nextDone } : t)));
+      setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, done: !nextDone, notificationIds: target.notificationIds } : t)));
       console.error('[TasksProvider] failed to toggle task', err);
     }
   };
@@ -73,15 +98,20 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     const prevTasks = tasks;
     const current = tasks.find((t) => t.id === id);
 
-    // Only resync the calendar event when a field that actually affects it changed —
-    // not for a bare done-toggle.
+    // Only resync the calendar event / reminder when a field that actually
+    // affects them changed — not for a bare done-toggle.
     let finalPatch: Partial<NewTaskInput> = patch;
-    const calendarRelevant = (['title', 'dueDate', 'time', 'notes', 'recurring', 'freq', 'dayIdxs'] as const)
-      .some((k) => k in patch);
-    if (calendarRelevant && current && appleCalendarConnected) {
-      await deleteAppleEvents(current.appleEventIds);
-      const appleEventIds = await syncTaskToAppleCalendar({ ...current, ...patch });
-      finalPatch = { ...patch, appleEventIds };
+    const syncRelevant = SYNC_RELEVANT_FIELDS.some((k) => k in patch);
+    if (syncRelevant && current) {
+      const merged = { ...current, ...patch };
+      if (appleCalendarConnected) {
+        await deleteAppleEvents(current.appleEventIds);
+        finalPatch = { ...finalPatch, appleEventIds: await syncTaskToAppleCalendar(merged) };
+      }
+      if (taskRemindersEnabled) {
+        await cancelTaskReminders(current.notificationIds);
+        finalPatch = { ...finalPatch, notificationIds: await scheduleTaskReminders(merged) };
+      }
     }
 
     setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...finalPatch } : t)));
@@ -106,6 +136,7 @@ export function TasksProvider({ children }: { children: ReactNode }) {
       return;
     }
     if (target?.appleEventIds && appleCalendarConnected) await deleteAppleEvents(target.appleEventIds);
+    if (target?.notificationIds && taskRemindersEnabled) await cancelTaskReminders(target.notificationIds);
   };
 
   return (

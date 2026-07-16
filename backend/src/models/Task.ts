@@ -16,6 +16,11 @@ export interface TaskDocument extends Document {
   notes: string;
   appleEventIds?: string[];
   googleEventId?: string;
+  // Locally-scheduled expo-notifications reminder ids (client-side only — the
+  // backend never schedules or sends these, it just persists the ids so the app
+  // can find and cancel/reschedule them later). One per weekday occurrence for a
+  // 'weekdays' task, same array-per-occurrence reasoning as appleEventIds.
+  notificationIds?: string[];
 }
 
 const taskSchema = new Schema<TaskDocument>({
@@ -39,6 +44,7 @@ const taskSchema = new Schema<TaskDocument>({
   // Calendar-sync event ids — only ever set when dueDate is non-empty.
   appleEventIds: { type: [String] },
   googleEventId: { type: String },
+  notificationIds: { type: [String] },
 });
 
 export function toPublicTask(doc: TaskDocument) {
@@ -58,6 +64,7 @@ export function toPublicTask(doc: TaskDocument) {
     notes: doc.notes,
     appleEventIds: doc.appleEventIds,
     googleEventId: doc.googleEventId,
+    notificationIds: doc.notificationIds,
   };
 }
 
