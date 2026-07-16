@@ -23,7 +23,7 @@ import type {
   Exam,
   ExamPlan as ExamPlanType,
 } from "@/types/plan.types";
-import { formatMonthYear, weekdayIndexMonday, taskOccursOnDay } from "@/utils/date";
+import { formatMonthYear, weekdayIndexMonday, taskOccursOnDay, computeTaskStreak } from "@/utils/date";
 import { parseTimeToMinutes } from "@/utils/time";
 import { syncClassToAppleCalendar } from "@/utils/appleCalendarSync";
 import { scheduleClassNotifications } from "@/utils/notifications";
@@ -107,6 +107,7 @@ export default function Dashboard() {
   // Today's task completion, for the Professional path's "Today's tasks" stat.
   const todaysTasks = tasks.filter((t) => taskOccursOnDay(t, todayIdx));
   const todaysTasksDone = todaysTasks.filter((t) => t.done).length;
+  const taskStreak = computeTaskStreak(tasks);
 
   // Most-recently-created first — class ids are Date.now() timestamps, so a
   // numeric sort on id doubles as a creation-order sort.
@@ -191,7 +192,7 @@ export default function Dashboard() {
                   <View style={[styles.statCard, { flex: 1.3 }]}>
                     <Text style={styles.statLabel}>Study streak</Text>
                     <View style={styles.statValueRow}>
-                      <Text style={styles.statValue}>5</Text>
+                      <Text style={styles.statValue}>{taskStreak}</Text>
                       <Text style={styles.statUnit}>days</Text>
                     </View>
                   </View>
@@ -610,7 +611,7 @@ export default function Dashboard() {
                   <View style={[styles.statCard, { flex: 1.3 }]}>
                     <Text style={styles.statLabel}>Study streak</Text>
                     <View style={styles.statValueRow}>
-                      <Text style={styles.statValue}>12</Text>
+                      <Text style={styles.statValue}>{taskStreak}</Text>
                       <Text style={styles.statUnit}>days</Text>
                     </View>
                   </View>
