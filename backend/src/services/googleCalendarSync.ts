@@ -153,6 +153,9 @@ async function upsertEvent(
   existingEventId: string | undefined,
   body: Record<string, unknown>
 ): Promise<string | undefined> {
+  // TEMPORARY — diagnosing a reported 1-hour offset on synced events. Remove once
+  // confirmed fixed.
+  console.log('[googleCalendarSync] upsertEvent payload', JSON.stringify(body));
   if (existingEventId) {
     const res = await fetch(
       `${CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(existingEventId)}`,
