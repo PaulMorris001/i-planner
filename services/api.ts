@@ -33,7 +33,10 @@ export async function apiRequest<T>(
     body: body ? JSON.stringify(body) : undefined,
   });
 
-  const data = await response.json();
+  // Delete endpoints reply 204 with an empty body — response.json() throws on
+  // that ("Unexpected end of input"), so parse manually and treat empty as null.
+  const raw = await response.text();
+  const data = raw ? JSON.parse(raw) : null;
 
   if (!response.ok) {
     throw {
