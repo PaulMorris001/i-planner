@@ -5,11 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": [
-      "iplanner",
-      "com.googleusercontent.apps.706469705840-kut758c4rurlqevdepel7e30o5qnps4g",
-      "com.googleusercontent.apps.706469705840-7gnh59mkb7nsi8t3cofbv2d190nca57b"
-    ],
+    "scheme": "iplanner",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
