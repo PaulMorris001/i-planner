@@ -11,6 +11,7 @@ import { usePlan } from '@/hooks/usePlan';
 import { useSettings } from '@/hooks/useSettings';
 import { confirmDelete } from '@/utils/confirmDelete';
 import { syncClassToAppleCalendar, deleteAppleEvents } from '@/utils/appleCalendarSync';
+import { scheduleClassNotifications, cancelNotifications } from '@/utils/notifications';
 import type { ClassItem } from '@/types/plan.types';
 
 const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -24,7 +25,7 @@ function classDaysLabel(item: ClassItem): string {
 export default function Classes() {
   const router = useRouter();
   const { plan, savePlan } = usePlan();
-  const { appleCalendarConnected } = useSettings();
+  const { appleCalendarConnected, remindersEnabled } = useSettings();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingClass, setEditingClass] = useState<ClassItem | null>(null);
   const [actionSheetTarget, setActionSheetTarget] = useState<ClassItem | null>(null);
@@ -36,17 +37,23 @@ export default function Classes() {
 
   const handleAddOrSaveClass = async (item: ClassItem) => {
     const isEdit = plan.classes.some((c) => c.id === item.id);
+    const prev = isEdit ? plan.classes.find((c) => c.id === item.id) : undefined;
     let synced = item;
     if (appleCalendarConnected) {
       try {
         // Best-effort — a calendar-write failure logs but never blocks the save.
-        if (isEdit) {
-          const prev = plan.classes.find((c) => c.id === item.id);
-          await deleteAppleEvents(prev?.appleEventIds);
-        }
-        synced = { ...item, appleEventIds: await syncClassToAppleCalendar(item) };
+        if (isEdit) await deleteAppleEvents(prev?.appleEventIds);
+        synced = { ...synced, appleEventIds: await syncClassToAppleCalendar(item) };
       } catch (err) {
         console.error('[Classes] failed to sync class to Apple Calendar', err);
+      }
+    }
+    if (remindersEnabled) {
+      try {
+        if (isEdit) await cancelNotifications(prev?.notificationIds);
+        synced = { ...synced, notificationIds: await scheduleClassNotifications(item) };
+      } catch (err) {
+        console.error('[Classes] failed to schedule class notifications', err);
       }
     }
     try {
@@ -68,6 +75,7 @@ export default function Classes() {
     try {
       await savePlan({ ...plan, classes: plan.classes.filter((c) => c.id !== id) });
       if (appleCalendarConnected) await deleteAppleEvents(removed?.appleEventIds);
+      if (remindersEnabled) await cancelNotifications(removed?.notificationIds);
     } catch (err) {
       await savePlan({ ...plan, classes: prevClasses });
       console.error('[Classes] failed to remove class', err);

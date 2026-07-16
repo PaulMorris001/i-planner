@@ -26,6 +26,7 @@ import type {
 import { formatMonthYear, weekdayIndexMonday, taskOccursOnDay } from "@/utils/date";
 import { parseTimeToMinutes } from "@/utils/time";
 import { syncClassToAppleCalendar } from "@/utils/appleCalendarSync";
+import { scheduleClassNotifications } from "@/utils/notifications";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
@@ -79,7 +80,7 @@ export default function Dashboard() {
     loading: planLoading,
   } = usePlan();
   const { focusProfile } = useOnboarding();
-  const { appleCalendarConnected } = useSettings();
+  const { appleCalendarConnected, remindersEnabled } = useSettings();
   const { habits, loading: habitsLoading } = useHabits();
   const { tasks, loading: tasksLoading } = useTasks();
   const { goals, loading: goalsLoading } = useGoals();
@@ -116,8 +117,9 @@ export default function Dashboard() {
 
   const handleAddClass = async (item: ClassItem) => {
     const appleEventIds = appleCalendarConnected ? await syncClassToAppleCalendar(item) : [];
+    const notificationIds = remindersEnabled ? await scheduleClassNotifications(item) : [];
     try {
-      await savePlan({ ...plan, classes: [...plan.classes, { ...item, appleEventIds }] });
+      await savePlan({ ...plan, classes: [...plan.classes, { ...item, appleEventIds, notificationIds }] });
     } catch (err) {
       console.error("[Dashboard] failed to add class", err);
       Alert.alert("Couldn't add class", "Check your connection and try again.");

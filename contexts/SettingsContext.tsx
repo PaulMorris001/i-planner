@@ -7,7 +7,12 @@ import { settingsService } from '@/services/settings.service';
 import { planService } from '@/services/plan.service';
 import { taskService } from '@/services/task.service';
 import { syncClassToAppleCalendar, syncTaskToAppleCalendar } from '@/utils/appleCalendarSync';
-import { requestNotificationPermission, scheduleTaskReminders, cancelTaskReminders } from '@/utils/taskNotifications';
+import {
+  requestNotificationPermission,
+  scheduleTaskNotifications,
+  scheduleClassNotifications,
+  cancelNotifications,
+} from '@/utils/notifications';
 import type { Settings } from '@/types/settings.types';
 import type { StudentPlan } from '@/types/plan.types';
 
@@ -48,29 +53,63 @@ async function backfillAppleCalendar() {
 
 // Same fetch-directly-via-services reasoning as backfillAppleCalendar above —
 // SettingsProvider is mounted above TasksProvider, so useTasks() isn't in scope.
-async function backfillTaskReminders() {
+async function backfillReminders() {
   try {
-    const tasks = await taskService.list();
+    const [plan, tasks] = await Promise.all([
+      planService.get<StudentPlan>('student'),
+      taskService.list(),
+    ]);
+
+    if (plan?.classes?.length) {
+      let changed = false;
+      const classes = await Promise.all(
+        plan.classes.map(async (item) => {
+          if (item.notificationIds?.length || !item.time) return item;
+          const notificationIds = await scheduleClassNotifications(item);
+          if (notificationIds.length) changed = true;
+          return { ...item, notificationIds };
+        })
+      );
+      if (changed) await planService.save('student', { ...plan, classes });
+    }
+
     for (const task of tasks) {
       if (task.notificationIds?.length || task.done || !task.dueDate || !task.time) continue;
-      const notificationIds = await scheduleTaskReminders(task);
+      const notificationIds = await scheduleTaskNotifications(task);
       if (notificationIds.length) await taskService.update(task.id, { notificationIds });
     }
   } catch (err) {
-    console.error('[SettingsProvider] task reminder backfill failed', err);
+    console.error('[SettingsProvider] reminder backfill failed', err);
   }
 }
 
-async function cancelAllTaskReminders() {
+async function cancelAllReminders() {
   try {
-    const tasks = await taskService.list();
+    const [plan, tasks] = await Promise.all([
+      planService.get<StudentPlan>('student'),
+      taskService.list(),
+    ]);
+
+    if (plan?.classes?.length) {
+      let changed = false;
+      const classes = await Promise.all(
+        plan.classes.map(async (item) => {
+          if (!item.notificationIds?.length) return item;
+          await cancelNotifications(item.notificationIds);
+          changed = true;
+          return { ...item, notificationIds: [] };
+        })
+      );
+      if (changed) await planService.save('student', { ...plan, classes });
+    }
+
     for (const task of tasks) {
       if (!task.notificationIds?.length) continue;
-      await cancelTaskReminders(task.notificationIds);
+      await cancelNotifications(task.notificationIds);
       await taskService.update(task.id, { notificationIds: [] });
     }
   } catch (err) {
-    console.error('[SettingsProvider] failed to cancel task reminders', err);
+    console.error('[SettingsProvider] failed to cancel reminders', err);
   }
 }
 
@@ -78,7 +117,7 @@ const DEFAULT_SETTINGS: Settings = {
   appleCalendarConnected: false,
   googleCalendarConnected: false,
   calendarGateDismissed: false,
-  taskRemindersEnabled: false,
+  remindersEnabled: false,
 };
 
 interface SettingsContextValue extends Settings {
@@ -88,8 +127,8 @@ interface SettingsContextValue extends Settings {
   disconnectAppleCalendar: () => Promise<void>;
   disconnectGoogleCalendar: () => Promise<void>;
   dismissCalendarGate: () => Promise<void>;
-  enableTaskReminders: () => Promise<boolean>;
-  disableTaskReminders: () => Promise<void>;
+  enableReminders: () => Promise<boolean>;
+  disableReminders: () => Promise<void>;
 }
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
@@ -196,34 +235,34 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const enableTaskReminders = async (): Promise<boolean> => {
+  const enableReminders = async (): Promise<boolean> => {
     const granted = await requestNotificationPermission();
     if (!granted) return false;
 
     const prevSettings = settings;
-    setSettings((s) => ({ ...s, taskRemindersEnabled: true }));
+    setSettings((s) => ({ ...s, remindersEnabled: true }));
     try {
-      setSettings(await settingsService.patch({ taskRemindersEnabled: true }));
-      backfillTaskReminders();
+      setSettings(await settingsService.patch({ remindersEnabled: true }));
+      backfillReminders();
       return true;
     } catch (err) {
       setSettings(prevSettings);
-      console.error('[SettingsProvider] failed to enable task reminders', err);
+      console.error('[SettingsProvider] failed to enable reminders', err);
       return false;
     }
   };
 
   // We can't revoke the OS notification permission itself — only cancel what
   // we've already scheduled and stop scheduling new ones.
-  const disableTaskReminders = async () => {
+  const disableReminders = async () => {
     const prevSettings = settings;
-    setSettings((s) => ({ ...s, taskRemindersEnabled: false }));
+    setSettings((s) => ({ ...s, remindersEnabled: false }));
     try {
-      setSettings(await settingsService.patch({ taskRemindersEnabled: false }));
-      cancelAllTaskReminders();
+      setSettings(await settingsService.patch({ remindersEnabled: false }));
+      cancelAllReminders();
     } catch (err) {
       setSettings(prevSettings);
-      console.error('[SettingsProvider] failed to disable task reminders', err);
+      console.error('[SettingsProvider] failed to disable reminders', err);
     }
   };
 
@@ -237,8 +276,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         disconnectAppleCalendar,
         disconnectGoogleCalendar,
         dismissCalendarGate,
-        enableTaskReminders,
-        disableTaskReminders,
+        enableReminders,
+        disableReminders,
       }}
     >
       {children}

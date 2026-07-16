@@ -15,6 +15,7 @@ import { usePlan } from '@/hooks/usePlan';
 import { useOnboarding } from '@/hooks/useOnboarding';
 import { useSettings } from '@/hooks/useSettings';
 import { syncClassToAppleCalendar } from '@/utils/appleCalendarSync';
+import { scheduleClassNotifications } from '@/utils/notifications';
 import type {
   StudentPlan as StudentPlanType,
   ClassItem,
@@ -84,7 +85,7 @@ export default function StudentPlan() {
   const insets = useSafeAreaInsets();
   const { savePlan } = usePlan();
   const { completeOnboarding } = useOnboarding();
-  const { appleCalendarConnected } = useSettings();
+  const { appleCalendarConnected, remindersEnabled } = useSettings();
 
   const [plan, setPlan] = useState<StudentPlanType>({
     classes:       [],
@@ -212,6 +213,7 @@ export default function StudentPlan() {
         plan.classes.map(async (item) => ({
           ...item,
           appleEventIds: appleCalendarConnected ? await syncClassToAppleCalendar(item) : [],
+          notificationIds: remindersEnabled ? await scheduleClassNotifications(item) : [],
         }))
       );
       await savePlan({ ...plan, classes: syncedClasses });

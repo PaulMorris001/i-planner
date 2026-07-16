@@ -13,6 +13,9 @@ export interface ClassItem {
   // dayIdxs occurrence; Google gets a single event with a multi-day RRULE).
   appleEventIds?: string[];
   googleEventId?: string;
+  // Locally-scheduled expo-notifications reminder ids — one per dayIdxs
+  // occurrence for weekly/weekdays, same reasoning as appleEventIds.
+  notificationIds?: string[];
 }
 
 export interface RecruitmentItem {

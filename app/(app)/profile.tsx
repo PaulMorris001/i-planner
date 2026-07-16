@@ -42,13 +42,13 @@ export default function Profile() {
   const {
     appleCalendarConnected,
     googleCalendarConnected,
-    taskRemindersEnabled,
+    remindersEnabled,
     connectAppleCalendar,
     connectGoogleCalendar,
     disconnectAppleCalendar,
     disconnectGoogleCalendar,
-    enableTaskReminders,
-    disableTaskReminders,
+    enableReminders,
+    disableReminders,
   } = useSettings();
 
   const [pathMenuOpen, setPathMenuOpen] = useState(false);
@@ -96,7 +96,7 @@ export default function Profile() {
   };
 
   const handleEnableReminders = async () => {
-    const ok = await enableTaskReminders();
+    const ok = await enableReminders();
     if (!ok) {
       Alert.alert(
         "Couldn't enable reminders",
@@ -107,11 +107,11 @@ export default function Profile() {
 
   const handleDisableReminders = () => {
     Alert.alert(
-      'Turn off task reminders?',
-      'Scheduled reminders for your existing tasks will be cancelled, and new tasks won’t get one either.',
+      'Turn off reminders?',
+      'Scheduled reminders for your existing tasks and classes will be cancelled, and new ones won’t get one either.',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Turn off', style: 'destructive', onPress: disableTaskReminders },
+        { text: 'Turn off', style: 'destructive', onPress: disableReminders },
       ]
     );
   };
@@ -248,7 +248,8 @@ export default function Profile() {
 
         <Text style={[styles.eyebrow, { marginTop: Spacing.lg }]}>REMINDERS</Text>
         <Text style={styles.sectionDesc}>
-          Get a notification 15 minutes before a task with a due date and time is due.
+          Get notified 15 minutes before and exactly when a task or class with a due/start date and
+          time is due — labeled so you know which is which.
         </Text>
 
         <View style={styles.consentList}>
@@ -257,15 +258,15 @@ export default function Profile() {
               <IconSymbol name="bell.fill" color={Colors.textPrimary} size={17} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.consentLabel}>Task reminders</Text>
-              <Text style={styles.consentDesc}>{taskRemindersEnabled ? 'Enabled' : 'Off'}</Text>
+              <Text style={styles.consentLabel}>Task & class reminders</Text>
+              <Text style={styles.consentDesc}>{remindersEnabled ? 'Enabled' : 'Off'}</Text>
             </View>
             <Pressable
-              style={[styles.calendarActionBtn, taskRemindersEnabled && styles.calendarActionBtnDanger]}
-              onPress={() => (taskRemindersEnabled ? handleDisableReminders() : handleEnableReminders())}
+              style={[styles.calendarActionBtn, remindersEnabled && styles.calendarActionBtnDanger]}
+              onPress={() => (remindersEnabled ? handleDisableReminders() : handleEnableReminders())}
             >
-              <Text style={[styles.calendarActionText, taskRemindersEnabled && styles.calendarActionTextDanger]}>
-                {taskRemindersEnabled ? 'Turn off' : 'Enable'}
+              <Text style={[styles.calendarActionText, remindersEnabled && styles.calendarActionTextDanger]}>
+                {remindersEnabled ? 'Turn off' : 'Enable'}
               </Text>
             </Pressable>
           </View>

@@ -5,7 +5,8 @@ export interface SettingsDocument extends Document {
   appleCalendarConnected: boolean;
   googleCalendarConnected: boolean;
   calendarGateDismissed: boolean;
-  taskRemindersEnabled: boolean;
+  // Gates local notifications for both tasks and classes with a due/start date+time.
+  remindersEnabled: boolean;
   // Google OAuth tokens — never exposed via toPublicSettings(). The client secret
   // for the Google OAuth client itself lives only in backend env, not here.
   googleAccessToken?: string;
@@ -25,7 +26,7 @@ const settingsSchema = new Schema<SettingsDocument>({
   appleCalendarConnected: { type: Boolean, default: false },
   googleCalendarConnected: { type: Boolean, default: false },
   calendarGateDismissed: { type: Boolean, default: false },
-  taskRemindersEnabled: { type: Boolean, default: false },
+  remindersEnabled: { type: Boolean, default: false },
   googleAccessToken: { type: String },
   googleRefreshToken: { type: String },
   googleTokenExpiresAt: { type: Date },
@@ -38,7 +39,7 @@ export function toPublicSettings(doc: SettingsDocument | null) {
     appleCalendarConnected: doc?.appleCalendarConnected ?? false,
     googleCalendarConnected: doc?.googleCalendarConnected ?? false,
     calendarGateDismissed: doc?.calendarGateDismissed ?? false,
-    taskRemindersEnabled: doc?.taskRemindersEnabled ?? false,
+    remindersEnabled: doc?.remindersEnabled ?? false,
   };
 }
 

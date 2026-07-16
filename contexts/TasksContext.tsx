@@ -4,7 +4,7 @@ import { auth } from '@/config/firebase';
 import { taskService } from '@/services/task.service';
 import { useSettings } from '@/hooks/useSettings';
 import { syncTaskToAppleCalendar, deleteAppleEvents } from '@/utils/appleCalendarSync';
-import { scheduleTaskReminders, cancelTaskReminders } from '@/utils/taskNotifications';
+import { scheduleTaskNotifications, cancelNotifications } from '@/utils/notifications';
 import type { Task, NewTaskInput } from '@/types/task.types';
 
 // Fields that affect what's scheduled — the same set for both the Apple Calendar
@@ -27,7 +27,7 @@ const TasksContext = createContext<TasksContextValue | null>(null);
 export function TasksProvider({ children }: { children: ReactNode }) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
-  const { appleCalendarConnected, taskRemindersEnabled } = useSettings();
+  const { appleCalendarConnected, remindersEnabled } = useSettings();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -53,7 +53,7 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     // Apple sync and reminder scheduling both run client-side — do both first so
     // the resulting ids ride along on the create request.
     const appleEventIds = appleCalendarConnected ? await syncTaskToAppleCalendar(input) : [];
-    const notificationIds = taskRemindersEnabled ? await scheduleTaskReminders(input) : [];
+    const notificationIds = remindersEnabled ? await scheduleTaskNotifications(input) : [];
     const toCreate = {
       ...input,
       ...(appleEventIds.length ? { appleEventIds } : {}),
@@ -76,12 +76,12 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     // A completed task doesn't need a reminder anymore; un-completing one that
     // still has a future due date/time should get its reminder back.
     let notificationIds = target.notificationIds;
-    if (taskRemindersEnabled) {
+    if (remindersEnabled) {
       if (nextDone) {
-        await cancelTaskReminders(target.notificationIds);
+        await cancelNotifications(target.notificationIds);
         notificationIds = [];
       } else {
-        notificationIds = await scheduleTaskReminders(target);
+        notificationIds = await scheduleTaskNotifications(target);
       }
     }
 
@@ -108,9 +108,9 @@ export function TasksProvider({ children }: { children: ReactNode }) {
         await deleteAppleEvents(current.appleEventIds);
         finalPatch = { ...finalPatch, appleEventIds: await syncTaskToAppleCalendar(merged) };
       }
-      if (taskRemindersEnabled) {
-        await cancelTaskReminders(current.notificationIds);
-        finalPatch = { ...finalPatch, notificationIds: await scheduleTaskReminders(merged) };
+      if (remindersEnabled) {
+        await cancelNotifications(current.notificationIds);
+        finalPatch = { ...finalPatch, notificationIds: await scheduleTaskNotifications(merged) };
       }
     }
 
@@ -136,7 +136,7 @@ export function TasksProvider({ children }: { children: ReactNode }) {
       return;
     }
     if (target?.appleEventIds && appleCalendarConnected) await deleteAppleEvents(target.appleEventIds);
-    if (target?.notificationIds && taskRemindersEnabled) await cancelTaskReminders(target.notificationIds);
+    if (target?.notificationIds && remindersEnabled) await cancelNotifications(target.notificationIds);
   };
 
   return (
