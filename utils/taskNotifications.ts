@@ -105,15 +105,22 @@ export async function scheduleTaskReminders(task: ReminderInput): Promise<string
       return ids;
     }
 
-    // One-off: single reminder 15 minutes before the due date/time.
+    // One-off: reminder 15 minutes before the due date/time. If that ideal
+    // moment has already passed (the task was created/edited with under 15
+    // minutes of lead time) but the due time itself is still ahead, fire almost
+    // immediately instead — a short heads-up beats silently scheduling nothing.
     const minutes = parseTimeToMinutes(task.time);
     const due = new Date(task.dueDate);
     due.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
-    const fireAt = new Date(due.getTime() - REMINDER_LEAD_MINUTES * 60_000);
-    if (fireAt.getTime() <= Date.now()) return [];
+    if (due.getTime() <= Date.now()) return []; // already overdue — nothing to remind about
+
+    const idealFireAt = new Date(due.getTime() - REMINDER_LEAD_MINUTES * 60_000);
+    const fireAt = idealFireAt.getTime() > Date.now() ? idealFireAt : new Date(Date.now() + 3_000);
+    const minutesUntilDue = Math.round((due.getTime() - fireAt.getTime()) / 60_000);
+    const body = minutesUntilDue >= 1 ? `Due in ${minutesUntilDue} minute${minutesUntilDue === 1 ? '' : 's'}` : 'Due now';
 
     const id = await Notifications.scheduleNotificationAsync({
-      content: { title: task.title, body: REMINDER_BODY },
+      content: { title: task.title, body },
       trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: fireAt, channelId },
     });
     return [id];
