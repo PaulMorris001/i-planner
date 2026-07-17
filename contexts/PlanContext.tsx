@@ -30,6 +30,7 @@ interface PlanContextValue {
   savePlan: (newPlan: StudentPlan) => Promise<void>;
   saveExamPlan: (newExamPlan: ExamPlan) => Promise<void>;
   saveProfessionalPlan: (newProfessionalPlan: ProfessionalPlan) => Promise<void>;
+  toggleExamTopic: (examId: string, topicId: string) => Promise<void>;
   clearPlan: () => void;
 }
 
@@ -87,6 +88,17 @@ export function PlanProvider({ children }: { children: ReactNode }) {
     await planService.save('professional', newProfessionalPlan);
   };
 
+  // Shared by Dashboard's "This week" card and the exam progress-tracker screen,
+  // which both need to flip a single topic's done state.
+  const toggleExamTopic = async (examId: string, topicId: string) => {
+    const updatedExams = examPlan.exams.map((e) =>
+      e.id === examId
+        ? { ...e, topics: e.topics?.map((t) => (t.id === topicId ? { ...t, done: !t.done } : t)) }
+        : e
+    );
+    await saveExamPlan({ exams: updatedExams });
+  };
+
   const clearPlan = () => {
     setPlan(EMPTY_PLAN);
     setExamPlan(EMPTY_EXAM_PLAN);
@@ -95,7 +107,10 @@ export function PlanProvider({ children }: { children: ReactNode }) {
 
   return (
     <PlanContext.Provider
-      value={{ plan, examPlan, professionalPlan, loading, savePlan, saveExamPlan, saveProfessionalPlan, clearPlan }}
+      value={{
+        plan, examPlan, professionalPlan, loading,
+        savePlan, saveExamPlan, saveProfessionalPlan, toggleExamTopic, clearPlan,
+      }}
     >
       {children}
     </PlanContext.Provider>

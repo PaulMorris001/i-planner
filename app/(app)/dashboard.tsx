@@ -77,6 +77,7 @@ export default function Dashboard() {
     examPlan,
     savePlan,
     saveExamPlan,
+    toggleExamTopic,
     loading: planLoading,
   } = usePlan();
   const { focusProfile } = useOnboarding();
@@ -179,14 +180,9 @@ export default function Dashboard() {
     .filter((t) => t.week >= nearestExamWeek)
     .slice(0, 4);
 
-  const toggleExamTopic = async (examId: string, topicId: string) => {
-    const updatedExams = examPlan.exams.map((e) =>
-      e.id === examId
-        ? { ...e, topics: e.topics?.map((t) => (t.id === topicId ? { ...t, done: !t.done } : t)) }
-        : e
-    );
+  const handleToggleExamTopic = async (examId: string, topicId: string) => {
     try {
-      await saveExamPlan({ exams: updatedExams });
+      await toggleExamTopic(examId, topicId);
     } catch (err) {
       console.error("[Dashboard] failed to toggle exam topic", err);
     }
@@ -464,7 +460,9 @@ export default function Dashboard() {
                 {sortedExams.length > 0 ? (
                   <ExamCarousel
                     exams={sortedExams}
-                    onTrackPress={() => router.push(Routes.CERT_TRACKER)}
+                    onTrackPress={(examId) =>
+                      router.push({ pathname: Routes.CERT_TRACKER, params: { examId } })
+                    }
                   />
                 ) : (
                   <View style={styles.card}>
@@ -586,7 +584,7 @@ export default function Dashboard() {
                           <Pressable
                             key={topic.id}
                             style={styles.examTaskRow}
-                            onPress={() => toggleExamTopic(nearestExam.id, topic.id)}
+                            onPress={() => handleToggleExamTopic(nearestExam.id, topic.id)}
                           >
                             <View
                               style={[

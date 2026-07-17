@@ -34,7 +34,7 @@ function formatShortDate(iso: string): string {
 
 interface ExamCarouselProps {
   exams: Exam[]; // pre-sorted, soonest first
-  onTrackPress: () => void;
+  onTrackPress: (examId: string) => void;
 }
 
 export function ExamCarousel({ exams, onTrackPress }: ExamCarouselProps) {
@@ -102,7 +102,7 @@ export function ExamCarousel({ exams, onTrackPress }: ExamCarouselProps) {
                     ? `${progress.done} of ${progress.total} topics complete`
                     : 'No study topics yet'}
                 </Text>
-                <Pressable style={styles.heroButton} onPress={onTrackPress}>
+                <Pressable style={styles.heroButton} onPress={() => onTrackPress(exam.id)}>
                   <Text style={styles.heroButtonText}>Track my progress</Text>
                   <IconSymbol name="chevron.right" color={Colors.white} size={16} />
                 </Pressable>

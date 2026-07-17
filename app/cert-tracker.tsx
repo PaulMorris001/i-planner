@@ -1,43 +1,38 @@
 import { useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors, Spacing } from '@/constants/theme';
-
-const CERT_TOPICS = [
-  'Capital Markets & Regulators',
-  'Debt Instruments',
-  'Equity Securities',
-  'Packaged Products & Funds',
-  'Options Fundamentals',
-  'Customer Accounts',
-  'Trading, Settlement & Custody',
-  'Economic Factors',
-  'Regulatory Framework',
-  'Final Review & Practice Exams',
-];
+import { usePlan } from '@/hooks/usePlan';
 
 const CONFIDENCE_WORDS = ['', 'Shaky', 'Building', 'Steady', 'Strong', 'Exam-ready'];
 
 export default function CertTracker() {
   const router = useRouter();
-  const [topicsDone, setTopicsDone] = useState<boolean[]>(CERT_TOPICS.map((_, i) => i < 3));
+  const { examId } = useLocalSearchParams<{ examId?: string }>();
+  const { examPlan, toggleExamTopic } = usePlan();
   const [practiceLogged, setPracticeLogged] = useState(0);
   const [mockScores, setMockScores] = useState<number[]>([]);
   const [confidence, setConfidence] = useState(0);
 
-  const certDone = topicsDone.filter(Boolean).length;
-  const certTotal = CERT_TOPICS.length;
-  const certPct = Math.round((certDone / certTotal) * 100);
+  // Falls back to the first exam if no id was passed (e.g. a stale deep link).
+  const exam = examPlan.exams.find((e) => e.id === examId) ?? examPlan.exams[0];
+  const topics = exam?.topics ?? [];
+  const certDone = topics.filter((t) => t.done).length;
+  const certTotal = topics.length;
+  const certPct = certTotal > 0 ? Math.round((certDone / certTotal) * 100) : 0;
 
   const lastMock = mockScores.length ? mockScores[mockScores.length - 1] : null;
   const mockLabel = lastMock != null ? `${lastMock}%` : '—';
   const confWord = CONFIDENCE_WORDS[confidence] || 'Steady';
 
-  const toggleTopic = (i: number) => {
-    setTopicsDone((prev) => prev.map((done, idx) => (idx === i ? !done : done)));
+  const handleToggleTopic = (topicId: string) => {
+    if (!exam) return;
+    toggleExamTopic(exam.id, topicId).catch((err) => {
+      console.error('[CertTracker] failed to toggle topic', err);
+    });
   };
 
   const logPractice = () => setPracticeLogged((n) => n + 10);
@@ -47,6 +42,21 @@ export default function CertTracker() {
     setMockScores((prev) => [...prev, next]);
   };
 
+  if (!exam) {
+    return (
+      <ScreenWrapper backgroundColor={Colors.offWhite} scroll style={styles.scrollContent}>
+        <Pressable style={styles.backRow} onPress={() => router.back()}>
+          <IconSymbol name="chevron.left" color={Colors.textSecondary} size={18} />
+          <Text style={styles.backText}>Back</Text>
+        </Pressable>
+        <Text style={styles.title}>No exam yet</Text>
+        <Text style={[styles.emptyText, { paddingHorizontal: Spacing.md }]}>
+          Add an exam from the dashboard to start tracking progress.
+        </Text>
+      </ScreenWrapper>
+    );
+  }
+
   return (
     <ScreenWrapper backgroundColor={Colors.offWhite} scroll style={styles.scrollContent}>
       <Pressable style={styles.backRow} onPress={() => router.back()}>
@@ -54,7 +64,7 @@ export default function CertTracker() {
         <Text style={styles.backText}>Back</Text>
       </Pressable>
 
-      <Text style={styles.title}>SIE progress</Text>
+      <Text style={styles.title}>{exam.name} progress</Text>
 
       <LinearGradient
         colors={['#8B3FD1', '#5A2A99']}
@@ -75,26 +85,32 @@ export default function CertTracker() {
       </LinearGradient>
 
       <Text style={styles.eyebrow}>TOPICS</Text>
-      <View style={styles.topicsList}>
-        {CERT_TOPICS.map((topic, i) => {
-          const done = topicsDone[i];
-          return (
-            <Pressable key={topic} style={styles.topicRow} onPress={() => toggleTopic(i)}>
+      {topics.length > 0 ? (
+        <View style={styles.topicsList}>
+          {topics.map((topic) => (
+            <Pressable key={topic.id} style={styles.topicRow} onPress={() => handleToggleTopic(topic.id)}>
               <View
                 style={[
                   styles.topicCheckbox,
-                  done
+                  topic.done
                     ? { backgroundColor: '#8B3FD1' }
                     : { borderWidth: 1.9, borderColor: Colors.border },
                 ]}
               >
-                {done && <IconSymbol name="checkmark" color={Colors.white} size={13} />}
+                {topic.done && <IconSymbol name="checkmark" color={Colors.white} size={13} />}
               </View>
-              <Text style={styles.topicText}>{topic}</Text>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.topicText}>{topic.title}</Text>
+                <Text style={styles.topicWeek}>Week {topic.week}</Text>
+              </View>
             </Pressable>
-          );
-        })}
-      </View>
+          ))}
+        </View>
+      ) : (
+        <Text style={[styles.emptyText, { paddingHorizontal: Spacing.md }]}>
+          No study topics generated for this exam yet.
+        </Text>
+      )}
 
       <View style={styles.statsRow}>
         <View style={styles.statCard}>
@@ -159,6 +175,12 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
     marginTop: 12,
     paddingHorizontal: Spacing.md,
+  },
+  emptyText: {
+    fontSize: 13.5,
+    color: Colors.textMuted,
+    marginTop: 8,
+    lineHeight: 19,
   },
   heroCard: {
     marginHorizontal: Spacing.md,
@@ -237,6 +259,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: Colors.textPrimary,
+  },
+  topicWeek: {
+    fontSize: 11.5,
+    color: Colors.textMuted,
+    marginTop: 1,
   },
   statsRow: {
     flexDirection: 'row',
