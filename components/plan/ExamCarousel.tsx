@@ -22,6 +22,12 @@ function daysUntil(examDate: string): number {
   return Math.max(0, Math.ceil((new Date(examDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
 }
 
+function topicProgress(exam: Exam): { done: number; total: number; pct: number } {
+  const total = exam.topics?.length ?? 0;
+  const done = exam.topics?.filter((t) => t.done).length ?? 0;
+  return { done, total, pct: total > 0 ? (done / total) * 100 : 0 };
+}
+
 function formatShortDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
@@ -71,32 +77,39 @@ export function ExamCarousel({ exams, onTrackPress }: ExamCarouselProps) {
         onMomentumScrollEnd={handleScrollEnd}
         style={{ width: CARD_WIDTH }}
       >
-        {exams.map((exam, i) => (
-          <View key={exam.id} style={{ width: CARD_WIDTH, paddingRight: CARD_GAP }}>
-            <LinearGradient
-              colors={GRADIENTS[i % GRADIENTS.length]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.heroCard}
-            >
-              <Text style={styles.heroLabel}>
-                {exam.name} · {formatShortDate(exam.examDate)}
-              </Text>
-              <View style={styles.heroValueRow}>
-                <Text style={styles.heroValue}>{daysUntil(exam.examDate)}</Text>
-                <Text style={styles.heroUnit}>days to go</Text>
-              </View>
-              <View style={styles.heroProgressTrack}>
-                <View style={[styles.heroProgressFill, { width: '30%' }]} />
-              </View>
-              <Text style={styles.heroSub}>3 of 10 topics complete</Text>
-              <Pressable style={styles.heroButton} onPress={onTrackPress}>
-                <Text style={styles.heroButtonText}>Track my progress</Text>
-                <IconSymbol name="chevron.right" color={Colors.white} size={16} />
-              </Pressable>
-            </LinearGradient>
-          </View>
-        ))}
+        {exams.map((exam, i) => {
+          const progress = topicProgress(exam);
+          return (
+            <View key={exam.id} style={{ width: CARD_WIDTH, paddingRight: CARD_GAP }}>
+              <LinearGradient
+                colors={GRADIENTS[i % GRADIENTS.length]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.heroCard}
+              >
+                <Text style={styles.heroLabel}>
+                  {exam.name} · {formatShortDate(exam.examDate)}
+                </Text>
+                <View style={styles.heroValueRow}>
+                  <Text style={styles.heroValue}>{daysUntil(exam.examDate)}</Text>
+                  <Text style={styles.heroUnit}>days to go</Text>
+                </View>
+                <View style={styles.heroProgressTrack}>
+                  <View style={[styles.heroProgressFill, { width: `${progress.pct}%` }]} />
+                </View>
+                <Text style={styles.heroSub}>
+                  {progress.total > 0
+                    ? `${progress.done} of ${progress.total} topics complete`
+                    : 'No study topics yet'}
+                </Text>
+                <Pressable style={styles.heroButton} onPress={onTrackPress}>
+                  <Text style={styles.heroButtonText}>Track my progress</Text>
+                  <IconSymbol name="chevron.right" color={Colors.white} size={16} />
+                </Pressable>
+              </LinearGradient>
+            </View>
+          );
+        })}
       </ScrollView>
 
       {exams.length > 1 && (

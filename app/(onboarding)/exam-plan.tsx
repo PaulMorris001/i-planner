@@ -15,6 +15,7 @@ import { Colors, Spacing, Typography, Radius } from "@/constants/theme";
 import { Routes } from "@/constants/routes";
 import { usePlan } from "@/hooks/usePlan";
 import { useOnboarding } from "@/hooks/useOnboarding";
+import { planService } from "@/services/plan.service";
 import {
   ExamSetupForm,
   EXAM_NAME_PLACEHOLDER,
@@ -68,7 +69,33 @@ export default function ExamPlan() {
   const handleContinue = async () => {
     setLoading(true);
     try {
-      const planToSave: ExamPlanType = { exams };
+      // Generate a week-by-week topic breakdown for each added exam — best-effort,
+      // a failed generation just leaves that exam without topics rather than
+      // blocking onboarding.
+      const examsWithTopics = await Promise.all(
+        exams.map(async (exam) => {
+          try {
+            const suggestions = await planService.generateExamTopics({
+              name: exam.name,
+              subject: exam.subject,
+              hoursPerWeek: exam.hoursPerWeek,
+              weeksRemaining: exam.weeksRemaining,
+            });
+            const topics = suggestions.map((s, i) => ({
+              id: `${exam.id}-${i}`,
+              title: s.title,
+              week: s.week,
+              done: false,
+            }));
+            return { ...exam, topics };
+          } catch (err) {
+            console.error("[ExamPlan] failed to generate topics for", exam.name, err);
+            return exam;
+          }
+        })
+      );
+
+      const planToSave: ExamPlanType = { exams: examsWithTopics };
       await saveExamPlan(planToSave);
       await completeOnboarding();
       router.replace(Routes.DASHBOARD);

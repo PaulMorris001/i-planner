@@ -53,21 +53,21 @@ const AI_TIP: Record<PathKey, string> = {
   professional: "Your first action is due in 2 days. Want a reminder?",
 };
 
-const EXAM_WEEK_TASKS: {
-  title: string;
-  status: "done" | "active" | "todo";
-  meta?: string;
-}[] = [
-  { title: "Mutual fund structures", status: "done" },
-  { title: "ETFs & closed-end funds", status: "active", meta: "Today · 2h" },
-  { title: "UITs & annuities", status: "todo" },
-];
-
 function formatShortDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
   });
+}
+
+// Which of the exam's generated topics (1-based week numbers) is "this week",
+// counted backward from the exam date — the last topic lands in the exam's
+// final week, the first as far back as the topic count allows.
+function currentExamWeek(exam: Exam): number {
+  const totalWeeks = exam.topics?.length || exam.weeksRemaining;
+  const msPerWeek = 7 * 24 * 60 * 60 * 1000;
+  const weeksUntilExam = Math.ceil((new Date(exam.examDate).getTime() - Date.now()) / msPerWeek);
+  return Math.min(totalWeeks, Math.max(1, totalWeeks - weeksUntilExam + 1));
 }
 
 export default function Dashboard() {
@@ -170,6 +170,27 @@ export default function Dashboard() {
   const sortedExams = [...examPlan.exams].sort(
     (a, b) => new Date(a.examDate).getTime() - new Date(b.examDate).getTime(),
   );
+
+  // "This week" card follows whichever exam is soonest.
+  const nearestExam = sortedExams[0];
+  const nearestExamWeek = nearestExam ? currentExamWeek(nearestExam) : 0;
+  const currentWeekTopic = nearestExam?.topics?.find((t) => t.week === nearestExamWeek);
+  const upcomingTopics = (nearestExam?.topics ?? [])
+    .filter((t) => t.week >= nearestExamWeek)
+    .slice(0, 4);
+
+  const toggleExamTopic = async (examId: string, topicId: string) => {
+    const updatedExams = examPlan.exams.map((e) =>
+      e.id === examId
+        ? { ...e, topics: e.topics?.map((t) => (t.id === topicId ? { ...t, done: !t.done } : t)) }
+        : e
+    );
+    try {
+      await saveExamPlan({ exams: updatedExams });
+    } catch (err) {
+      console.error("[Dashboard] failed to toggle exam topic", err);
+    }
+  };
 
   return (
     <>
@@ -539,72 +560,64 @@ export default function Dashboard() {
                 </View>
 
                 {/* This week */}
-                <View style={styles.card}>
-                  <View style={styles.rowBetween}>
-                    <Text style={styles.todayTitle}>This week — Week 4</Text>
-                    <Text
-                      style={[
-                        styles.examPill,
-                        {
-                          color: TaskCategories.exam.color,
-                          backgroundColor: TaskCategories.exam.soft,
-                        },
-                      ]}
-                    >
-                      8h planned
+                {nearestExam && (
+                  <View style={styles.card}>
+                    <View style={styles.rowBetween}>
+                      <Text style={styles.todayTitle}>This week — Week {nearestExamWeek}</Text>
+                      <Text
+                        style={[
+                          styles.examPill,
+                          {
+                            color: TaskCategories.exam.color,
+                            backgroundColor: TaskCategories.exam.soft,
+                          },
+                        ]}
+                      >
+                        {nearestExam.hoursPerWeek}h planned
+                      </Text>
+                    </View>
+                    <Text style={styles.weekTopic}>
+                      {currentWeekTopic?.title ?? "No study topics generated yet"}
                     </Text>
+                    <View style={{ gap: 7, marginTop: 11 }}>
+                      {upcomingTopics.map((topic) => {
+                        const isCurrent = topic.week === nearestExamWeek;
+                        return (
+                          <Pressable
+                            key={topic.id}
+                            style={styles.examTaskRow}
+                            onPress={() => toggleExamTopic(nearestExam.id, topic.id)}
+                          >
+                            <View
+                              style={[
+                                styles.examTaskDot,
+                                topic.done && { backgroundColor: Colors.successSoft },
+                                !topic.done &&
+                                  isCurrent && { borderWidth: 1.7, borderColor: Colors.primaryLight },
+                                !topic.done &&
+                                  !isCurrent && { borderWidth: 1.7, borderColor: Colors.border },
+                              ]}
+                            >
+                              {topic.done && (
+                                <IconSymbol name="checkmark" color={Colors.success} size={11} />
+                              )}
+                            </View>
+                            <Text
+                              style={[
+                                styles.examTaskTitle,
+                                !topic.done && isCurrent && { color: Colors.textPrimary, fontWeight: "600" },
+                                !topic.done && !isCurrent && { color: Colors.textMuted },
+                              ]}
+                            >
+                              {topic.title}
+                            </Text>
+                            <Text style={styles.examTaskMeta}>Week {topic.week}</Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
                   </View>
-                  <Text style={styles.weekTopic}>
-                    Packaged Products & Funds
-                  </Text>
-                  <View style={{ gap: 7, marginTop: 11 }}>
-                    {EXAM_WEEK_TASKS.map((task) => (
-                      <View key={task.title} style={styles.examTaskRow}>
-                        <View
-                          style={[
-                            styles.examTaskDot,
-                            task.status === "done" && {
-                              backgroundColor: Colors.successSoft,
-                            },
-                            task.status === "active" && {
-                              borderWidth: 1.7,
-                              borderColor: Colors.primaryLight,
-                            },
-                            task.status === "todo" && {
-                              borderWidth: 1.7,
-                              borderColor: Colors.border,
-                            },
-                          ]}
-                        >
-                          {task.status === "done" && (
-                            <IconSymbol
-                              name="checkmark"
-                              color={Colors.success}
-                              size={11}
-                            />
-                          )}
-                        </View>
-                        <Text
-                          style={[
-                            styles.examTaskTitle,
-                            task.status === "active" && {
-                              color: Colors.textPrimary,
-                              fontWeight: "600",
-                            },
-                            task.status === "todo" && {
-                              color: Colors.textMuted,
-                            },
-                          ]}
-                        >
-                          {task.title}
-                        </Text>
-                        {task.meta && (
-                          <Text style={styles.examTaskMeta}>{task.meta}</Text>
-                        )}
-                      </View>
-                    ))}
-                  </View>
-                </View>
+                )}
 
                 {/* Study streak + Next session */}
                 <View style={styles.statsRow}>

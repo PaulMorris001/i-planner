@@ -2,7 +2,6 @@ import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
 import { Colors, Spacing, Radius } from '@/constants/theme';
 
 export const EXAM_NAME_PLACEHOLDER = 'SIE';
-export const EXAM_TOPIC_COUNT = 10;
 
 export const WEEKS_MIN = 4;
 export const WEEKS_MAX = 20;
@@ -89,7 +88,7 @@ export function ExamSetupForm({
       <View style={styles.hintBox}>
         <Text style={styles.hintText}>
           That's <Text style={styles.hintBold}>{totalHours} hours</Text> of study — enough to cover
-          all {EXAM_TOPIC_COUNT} {displayName} topic areas with review time.
+          all {weeks} {displayName} topic areas with review time.
         </Text>
       </View>
     </View>

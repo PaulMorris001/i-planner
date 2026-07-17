@@ -66,6 +66,13 @@ export type PlanCategory =
   | 'other';
 
 // ── Exam types ─────────────────────────────────────────────────────────────
+export interface ExamTopic {
+  id:    string;
+  title: string;
+  week:  number; // 1-based, 1..weeksRemaining (as of generation time)
+  done:  boolean;
+}
+
 export interface Exam {
   id:             string;
   name:           string;
@@ -73,6 +80,9 @@ export interface Exam {
   examDate:       string;
   hoursPerWeek:   number;
   weeksRemaining: number;
+  // AI-generated week-by-week study topics — undefined/empty until generated
+  // (e.g. an exam saved before this feature existed, or generation failed).
+  topics?: ExamTopic[];
 }
 
 export interface ExamPlan {

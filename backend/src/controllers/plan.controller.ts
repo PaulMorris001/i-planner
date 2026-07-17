@@ -4,6 +4,7 @@ import { Settings } from '../models/Settings';
 import { AuthedRequest } from '../middleware/requireAuth';
 import { ApiError } from '../utils/ApiError';
 import { deleteClassEvents, upsertClassEvents, SyncableClassItem } from '../services/googleCalendarSync';
+import { generateExamTopics as generateExamTopicsService } from '../services/examTopics';
 
 function assertValidPathType(pathType: string): asserts pathType is PathType {
   if (!(PATH_TYPES as readonly string[]).includes(pathType)) {
@@ -43,6 +44,26 @@ export async function savePlan(req: AuthedRequest, res: Response) {
   );
 
   res.json({ data: plan.data });
+}
+
+export async function generateExamTopicsHandler(req: AuthedRequest, res: Response) {
+  const { name, subject, hoursPerWeek, weeksRemaining } = req.body ?? {};
+
+  if (!name || typeof name !== 'string' || !name.trim()) {
+    throw new ApiError(400, 'Exam name is required.', 'general');
+  }
+  if (typeof weeksRemaining !== 'number' || weeksRemaining <= 0) {
+    throw new ApiError(400, 'weeksRemaining must be a positive number.', 'general');
+  }
+
+  const topics = await generateExamTopicsService({
+    name: name.trim(),
+    subject: typeof subject === 'string' && subject.trim() ? subject.trim() : name.trim(),
+    hoursPerWeek: typeof hoursPerWeek === 'number' && hoursPerWeek > 0 ? hoursPerWeek : 5,
+    weeksRemaining,
+  });
+
+  res.json({ topics });
 }
 
 // Single choke point for Google-class-sync: all 3 frontend class call sites
