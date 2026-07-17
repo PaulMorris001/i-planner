@@ -21,4 +21,5 @@ export const env = {
   googleOAuthClientSecret: required('GOOGLE_OAUTH_CLIENT_SECRET'),
   googleOAuthStateSecret: required('GOOGLE_OAUTH_STATE_SECRET'),
   backendPublicUrl: required('BACKEND_PUBLIC_URL'),
+  openaiApiKey: required('OPENAI_API_KEY'),
 };

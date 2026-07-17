@@ -1,9 +1,20 @@
+import OpenAI from 'openai';
+import { env } from '../config/env';
+
 export interface MilestoneSuggestion {
   title: string;
   dueLabel: string;
 }
 
-const MOCK_MILESTONES: Record<string, MilestoneSuggestion[]> = {
+const openai = new OpenAI({ apiKey: env.openaiApiKey });
+
+// Cost-effective tier appropriate for short structured JSON output — confirmed
+// against the live /v1/models list rather than assumed.
+const OPENAI_MODEL = 'gpt-5.4-mini';
+
+// Used when the API call fails or returns something unusable — goal creation
+// shouldn't be blocked by an AI outage.
+const FALLBACK_MILESTONES: Record<string, MilestoneSuggestion[]> = {
   study: [
     { title: 'Outline the syllabus and key topics', dueLabel: 'This week' },
     { title: 'Complete a first practice test', dueLabel: 'This month' },
@@ -30,13 +41,65 @@ const MOCK_MILESTONES: Record<string, MilestoneSuggestion[]> = {
   ],
 };
 
-// Stubbed AI milestone generation — returns canned data so the create → review →
-// save flow is fully testable before a real LLM call exists. Kept as an async
-// function with this exact input/output shape so swapping in a real call later
-// (likely shared with the Coach tab) is a drop-in replacement, not a rewrite.
+const MILESTONES_SCHEMA = {
+  type: 'object',
+  properties: {
+    milestones: {
+      type: 'array',
+      minItems: 4,
+      maxItems: 4,
+      items: {
+        type: 'object',
+        properties: {
+          title: {
+            type: 'string',
+            description: 'Short, concrete, actionable milestone title (under 60 characters).',
+          },
+          dueLabel: {
+            type: 'string',
+            description: 'A relative timing label, e.g. "This week", "This month", "Mid-way", "Final stretch".',
+          },
+        },
+        required: ['title', 'dueLabel'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['milestones'],
+  additionalProperties: false,
+};
+
+// Real OpenAI call, replacing the old hardcoded stub. Uses Structured Outputs
+// (json_schema, strict mode) for reliable JSON rather than parsing freeform text.
 export async function generateGoalMilestones(input: {
   title: string;
   type: string;
 }): Promise<MilestoneSuggestion[]> {
-  return MOCK_MILESTONES[input.type] ?? MOCK_MILESTONES.personal;
+  try {
+    const response = await openai.responses.create({
+      model: OPENAI_MODEL,
+      input:
+        `Generate exactly 4 sequential milestones to help someone achieve this goal.\n\n` +
+        `Goal title: "${input.title}"\n` +
+        `Goal type: ${input.type}\n\n` +
+        `The milestones should be concrete, actionable steps in logical order from first ` +
+        `to last, appropriate for a "${input.type}" goal.`,
+      text: {
+        format: {
+          type: 'json_schema',
+          name: 'milestones',
+          schema: MILESTONES_SCHEMA,
+          strict: true,
+        },
+      },
+    });
+
+    const parsed = JSON.parse(response.output_text) as { milestones?: MilestoneSuggestion[] };
+    if (parsed.milestones?.length) return parsed.milestones;
+    console.error('[goalMilestones] OpenAI response had no usable milestones, using fallback');
+  } catch (err) {
+    console.error('[goalMilestones] OpenAI API call failed, using fallback', err);
+  }
+
+  return FALLBACK_MILESTONES[input.type] ?? FALLBACK_MILESTONES.personal;
 }
