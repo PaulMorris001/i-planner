@@ -1,17 +1,17 @@
-import { useState } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Alert, StyleSheet } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useOnboarding } from '@/hooks/useOnboarding';
+import { coachService } from '@/services/coach.service';
 import { Colors, Spacing } from '@/constants/theme';
+import type { CoachMessage, CoachModeId } from '@/types/coach.types';
 
 interface Attachment {
   uri: string;
   name: string;
 }
-
-type CoachModeId = 'study' | 'plan' | 'goal';
 
 const MODES: { id: CoachModeId; label: string }[] = [
   { id: 'study', label: 'Study Buddy' },
@@ -31,19 +31,42 @@ const SUGGESTIONS: Record<CoachModeId, string[]> = {
   goal: ['Set a study goal this week', 'Break down my exam prep', 'Suggest a habit'],
 };
 
-const AI_FREE_LIMIT = 5;
-const AI_QUERIES_USED = 4;
-
 export default function Coach() {
   const { focusProfile } = useOnboarding();
   const [modeOverride, setModeOverride] = useState<CoachModeId | null>(null);
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [messages, setMessages] = useState<CoachMessage[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(true);
+  const [sending, setSending] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
 
   const visibleModes = MODES.filter((m) => m.id !== 'study' || focusProfile !== 'professional');
   const mode = modeOverride && visibleModes.some((m) => m.id === modeOverride) ? modeOverride : visibleModes[0].id;
 
   const empty = EMPTY_STATE[mode];
+
+  // Conversation history is per mode, stored server-side — reload whenever the
+  // active mode changes.
+  useEffect(() => {
+    let cancelled = false;
+    setMessages([]);
+    setLoadingHistory(true);
+    coachService
+      .list(mode)
+      .then((msgs) => {
+        if (!cancelled) setMessages(msgs);
+      })
+      .catch((err) => {
+        console.error('[Coach] failed to load history', err);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingHistory(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [mode]);
 
   const handlePickFile = async () => {
     const result = await DocumentPicker.getDocumentAsync({
@@ -62,9 +85,29 @@ export default function Coach() {
     setAttachments((prev) => prev.filter((a) => a.uri !== uri));
   };
 
-  const handleSend = () => {
+  const handleSend = async () => {
+    const text = input.trim();
+    if (!text || sending) return;
+
     setInput('');
     setAttachments([]);
+    const optimisticId = `temp-${Date.now()}`;
+    setMessages((prev) => [
+      ...prev,
+      { id: optimisticId, role: 'user', content: text, createdAt: new Date().toISOString() },
+    ]);
+    setSending(true);
+    try {
+      const reply = await coachService.send(mode, text);
+      setMessages((prev) => [...prev, reply]);
+    } catch (err) {
+      console.error('[Coach] failed to send message', err);
+      Alert.alert("Couldn't send message", 'Check your connection and try again.');
+      setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
+      setInput(text);
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -91,19 +134,46 @@ export default function Coach() {
           </View>
         </View>
 
-        <View style={styles.emptyWrap}>
-          <Text style={styles.emptyTitle}>{empty.title}</Text>
-          <Text style={styles.emptyDesc}>{empty.desc}</Text>
-        </View>
+        {loadingHistory ? (
+          <View style={styles.emptyWrap}>
+            <ActivityIndicator color={Colors.primaryLight} />
+          </View>
+        ) : messages.length === 0 ? (
+          <View style={styles.emptyWrap}>
+            <Text style={styles.emptyTitle}>{empty.title}</Text>
+            <Text style={styles.emptyDesc}>{empty.desc}</Text>
+          </View>
+        ) : (
+          <ScrollView
+            ref={scrollRef}
+            style={styles.messagesScroll}
+            contentContainerStyle={styles.messagesContent}
+            onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
+            keyboardShouldPersistTaps="handled"
+          >
+            {messages.map((m) => (
+              <View
+                key={m.id}
+                style={[styles.bubbleRow, m.role === 'user' ? styles.bubbleRowUser : styles.bubbleRowAssistant]}
+              >
+                <View style={[styles.bubble, m.role === 'user' ? styles.bubbleUser : styles.bubbleAssistant]}>
+                  <Text style={m.role === 'user' ? styles.bubbleTextUser : styles.bubbleTextAssistant}>
+                    {m.content}
+                  </Text>
+                </View>
+              </View>
+            ))}
+            {sending && (
+              <View style={[styles.bubbleRow, styles.bubbleRowAssistant]}>
+                <View style={[styles.bubble, styles.bubbleAssistant]}>
+                  <ActivityIndicator size="small" color={Colors.textMuted} />
+                </View>
+              </View>
+            )}
+          </ScrollView>
+        )}
 
         <View style={styles.bottomBar}>
-          <View style={styles.meterRow}>
-            <IconSymbol name="sparkles" color={Colors.textMuted} size={14} />
-            <Text style={styles.meterText}>
-              {AI_FREE_LIMIT - AI_QUERIES_USED} of {AI_FREE_LIMIT} free AI queries left this week
-            </Text>
-          </View>
-
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -148,8 +218,15 @@ export default function Coach() {
               placeholder="Ask your coach anything…"
               placeholderTextColor={Colors.textMuted}
               style={styles.input}
+              editable={!sending}
+              onSubmitEditing={handleSend}
+              returnKeyType="send"
             />
-            <Pressable style={styles.sendButton} onPress={handleSend}>
+            <Pressable
+              style={[styles.sendButton, (sending || !input.trim()) && styles.sendButtonDisabled]}
+              onPress={handleSend}
+              disabled={sending || !input.trim()}
+            >
               <IconSymbol name="arrow.right" color={Colors.white} size={20} />
             </Pressable>
           </View>
@@ -240,6 +317,50 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     maxWidth: 280,
   },
+  messagesScroll: {
+    flex: 1,
+  },
+  messagesContent: {
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.sm,
+    gap: 10,
+  },
+  bubbleRow: {
+    flexDirection: 'row',
+  },
+  bubbleRowUser: {
+    justifyContent: 'flex-end',
+  },
+  bubbleRowAssistant: {
+    justifyContent: 'flex-start',
+  },
+  bubble: {
+    maxWidth: '82%',
+    borderRadius: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+  },
+  bubbleUser: {
+    backgroundColor: Colors.primaryLight,
+    borderBottomRightRadius: 4,
+  },
+  bubbleAssistant: {
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderBottomLeftRadius: 4,
+  },
+  bubbleTextUser: {
+    fontSize: 14.5,
+    color: Colors.white,
+    lineHeight: 20,
+  },
+  bubbleTextAssistant: {
+    fontSize: 14.5,
+    color: Colors.textPrimary,
+    lineHeight: 20,
+  },
   bottomBar: {
     paddingHorizontal: Spacing.md,
     paddingTop: Spacing.sm,
@@ -247,17 +368,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.offWhite,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
-  },
-  meterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    paddingBottom: 9,
-  },
-  meterText: {
-    fontSize: 11.5,
-    fontWeight: '600',
-    color: Colors.textMuted,
   },
   chipsRow: {
     gap: 7,
@@ -325,5 +435,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  sendButtonDisabled: {
+    backgroundColor: Colors.border,
   },
 });
