@@ -43,6 +43,7 @@ const MAPPING = {
   'ellipsis': 'more-vert',
   'trash': 'delete',
   'bell.fill': 'notifications',
+  'info.circle': 'info',
 } as IconMapping;
 
 /**

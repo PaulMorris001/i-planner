@@ -184,7 +184,7 @@ export default function Profile() {
           )}
         </View>
 
-        <Pressable style={styles.plansCard}>
+        <Pressable style={styles.plansCard} onPress={() => router.push(Routes.PLANS)}>
           <View style={styles.plansIconBox}>
             <IconSymbol name="star.fill" color={Colors.white} size={20} />
           </View>
