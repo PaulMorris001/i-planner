@@ -31,6 +31,7 @@ interface PlanContextValue {
   saveExamPlan: (newExamPlan: ExamPlan) => Promise<void>;
   saveProfessionalPlan: (newProfessionalPlan: ProfessionalPlan) => Promise<void>;
   toggleExamTopic: (examId: string, topicId: string) => Promise<void>;
+  refetch: () => Promise<void>;
   clearPlan: () => void;
 }
 
@@ -41,6 +42,21 @@ export function PlanProvider({ children }: { children: ReactNode }) {
   const [examPlan, setExamPlan]                 = useState<ExamPlan>(EMPTY_EXAM_PLAN);
   const [professionalPlan, setProfessionalPlan] = useState<ProfessionalPlan>(EMPTY_PROFESSIONAL_PLAN);
   const [loading, setLoading]                   = useState(true);
+
+  const fetchPlans = async () => {
+    try {
+      const [studentData, examData, professionalData] = await Promise.all([
+        planService.get<StudentPlan>('student'),
+        planService.get<ExamPlan>('exam'),
+        planService.get<ProfessionalPlan>('professional'),
+      ]);
+      if (studentData)      setPlan(studentData);
+      if (examData)         setExamPlan(examData);
+      if (professionalData) setProfessionalPlan(professionalData);
+    } catch (err) {
+      console.error('[PlanProvider] failed to load plans', err);
+    }
+  };
 
   useEffect(() => {
     // Wait for a live Firebase user before fetching — on cold start, session
@@ -53,24 +69,12 @@ export function PlanProvider({ children }: { children: ReactNode }) {
         setLoading(false);
         return;
       }
-
-      try {
-        const [studentData, examData, professionalData] = await Promise.all([
-          planService.get<StudentPlan>('student'),
-          planService.get<ExamPlan>('exam'),
-          planService.get<ProfessionalPlan>('professional'),
-        ]);
-        if (studentData)      setPlan(studentData);
-        if (examData)         setExamPlan(examData);
-        if (professionalData) setProfessionalPlan(professionalData);
-      } catch (err) {
-        console.error('[PlanProvider] failed to load plans', err);
-      } finally {
-        setLoading(false);
-      }
+      await fetchPlans();
+      setLoading(false);
     });
 
     return unsubscribe;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const savePlan = async (newPlan: StudentPlan) => {
@@ -109,7 +113,7 @@ export function PlanProvider({ children }: { children: ReactNode }) {
     <PlanContext.Provider
       value={{
         plan, examPlan, professionalPlan, loading,
-        savePlan, saveExamPlan, saveProfessionalPlan, toggleExamTopic, clearPlan,
+        savePlan, saveExamPlan, saveProfessionalPlan, toggleExamTopic, refetch: fetchPlans, clearPlan,
       }}
     >
       {children}

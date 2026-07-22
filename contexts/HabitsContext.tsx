@@ -12,6 +12,7 @@ interface HabitsContextValue {
   toggleToday: (id: string) => Promise<void>;
   updateHabit: (id: string, patch: Partial<NewHabitInput>) => Promise<void>;
   deleteHabit: (id: string) => Promise<void>;
+  refetch: () => Promise<void>;
 }
 
 const HabitsContext = createContext<HabitsContextValue | null>(null);
@@ -20,6 +21,14 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
   const [habits, setHabits] = useState<Habit[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const fetchHabits = async () => {
+    try {
+      setHabits(await habitService.list());
+    } catch (err) {
+      console.error('[HabitsProvider] failed to load habits', err);
+    }
+  };
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) {
@@ -27,15 +36,11 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
         setLoading(false);
         return;
       }
-      try {
-        setHabits(await habitService.list());
-      } catch (err) {
-        console.error('[HabitsProvider] failed to load habits', err);
-      } finally {
-        setLoading(false);
-      }
+      await fetchHabits();
+      setLoading(false);
     });
     return unsubscribe;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const createHabit = async (input: NewHabitInput) => {
@@ -105,7 +110,7 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <HabitsContext.Provider value={{ habits, loading, createHabit, toggleToday, updateHabit, deleteHabit }}>
+    <HabitsContext.Provider value={{ habits, loading, createHabit, toggleToday, updateHabit, deleteHabit, refetch: fetchHabits }}>
       {children}
     </HabitsContext.Provider>
   );

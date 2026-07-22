@@ -1,5 +1,6 @@
 import {
   KeyboardAvoidingView,
+  RefreshControl,
   ScrollView,
   Platform,
   StyleSheet,
@@ -14,6 +15,10 @@ interface ScreenWrapperProps {
   style?: ViewStyle;
   backgroundColor?: string;
   edges?: Edge[];
+  // Only meaningful when scroll is true — attaches pull-to-refresh to the
+  // internal ScrollView.
+  onRefresh?: () => void | Promise<void>;
+  refreshing?: boolean;
 }
 
 export function ScreenWrapper({
@@ -22,6 +27,8 @@ export function ScreenWrapper({
   style,
   backgroundColor = Colors.white,
   edges = ['top', 'right', 'bottom', 'left'],
+  onRefresh,
+  refreshing = false,
 }: ScreenWrapperProps) {
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor }]} edges={edges}>
@@ -34,6 +41,16 @@ export function ScreenWrapper({
             contentContainerStyle={[styles.scroll, style]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
+            refreshControl={
+              onRefresh ? (
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  tintColor={Colors.primaryLight}
+                  colors={[Colors.primaryLight]}
+                />
+              ) : undefined
+            }
           >
             {children}
           </ScrollView>

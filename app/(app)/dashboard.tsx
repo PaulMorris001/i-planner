@@ -78,15 +78,25 @@ export default function Dashboard() {
     savePlan,
     saveExamPlan,
     toggleExamTopic,
+    refetch: refetchPlan,
     loading: planLoading,
   } = usePlan();
   const { focusProfile } = useOnboarding();
   const { appleCalendarConnected, remindersEnabled } = useSettings();
-  const { habits, loading: habitsLoading } = useHabits();
-  const { tasks, loading: tasksLoading } = useTasks();
-  const { goals, loading: goalsLoading } = useGoals();
+  const { habits, loading: habitsLoading, refetch: refetchHabits } = useHabits();
+  const { tasks, loading: tasksLoading, refetch: refetchTasks } = useTasks();
+  const { goals, loading: goalsLoading, refetch: refetchGoals } = useGoals();
   const dashboardLoading =
     planLoading || habitsLoading || tasksLoading || goalsLoading;
+  const [refreshing, setRefreshing] = useState(false);
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([refetchPlan(), refetchTasks(), refetchHabits(), refetchGoals()]);
+    } finally {
+      setRefreshing(false);
+    }
+  };
   const careerGoal = goals.find((g) => g.type === "career");
   const careerMilestonesDone =
     careerGoal?.milestones.filter((m) => m.done).length ?? 0;
@@ -195,6 +205,8 @@ export default function Dashboard() {
         scroll
         style={styles.scrollContent}
         edges={["top", "right", "left"]}
+        onRefresh={handleRefresh}
+        refreshing={refreshing}
       >
         <GreetingHeader />
 

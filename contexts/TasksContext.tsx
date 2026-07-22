@@ -20,6 +20,7 @@ interface TasksContextValue {
   toggleDone: (id: string) => Promise<void>;
   updateTask: (id: string, patch: Partial<NewTaskInput>) => Promise<void>;
   removeTask: (id: string) => Promise<void>;
+  refetch: () => Promise<void>;
 }
 
 const TasksContext = createContext<TasksContextValue | null>(null);
@@ -29,6 +30,14 @@ export function TasksProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const { appleCalendarConnected, remindersEnabled } = useSettings();
 
+  const fetchTasks = async () => {
+    try {
+      setTasks(await taskService.list());
+    } catch (err) {
+      console.error('[TasksProvider] failed to load tasks', err);
+    }
+  };
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) {
@@ -36,15 +45,11 @@ export function TasksProvider({ children }: { children: ReactNode }) {
         setLoading(false);
         return;
       }
-      try {
-        setTasks(await taskService.list());
-      } catch (err) {
-        console.error('[TasksProvider] failed to load tasks', err);
-      } finally {
-        setLoading(false);
-      }
+      await fetchTasks();
+      setLoading(false);
     });
     return unsubscribe;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const createTask = async (input: NewTaskInput) => {
@@ -140,7 +145,7 @@ export function TasksProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <TasksContext.Provider value={{ tasks, loading, createTask, toggleDone, updateTask, removeTask }}>
+    <TasksContext.Provider value={{ tasks, loading, createTask, toggleDone, updateTask, removeTask, refetch: fetchTasks }}>
       {children}
     </TasksContext.Provider>
   );

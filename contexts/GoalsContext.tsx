@@ -21,6 +21,7 @@ interface GoalsContextValue {
   createGoal: (input: NewGoalInput) => Promise<void>;
   updateGoal: (id: string, patch: GoalUpdatePatch) => Promise<void>;
   deleteGoal: (id: string) => Promise<void>;
+  refetch: () => Promise<void>;
 }
 
 const GoalsContext = createContext<GoalsContextValue | null>(null);
@@ -29,6 +30,14 @@ export function GoalsProvider({ children }: { children: ReactNode }) {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const fetchGoals = async () => {
+    try {
+      setGoals(await goalService.list());
+    } catch (err) {
+      console.error('[GoalsProvider] failed to load goals', err);
+    }
+  };
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) {
@@ -36,15 +45,11 @@ export function GoalsProvider({ children }: { children: ReactNode }) {
         setLoading(false);
         return;
       }
-      try {
-        setGoals(await goalService.list());
-      } catch (err) {
-        console.error('[GoalsProvider] failed to load goals', err);
-      } finally {
-        setLoading(false);
-      }
+      await fetchGoals();
+      setLoading(false);
     });
     return unsubscribe;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const createGoal = async (input: NewGoalInput) => {
@@ -86,7 +91,7 @@ export function GoalsProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <GoalsContext.Provider value={{ goals, loading, createGoal, updateGoal, deleteGoal }}>
+    <GoalsContext.Provider value={{ goals, loading, createGoal, updateGoal, deleteGoal, refetch: fetchGoals }}>
       {children}
     </GoalsContext.Provider>
   );
