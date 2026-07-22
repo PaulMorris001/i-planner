@@ -62,9 +62,18 @@ export default function Profile() {
   const displayName = user?.fullName ?? 'Jordan';
   const avatarInitial = user?.fullName?.trim().charAt(0).toUpperCase() ?? 'J';
 
-  const handleLogout = async () => {
-    await logout();
-    router.replace(Routes.WELCOME);
+  const handleLogout = () => {
+    Alert.alert('Log out?', "You'll need to sign back in to access your planner.", [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Log out',
+        style: 'destructive',
+        onPress: async () => {
+          await logout();
+          router.replace(Routes.WELCOME);
+        },
+      },
+    ]);
   };
 
   const handleConnectApple = async () => {
