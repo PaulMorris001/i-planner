@@ -23,6 +23,7 @@ import type {
   Exam,
   ExamPlan as ExamPlanType,
 } from "@/types/plan.types";
+import type { Goal } from "@/types/goal.types";
 import { formatMonthYear, weekdayIndexMonday, taskOccursOnDay, computeTaskStreak } from "@/utils/date";
 import { parseTimeToMinutes } from "@/utils/time";
 import { syncClassToAppleCalendar } from "@/utils/appleCalendarSync";
@@ -70,6 +71,19 @@ function currentExamWeek(exam: Exam): number {
   return Math.min(totalWeeks, Math.max(1, totalWeeks - weeksUntilExam + 1));
 }
 
+// True when dateIso falls within the current Monday-Sunday week.
+function isThisWeek(dateIso: string): boolean {
+  const date = new Date(dateIso);
+  if (Number.isNaN(date.getTime())) return false;
+  const now = new Date();
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - weekdayIndexMonday(now));
+  monday.setHours(0, 0, 0, 0);
+  const nextMonday = new Date(monday);
+  nextMonday.setDate(monday.getDate() + 7);
+  return date >= monday && date < nextMonday;
+}
+
 export default function Dashboard() {
   const router = useRouter();
   const {
@@ -102,10 +116,16 @@ export default function Dashboard() {
     careerGoal?.milestones.filter((m) => m.done).length ?? 0;
   const nextCareerMilestone = careerGoal?.milestones.find((m) => !m.done);
   const habitsDoneToday = habits.filter((h) => h.doneToday).length;
+  const thisWeeksGoals = goals.filter((g) => g.targetDate && isThisWeek(g.targetDate));
 
   const [classModalOpen, setClassModalOpen] = useState(false);
   const [examModalOpen, setExamModalOpen] = useState(false);
   const [goalSummaryOpen, setGoalSummaryOpen] = useState(false);
+  const [viewingGoal, setViewingGoal] = useState<Goal | null>(null);
+  const openGoalSummary = (goal: Goal | null) => {
+    setViewingGoal(goal);
+    setGoalSummaryOpen(true);
+  };
 
   const pathKey = toPathKey(focusProfile);
 
@@ -417,23 +437,47 @@ export default function Dashboard() {
                   )}
                 </View>
 
-                {/* This week's goal */}
-                <View style={styles.card}>
-                  <View style={styles.rowBetween}>
-                    <Text style={styles.weekGoalTitle}>This week's goal</Text>
-                    <Text style={styles.mono}>60%</Text>
-                  </View>
-                  <Text style={styles.weekGoalSub}>
-                    Finish Corporate Finance modules 1–3
+                {/* This week's goal(s) */}
+                <View style={{ gap: 9 }}>
+                  <Text style={styles.eyebrowMuted}>
+                    {thisWeeksGoals.length > 1 ? "THIS WEEK'S GOALS" : "THIS WEEK'S GOAL"}
                   </Text>
-                  <View style={styles.progressTrack}>
-                    <View
-                      style={[
-                        styles.progressFill,
-                        { width: "60%", backgroundColor: Colors.primaryLight },
-                      ]}
-                    />
-                  </View>
+                  {thisWeeksGoals.length === 0 ? (
+                    <Pressable
+                      style={styles.placeholderRow}
+                      onPress={() => router.push(Routes.GOALS)}
+                    >
+                      <View style={styles.dashedIconBox}>
+                        <IconSymbol name="target" color={Colors.textMuted} size={19} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.placeholderTitle}>No goals due this week</Text>
+                        <Text style={styles.placeholderSub}>
+                          Set a due date on a goal to see it here.
+                        </Text>
+                      </View>
+                    </Pressable>
+                  ) : (
+                    thisWeeksGoals.map((goal) => (
+                      <View key={goal.id} style={styles.card}>
+                        <View style={styles.rowBetween}>
+                          <Text style={styles.weekGoalTitle} numberOfLines={1}>
+                            {goal.title}
+                          </Text>
+                          <Text style={styles.mono}>{goal.pct}%</Text>
+                        </View>
+                        <View style={[styles.progressTrack, { marginTop: 10 }]}>
+                          <AnimatedProgressBar pct={goal.pct} color={Colors.primaryLight} />
+                        </View>
+                        <Pressable
+                          style={[styles.viewButton, { alignSelf: "flex-end", marginTop: 11 }]}
+                          onPress={() => openGoalSummary(goal)}
+                        >
+                          <Text style={styles.viewButtonText}>View</Text>
+                        </Pressable>
+                      </View>
+                    ))
+                  )}
                 </View>
 
                 {/* Upcoming */}
@@ -730,7 +774,7 @@ export default function Dashboard() {
                           </View>
                           <Pressable
                             style={styles.viewButton}
-                            onPress={() => setGoalSummaryOpen(true)}
+                            onPress={() => openGoalSummary(careerGoal ?? null)}
                           >
                             <Text style={styles.viewButtonText}>View</Text>
                           </Pressable>
@@ -863,7 +907,7 @@ export default function Dashboard() {
       <GoalSummaryModal
         visible={goalSummaryOpen}
         onClose={() => setGoalSummaryOpen(false)}
-        goal={careerGoal ?? null}
+        goal={viewingGoal}
       />
     </>
   );
@@ -1165,11 +1209,8 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "700",
     color: Colors.textPrimary,
-  },
-  weekGoalSub: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    marginTop: 5,
+    flex: 1,
+    marginRight: 10,
   },
   progressTrack: {
     height: 8,

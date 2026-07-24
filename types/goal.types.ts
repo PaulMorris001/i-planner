@@ -15,7 +15,9 @@ export interface Goal {
   color: string;
   pct: number;
   milestones: Milestone[];
-  // Career-goal-specific context (unused by other goal types).
+  // targetRole/targetIndustry are career-goal-specific context. targetDate is
+  // general — a due date any goal type can have, used to surface goals due
+  // "this week" on the Dashboard.
   targetRole?: string;
   targetIndustry?: string;
   targetDate?: string;

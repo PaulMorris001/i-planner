@@ -106,12 +106,9 @@ export function NewGoalModal({ visible, onClose, onCreate, editingGoal, onSave }
         type: type.id,
         tag: type.label,
         color: type.color,
+        targetDate: targetDate ? targetDate.toISOString() : '',
         ...(type.id === 'career'
-          ? {
-              targetRole: targetRole.trim(),
-              targetIndustry: targetIndustry.trim(),
-              targetDate: targetDate ? targetDate.toISOString() : '',
-            }
+          ? { targetRole: targetRole.trim(), targetIndustry: targetIndustry.trim() }
           : {}),
       });
       handleClose();
@@ -166,12 +163,9 @@ export function NewGoalModal({ visible, onClose, onCreate, editingGoal, onSave }
         milestones: milestones
           .filter((m) => m.title.trim().length > 0)
           .map((m) => ({ title: m.title.trim(), dueLabel: m.dueLabel.trim() })),
+        targetDate: targetDate ? targetDate.toISOString() : '',
         ...(type.id === 'career'
-          ? {
-              targetRole: targetRole.trim(),
-              targetIndustry: targetIndustry.trim(),
-              targetDate: targetDate ? targetDate.toISOString() : '',
-            }
+          ? { targetRole: targetRole.trim(), targetIndustry: targetIndustry.trim() }
           : {}),
       });
       handleClose();
@@ -234,25 +228,26 @@ export function NewGoalModal({ visible, onClose, onCreate, editingGoal, onSave }
                   placeholderTextColor={Colors.textMuted}
                   style={styles.input}
                 />
-                <Pressable style={styles.datePicker} onPress={() => setShowDatePicker(true)}>
-                  <Text style={styles.datePickerIcon}>📅</Text>
-                  <Text style={[styles.datePickerText, !targetDate && styles.datePickerPlaceholder]}>
-                    {targetDate ? formatDate(targetDate) : 'Target date (optional)'}
-                  </Text>
-                </Pressable>
-                {showDatePicker && (
-                  <DateTimePicker
-                    value={targetDate ?? new Date()}
-                    mode="date"
-                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                    themeVariant="light"
-                    onChange={(_, date) => {
-                      if (Platform.OS === 'android') setShowDatePicker(false);
-                      if (date) setTargetDate(date);
-                    }}
-                  />
-                )}
               </>
+            )}
+
+            <Pressable style={styles.datePicker} onPress={() => setShowDatePicker(true)}>
+              <Text style={styles.datePickerIcon}>📅</Text>
+              <Text style={[styles.datePickerText, !targetDate && styles.datePickerPlaceholder]}>
+                {targetDate ? formatDate(targetDate) : 'Due date (optional)'}
+              </Text>
+            </Pressable>
+            {showDatePicker && (
+              <DateTimePicker
+                value={targetDate ?? new Date()}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                themeVariant="light"
+                onChange={(_, date) => {
+                  if (Platform.OS === 'android') setShowDatePicker(false);
+                  if (date) setTargetDate(date);
+                }}
+              />
             )}
 
             <Pressable
