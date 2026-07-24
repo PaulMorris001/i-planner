@@ -21,6 +21,7 @@ interface TasksContextValue {
   updateTask: (id: string, patch: Partial<NewTaskInput>) => Promise<void>;
   removeTask: (id: string) => Promise<void>;
   refetch: () => Promise<void>;
+  syncExternallyCreatedTask: (id: string) => Promise<void>;
 }
 
 const TasksContext = createContext<TasksContextValue | null>(null);
@@ -133,6 +134,27 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // For tasks created by a path other than createTask (currently: the AI Coach's
+  // create_task tool, which is a pure backend flow) — Apple sync and local
+  // notifications can only happen client-side, so this runs that step after the
+  // fact instead of duplicating it into a second creation path.
+  const syncExternallyCreatedTask = async (id: string) => {
+    const target = tasks.find((t) => t.id === id);
+    if (!target) return;
+    const appleEventIds = appleCalendarConnected ? await syncTaskToAppleCalendar(target) : [];
+    const notificationIds = remindersEnabled ? await scheduleTaskNotifications(target) : [];
+    if (!appleEventIds.length && !notificationIds.length) return;
+    const patch: Partial<NewTaskInput> = {};
+    if (appleEventIds.length) patch.appleEventIds = appleEventIds;
+    if (notificationIds.length) patch.notificationIds = notificationIds;
+    try {
+      const updated = await taskService.update(id, patch);
+      setTasks((prev) => prev.map((t) => (t.id === id ? updated : t)));
+    } catch (err) {
+      console.error('[TasksProvider] failed to sync externally-created task', err);
+    }
+  };
+
   const removeTask = async (id: string) => {
     const prevTasks = tasks;
     const target = tasks.find((t) => t.id === id);
@@ -149,7 +171,9 @@ export function TasksProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <TasksContext.Provider value={{ tasks, loading, createTask, toggleDone, updateTask, removeTask, refetch: fetchTasks }}>
+    <TasksContext.Provider
+      value={{ tasks, loading, createTask, toggleDone, updateTask, removeTask, refetch: fetchTasks, syncExternallyCreatedTask }}
+    >
       {children}
     </TasksContext.Provider>
   );

@@ -4,6 +4,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useOnboarding } from '@/hooks/useOnboarding';
+import { useTasks } from '@/hooks/useTasks';
 import { coachService } from '@/services/coach.service';
 import { Colors, Spacing } from '@/constants/theme';
 import type { CoachMessage, CoachModeId } from '@/types/coach.types';
@@ -33,6 +34,7 @@ const SUGGESTIONS: Record<CoachModeId, string[]> = {
 
 export default function Coach() {
   const { focusProfile } = useOnboarding();
+  const { refetch: refetchTasks, syncExternallyCreatedTask } = useTasks();
   const [modeOverride, setModeOverride] = useState<CoachModeId | null>(null);
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -100,6 +102,14 @@ export default function Coach() {
     try {
       const reply = await coachService.send(mode, text);
       setMessages((prev) => [...prev, reply]);
+      if (reply.createdTaskIds?.length) {
+        // The AI-created task(s) exist server-side (with Google sync already
+        // applied) but still need the client-side Apple Calendar/notification
+        // step that manually-created tasks get — refetch so they're in state,
+        // then run that step for each.
+        await refetchTasks();
+        await Promise.all(reply.createdTaskIds.map((id) => syncExternallyCreatedTask(id)));
+      }
     } catch (err) {
       console.error('[Coach] failed to send message', err);
       Alert.alert("Couldn't send message", 'Check your connection and try again.');

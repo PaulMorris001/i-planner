@@ -48,7 +48,13 @@ export async function sendCoachMessage(req: AuthedRequest, res: Response) {
     calendar: settings?.aiAccessCalendar ?? true,
   };
   const contextSummary = await buildContextSummary(req.userId!, consent);
-  const replyText = await generateCoachReply({ mode, contextSummary, history, userMessage: trimmed });
+  const { text: replyText, createdTaskIds } = await generateCoachReply({
+    mode,
+    contextSummary,
+    history,
+    userMessage: trimmed,
+    firebaseUid: req.userId!,
+  });
 
   const assistantDoc = await CoachMessage.create({
     firebaseUid: req.userId,
@@ -57,5 +63,5 @@ export async function sendCoachMessage(req: AuthedRequest, res: Response) {
     content: replyText,
   });
 
-  res.status(201).json(toPublicCoachMessage(assistantDoc));
+  res.status(201).json({ ...toPublicCoachMessage(assistantDoc), createdTaskIds });
 }

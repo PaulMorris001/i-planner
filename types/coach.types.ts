@@ -6,3 +6,10 @@ export interface CoachMessage {
   content: string;
   createdAt: string;
 }
+
+// "Plan My Day" replies can carry ids of tasks the AI just created, so the
+// client knows to refetch and run the same client-side sync (Apple/reminders)
+// that manually-created tasks get.
+export interface CoachSendResult extends CoachMessage {
+  createdTaskIds?: string[];
+}

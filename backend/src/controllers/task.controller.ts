@@ -1,41 +1,9 @@
 import { Response } from 'express';
 import { Task, toPublicTask } from '../models/Task';
-import { Settings } from '../models/Settings';
 import { AuthedRequest } from '../middleware/requireAuth';
 import { ApiError } from '../utils/ApiError';
 import { findOwnedOrThrow } from '../utils/ownedDoc';
-import { deleteTaskEvent, upsertTaskEvent } from '../services/googleCalendarSync';
-
-async function syncTaskToGoogle(
-  firebaseUid: string,
-  task: {
-    title: string;
-    dueDate: string;
-    time?: string;
-    notes?: string;
-    recurring: boolean;
-    freq?: 'weekly' | 'weekdays' | 'daily';
-    dayIdxs?: number[];
-    googleEventId?: string;
-  }
-) {
-  const settings = await Settings.findOne({ firebaseUid });
-  if (!settings?.googleCalendarConnected) return undefined;
-  // An edit that clears dueDate leaves nothing to sync — delete any existing
-  // event instead of leaving it orphaned on the calendar.
-  if (!task.dueDate) {
-    if (task.googleEventId) await deleteTaskEvent(settings, task);
-    return undefined;
-  }
-  return upsertTaskEvent(settings, task);
-}
-
-async function unsyncTaskFromGoogle(firebaseUid: string, task: { googleEventId?: string }) {
-  if (!task.googleEventId) return;
-  const settings = await Settings.findOne({ firebaseUid });
-  if (!settings?.googleCalendarConnected) return;
-  await deleteTaskEvent(settings, task);
-}
+import { createTaskDoc, syncTaskToGoogle, unsyncTaskFromGoogle } from '../services/taskCreation';
 
 export async function listTasks(req: AuthedRequest, res: Response) {
   const tasks = await Task.find({ firebaseUid: req.userId });
@@ -54,28 +22,24 @@ export async function createTask(req: AuthedRequest, res: Response) {
     throw new ApiError(400, 'Category and priority are required.', 'general');
   }
 
-  const task = await Task.create({
-    firebaseUid: req.userId,
-    title: title.trim(),
+  const task = await createTaskDoc(req.userId!, {
+    title,
     category,
     priority,
-    day: Number(day) || 0,
-    hour: Number(hour) || 0,
-    time: time ?? '',
-    dueDate: dueDate ?? '',
-    recurring: !!recurring,
+    day,
+    hour,
+    time,
+    dueDate,
+    recurring,
     freq: freq ?? undefined,
     dayIdxs: Array.isArray(dayIdxs) ? dayIdxs : undefined,
-    notes: notes ?? '',
+    notes,
     // Apple sync and local notification scheduling both run client-side — the
     // frontend already created the device calendar event(s)/reminder(s) before
     // this request and just wants the ids persisted.
     appleEventIds: Array.isArray(appleEventIds) ? appleEventIds : undefined,
     notificationIds: Array.isArray(notificationIds) ? notificationIds : undefined,
   });
-
-  task.googleEventId = await syncTaskToGoogle(req.userId!, task);
-  if (task.isModified('googleEventId')) await task.save();
 
   res.status(201).json(toPublicTask(task));
 }
