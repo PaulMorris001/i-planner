@@ -1,12 +1,20 @@
-import { View, Text, Pressable, StyleSheet, Alert } from 'react-native';
+import { useState } from 'react';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { SyllabusUploadModal } from '@/components/plan/SyllabusUploadModal';
 import { Colors, Spacing } from '@/constants/theme';
-import { DUMMY_SYLLABI } from '@/constants/dummySyllabi';
+import { useSyllabi } from '@/hooks/useSyllabi';
+
+function formatShortDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
 
 export default function Syllabi() {
   const router = useRouter();
+  const { syllabi, loading } = useSyllabi();
+  const [uploadOpen, setUploadOpen] = useState(false);
 
   return (
     <ScreenWrapper backgroundColor={Colors.offWhite} scroll style={styles.scrollContent}>
@@ -17,34 +25,37 @@ export default function Syllabi() {
 
       <Text style={styles.title}>Syllabi</Text>
       <Text style={styles.subtitle}>
-        {DUMMY_SYLLABI.length} syllab{DUMMY_SYLLABI.length === 1 ? 'us' : 'i'} · placeholder data
+        {syllabi.length} syllab{syllabi.length === 1 ? 'us' : 'i'}
       </Text>
 
       <View style={styles.list}>
-        {DUMMY_SYLLABI.length === 0 ? (
+        {loading ? (
+          <Text style={styles.emptyText}>Loading…</Text>
+        ) : syllabi.length === 0 ? (
           <Text style={styles.emptyText}>No syllabi added yet.</Text>
         ) : (
-          DUMMY_SYLLABI.map((sy) => (
+          syllabi.map((sy) => (
             <View key={sy.id} style={styles.row}>
               <View style={styles.iconBox}>
                 <IconSymbol name="doc.fill" color={Colors.primaryLight} size={16} />
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={styles.rowTitle} numberOfLines={1}>{sy.courseName}</Text>
-                <Text style={styles.rowMeta} numberOfLines={1}>{sy.fileName} · Added {sy.addedDate}</Text>
+                <Text style={styles.rowMeta} numberOfLines={1}>
+                  {sy.fileName} · Added {formatShortDate(sy.createdAt)}
+                </Text>
               </View>
             </View>
           ))
         )}
 
-        <Pressable
-          style={styles.addButton}
-          onPress={() => Alert.alert('Coming soon', 'Syllabus upload & AI parsing is on the way.')}
-        >
+        <Pressable style={styles.addButton} onPress={() => setUploadOpen(true)}>
           <IconSymbol name="plus" color={Colors.primaryLight} size={18} />
           <Text style={styles.addButtonText}>Add syllabus</Text>
         </Pressable>
       </View>
+
+      <SyllabusUploadModal visible={uploadOpen} onClose={() => setUploadOpen(false)} />
     </ScreenWrapper>
   );
 }

@@ -8,7 +8,9 @@ export function createApp() {
   const app = express();
 
   app.use(cors({ origin: env.corsOrigin }));
-  app.use(express.json());
+  // Default 100kb limit is too small for a base64-encoded syllabus PDF
+  // (syllabus.controller.ts's extract endpoint) — base64 inflates size ~33%.
+  app.use(express.json({ limit: '15mb' }));
 
   app.use('/api', router);
 

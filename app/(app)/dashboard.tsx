@@ -2,13 +2,13 @@ import { GoalSummaryModal } from "@/components/goal/GoalSummaryModal";
 import { ScreenWrapper } from "@/components/layout/ScreenWrapper";
 import { AddClassModal } from "@/components/plan/AddClassModal";
 import { AddExamModal } from "@/components/plan/AddExamModal";
+import { SyllabusUploadModal } from "@/components/plan/SyllabusUploadModal";
 import { ExamCarousel } from "@/components/plan/ExamCarousel";
 import { AnimatedProgressBar } from "@/components/ui/AnimatedProgressBar";
 import { DashboardSkeleton } from "@/components/ui/DashboardSkeleton";
 import { GreetingHeader } from "@/components/ui/GreetingHeader";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { COURSE_COLORS } from "@/constants/classColors";
-import { DUMMY_SYLLABI } from "@/constants/dummySyllabi";
 import { Routes } from "@/constants/routes";
 import { TaskCategories } from "@/constants/taskMeta";
 import { Colors, Spacing } from "@/constants/theme";
@@ -18,6 +18,7 @@ import { useOnboarding } from "@/hooks/useOnboarding";
 import { usePlan } from "@/hooks/usePlan";
 import { useSettings } from "@/hooks/useSettings";
 import { useTasks } from "@/hooks/useTasks";
+import { useSyllabi } from "@/hooks/useSyllabi";
 import type {
   ClassItem,
   Exam,
@@ -100,13 +101,14 @@ export default function Dashboard() {
   const { habits, loading: habitsLoading, refetch: refetchHabits } = useHabits();
   const { tasks, loading: tasksLoading, refetch: refetchTasks } = useTasks();
   const { goals, loading: goalsLoading, refetch: refetchGoals } = useGoals();
+  const { syllabi, loading: syllabiLoading, refetch: refetchSyllabi } = useSyllabi();
   const dashboardLoading =
-    planLoading || habitsLoading || tasksLoading || goalsLoading;
+    planLoading || habitsLoading || tasksLoading || goalsLoading || syllabiLoading;
   const [refreshing, setRefreshing] = useState(false);
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      await Promise.all([refetchPlan(), refetchTasks(), refetchHabits(), refetchGoals()]);
+      await Promise.all([refetchPlan(), refetchTasks(), refetchHabits(), refetchGoals(), refetchSyllabi()]);
     } finally {
       setRefreshing(false);
     }
@@ -120,6 +122,7 @@ export default function Dashboard() {
 
   const [classModalOpen, setClassModalOpen] = useState(false);
   const [examModalOpen, setExamModalOpen] = useState(false);
+  const [syllabusModalOpen, setSyllabusModalOpen] = useState(false);
   const [goalSummaryOpen, setGoalSummaryOpen] = useState(false);
   const [viewingGoal, setViewingGoal] = useState<Goal | null>(null);
   const openGoalSummary = (goal: Goal | null) => {
@@ -369,18 +372,13 @@ export default function Dashboard() {
                   )}
                 </View>
 
-                {/* My Syllabi (coming soon — dummy data for now) */}
+                {/* My Syllabi */}
                 <View style={styles.card}>
                   <View style={styles.rowBetween}>
                     <Text style={styles.todayTitle}>My Syllabi</Text>
                     <Pressable
                       style={styles.addClassBtn}
-                      onPress={() =>
-                        Alert.alert(
-                          "Coming soon",
-                          "Syllabus upload & AI parsing is on the way.",
-                        )
-                      }
+                      onPress={() => setSyllabusModalOpen(true)}
                     >
                       <IconSymbol
                         name="plus"
@@ -390,9 +388,9 @@ export default function Dashboard() {
                       <Text style={styles.addClassBtnText}>Add Syllabus</Text>
                     </Pressable>
                   </View>
-                  {DUMMY_SYLLABI.length > 0 ? (
+                  {syllabi.length > 0 ? (
                     <View style={{ gap: 8, marginTop: 11 }}>
-                      {DUMMY_SYLLABI.slice(0, 3).map((sy) => (
+                      {syllabi.slice(0, 3).map((sy) => (
                         <View key={sy.id} style={styles.syllabusRow}>
                           <View style={styles.syllabusIconBox}>
                             <IconSymbol
@@ -414,13 +412,13 @@ export default function Dashboard() {
                           </View>
                         </View>
                       ))}
-                      {DUMMY_SYLLABI.length > 3 && (
+                      {syllabi.length > 3 && (
                         <Pressable
                           style={styles.viewAllRow}
                           onPress={() => router.push(Routes.SYLLABI)}
                         >
                           <Text style={styles.viewAllText}>
-                            View all {DUMMY_SYLLABI.length} syllabi
+                            View all {syllabi.length} syllabi
                           </Text>
                           <IconSymbol
                             name="chevron.right"
@@ -908,6 +906,10 @@ export default function Dashboard() {
         visible={goalSummaryOpen}
         onClose={() => setGoalSummaryOpen(false)}
         goal={viewingGoal}
+      />
+      <SyllabusUploadModal
+        visible={syllabusModalOpen}
+        onClose={() => setSyllabusModalOpen(false)}
       />
     </>
   );

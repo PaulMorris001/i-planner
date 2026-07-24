@@ -8,6 +8,7 @@ import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/Button';
 import { AddClassModal } from '@/components/plan/AddClassModal';
+import { SyllabusUploadModal } from '@/components/plan/SyllabusUploadModal';
 import { BottomSheetModal } from '@/components/ui/BottomSheetModal';
 import { Colors, Spacing, Typography, Radius } from '@/constants/theme';
 import { Routes } from '@/constants/routes';
@@ -100,6 +101,7 @@ export default function StudentPlan() {
 
   // ── Class sheet state ──
   const [classSheetOpen, setClassSheetOpen] = useState(false);
+  const [syllabusModalOpen, setSyllabusModalOpen] = useState(false);
 
   // ── Recruitment sheet state ──
   const [recSheetOpen, setRecSheetOpen] = useState(false);
@@ -328,6 +330,13 @@ export default function StudentPlan() {
                 >
                   <Text style={styles.addBtnText}>+ {plan.classes.length === 0 ? 'Add a class' : 'Add another class'}</Text>
                 </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.uploadSyllabusBtn}
+                  onPress={() => setSyllabusModalOpen(true)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.uploadSyllabusBtnText}>Or upload a syllabus PDF — AI fills this in</Text>
+                </TouchableOpacity>
               </>
             )}
 
@@ -490,6 +499,11 @@ export default function StudentPlan() {
         visible={classSheetOpen}
         onClose={() => setClassSheetOpen(false)}
         onAdd={addClass}
+      />
+
+      <SyllabusUploadModal
+        visible={syllabusModalOpen}
+        onClose={() => setSyllabusModalOpen(false)}
       />
 
       {/* ── Add recruitment sheet ── */}
@@ -726,6 +740,13 @@ const styles = StyleSheet.create({
     borderRadius: 15, paddingVertical: 14, alignItems: 'center', justifyContent: 'center',
   },
   addBtnText: { fontSize: 14.5, fontWeight: '600', color: Colors.primary },
+
+  uploadSyllabusBtn: {
+    alignItems: 'center', justifyContent: 'center', paddingVertical: 10,
+  },
+  uploadSyllabusBtnText: {
+    fontSize: 13, fontWeight: '600', color: Colors.textSecondary, textDecorationLine: 'underline',
+  },
 
   otherInputRow: { flexDirection: 'row', gap: 8 },
   otherInput: {
