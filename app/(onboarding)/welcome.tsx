@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Colors, Spacing, Typography, Radius } from "@/constants/theme";
 import { Routes } from "@/constants/routes";
 
-const PILLS = ["Time", "Learning", "Caree", "Money"];
+const PILLS = ["Time", "Learning", "Career", "Money"];
 
 export default function Welcome() {
   return (
