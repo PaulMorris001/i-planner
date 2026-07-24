@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Alert, StyleSheet } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
+import * as Clipboard from 'expo-clipboard';
+import * as Haptics from 'expo-haptics';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useOnboarding } from '@/hooks/useOnboarding';
@@ -41,6 +43,7 @@ export default function Coach() {
   const [messages, setMessages] = useState<CoachMessage[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [sending, setSending] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
 
   const visibleModes = MODES.filter((m) => m.id !== 'study' || focusProfile !== 'professional');
@@ -85,6 +88,13 @@ export default function Coach() {
 
   const removeAttachment = (uri: string) => {
     setAttachments((prev) => prev.filter((a) => a.uri !== uri));
+  };
+
+  const handleCopyMessage = async (message: CoachMessage) => {
+    await Clipboard.setStringAsync(message.content);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setCopiedId(message.id);
+    setTimeout(() => setCopiedId((current) => (current === message.id ? null : current)), 1200);
   };
 
   const handleSend = async () => {
@@ -168,11 +178,20 @@ export default function Coach() {
                 key={m.id}
                 style={[styles.bubbleRow, m.role === 'user' ? styles.bubbleRowUser : styles.bubbleRowAssistant]}
               >
-                <View style={[styles.bubble, m.role === 'user' ? styles.bubbleUser : styles.bubbleAssistant]}>
+                <Pressable
+                  onLongPress={() => handleCopyMessage(m)}
+                  style={[styles.bubble, m.role === 'user' ? styles.bubbleUser : styles.bubbleAssistant]}
+                >
                   <Text style={m.role === 'user' ? styles.bubbleTextUser : styles.bubbleTextAssistant}>
                     {m.content}
                   </Text>
-                </View>
+                  {copiedId === m.id && (
+                    <View style={styles.copiedPill}>
+                      <IconSymbol name="checkmark" color={Colors.white} size={11} />
+                      <Text style={styles.copiedPillText}>Copied</Text>
+                    </View>
+                  )}
+                </Pressable>
               </View>
             ))}
             {sending && (
@@ -352,6 +371,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingVertical: 10,
     paddingHorizontal: 14,
+    position: 'relative',
   },
   bubbleUser: {
     backgroundColor: Colors.primaryLight,
@@ -372,6 +392,23 @@ const styles = StyleSheet.create({
     fontSize: 14.5,
     color: Colors.textPrimary,
     lineHeight: 20,
+  },
+  copiedPill: {
+    position: 'absolute',
+    top: -12,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.textPrimary,
+    borderRadius: 999,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+  },
+  copiedPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.white,
   },
   bottomBar: {
     paddingHorizontal: Spacing.md,
