@@ -54,6 +54,7 @@ export async function sendCoachMessage(req: AuthedRequest, res: Response) {
     history,
     userMessage: trimmed,
     firebaseUid: req.userId!,
+    canCreateTasks: consent.tasks,
   });
 
   const assistantDoc = await CoachMessage.create({

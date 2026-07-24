@@ -7,16 +7,18 @@ export const CREATE_TASK_TOOL = {
   type: 'function',
   name: 'create_task',
   description:
-    'Create one or more tasks in the user\'s planner. Call this whenever the user asks you to add, ' +
-    'create, remind them about, or schedule something — do not just describe what you would add.',
+    'Create one or more tasks (up to 10 per call) in the user\'s planner. Call this whenever the user ' +
+    'asks you to add, create, remind them about, or schedule something — do not just describe what you ' +
+    'would add.',
   strict: true,
   parameters: {
     type: 'object',
     properties: {
       tasks: {
         type: 'array',
-        minItems: 1,
-        maxItems: 10,
+        // minItems/maxItems aren't in OpenAI's supported strict-schema subset
+        // (same reason syllabusExtraction.ts's SYLLABUS_SCHEMA omits them) — the
+        // 10-item cap is enforced in createTasksFromDrafts below instead.
         items: {
           type: 'object',
           properties: {

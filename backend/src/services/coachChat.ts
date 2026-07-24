@@ -38,6 +38,7 @@ export async function generateCoachReply(input: {
   history: { role: 'user' | 'assistant'; content: string }[];
   userMessage: string;
   firebaseUid: string;
+  canCreateTasks: boolean;
 }): Promise<CoachReplyResult> {
   const today = new Date().toISOString().slice(0, 10);
   const instructions =
@@ -51,8 +52,10 @@ export async function generateCoachReply(input: {
 
   // Only "Plan My Day" can create tasks — the one mode actually about
   // scheduling, so a casual Study Buddy/Goal Coach chat never accidentally
-  // triggers task creation.
-  const tools = input.mode === 'plan' ? [CREATE_TASK_TOOL] : undefined;
+  // triggers task creation. Also respects the user's "Tasks & deadlines" AI
+  // Data Access toggle — if they've told the coach not to touch task data, it
+  // shouldn't be able to create tasks either, not just read them.
+  const tools = input.mode === 'plan' && input.canCreateTasks ? [CREATE_TASK_TOOL] : undefined;
 
   try {
     const firstResponse = await openai.responses.create({

@@ -105,10 +105,12 @@ export default function Coach() {
       if (reply.createdTaskIds?.length) {
         // The AI-created task(s) exist server-side (with Google sync already
         // applied) but still need the client-side Apple Calendar/notification
-        // step that manually-created tasks get — refetch so they're in state,
-        // then run that step for each.
-        await refetchTasks();
-        await Promise.all(reply.createdTaskIds.map((id) => syncExternallyCreatedTask(id)));
+        // step that manually-created tasks get. Use refetch()'s own return
+        // value, not the `tasks` in context state — the new task can't be in
+        // that state yet by definition (this closure predates the refetch).
+        const freshTasks = await refetchTasks();
+        const createdTasks = freshTasks.filter((t) => reply.createdTaskIds!.includes(t.id));
+        await Promise.all(createdTasks.map((t) => syncExternallyCreatedTask(t)));
       }
     } catch (err) {
       console.error('[Coach] failed to send message', err);

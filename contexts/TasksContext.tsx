@@ -20,8 +20,8 @@ interface TasksContextValue {
   toggleDone: (id: string) => Promise<void>;
   updateTask: (id: string, patch: Partial<NewTaskInput>) => Promise<void>;
   removeTask: (id: string) => Promise<void>;
-  refetch: () => Promise<void>;
-  syncExternallyCreatedTask: (id: string) => Promise<void>;
+  refetch: () => Promise<Task[]>;
+  syncExternallyCreatedTask: (task: Task) => Promise<void>;
 }
 
 const TasksContext = createContext<TasksContextValue | null>(null);
@@ -31,11 +31,14 @@ export function TasksProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const { appleCalendarConnected, remindersEnabled } = useSettings();
 
-  const fetchTasks = async () => {
+  const fetchTasks = async (): Promise<Task[]> => {
     try {
-      setTasks(await taskService.list());
+      const list = await taskService.list();
+      setTasks(list);
+      return list;
     } catch (err) {
       console.error('[TasksProvider] failed to load tasks', err);
+      return [];
     }
   };
 
@@ -138,18 +141,22 @@ export function TasksProvider({ children }: { children: ReactNode }) {
   // create_task tool, which is a pure backend flow) — Apple sync and local
   // notifications can only happen client-side, so this runs that step after the
   // fact instead of duplicating it into a second creation path.
-  const syncExternallyCreatedTask = async (id: string) => {
-    const target = tasks.find((t) => t.id === id);
-    if (!target) return;
-    const appleEventIds = appleCalendarConnected ? await syncTaskToAppleCalendar(target) : [];
-    const notificationIds = remindersEnabled ? await scheduleTaskNotifications(target) : [];
+  //
+  // Takes the task itself rather than an id to look up in `tasks` state: the
+  // caller (coach.tsx) awaits refetch() and then this in the same handler, and
+  // this closure's own `tasks` would still be the pre-refetch snapshot from
+  // when the closure was created (a fresh `tasks` only exists in the *next*
+  // render's closure) — looking it up here would always miss.
+  const syncExternallyCreatedTask = async (task: Task) => {
+    const appleEventIds = appleCalendarConnected ? await syncTaskToAppleCalendar(task) : [];
+    const notificationIds = remindersEnabled ? await scheduleTaskNotifications(task) : [];
     if (!appleEventIds.length && !notificationIds.length) return;
     const patch: Partial<NewTaskInput> = {};
     if (appleEventIds.length) patch.appleEventIds = appleEventIds;
     if (notificationIds.length) patch.notificationIds = notificationIds;
     try {
-      const updated = await taskService.update(id, patch);
-      setTasks((prev) => prev.map((t) => (t.id === id ? updated : t)));
+      const updated = await taskService.update(task.id, patch);
+      setTasks((prev) => prev.map((t) => (t.id === task.id ? updated : t)));
     } catch (err) {
       console.error('[TasksProvider] failed to sync externally-created task', err);
     }
