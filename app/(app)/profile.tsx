@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { Button } from '@/components/ui/Button';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { DeleteAccountModal } from '@/components/profile/DeleteAccountModal';
 import { useAuth } from '@/hooks/useAuth';
 import { useOnboarding } from '@/hooks/useOnboarding';
 import { useSettings } from '@/hooks/useSettings';
@@ -52,6 +53,7 @@ export default function Profile() {
   } = useSettings();
 
   const [pathMenuOpen, setPathMenuOpen] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [consent, setConsent] = useState<Record<string, boolean>>({
     tasks: true,
     goals: true,
@@ -321,7 +323,15 @@ export default function Profile() {
         </Text>
 
         <Button label="Log out" onPress={handleLogout} variant="secondary" style={styles.logoutButton} />
+
+        <Text style={[styles.eyebrow, { marginTop: Spacing.lg, color: Colors.error }]}>DANGER ZONE</Text>
+        <Pressable style={styles.deleteAccountRow} onPress={() => setDeleteModalOpen(true)}>
+          <Text style={styles.deleteAccountText}>Delete account</Text>
+          <IconSymbol name="chevron.right" color={Colors.error} size={18} />
+        </Pressable>
       </View>
+
+      <DeleteAccountModal visible={deleteModalOpen} onClose={() => setDeleteModalOpen(false)} />
     </ScreenWrapper>
   );
 }
@@ -595,5 +605,21 @@ const styles = StyleSheet.create({
   },
   logoutButton: {
     marginTop: Spacing.lg,
+  },
+  deleteAccountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.errorBg,
+    borderWidth: 1,
+    borderColor: Colors.error,
+    borderRadius: 15,
+    padding: 14,
+    paddingHorizontal: 16,
+  },
+  deleteAccountText: {
+    fontSize: 14.5,
+    fontWeight: '700',
+    color: Colors.error,
   },
 });

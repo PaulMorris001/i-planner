@@ -18,7 +18,7 @@ function mapFirebaseUser(user: FirebaseUser): User {
   };
 }
 
-function mapFirebaseError(err: unknown): AuthError {
+export function mapFirebaseError(err: unknown): AuthError {
   const code = (err as { code?: string })?.code ?? '';
 
   switch (code) {
