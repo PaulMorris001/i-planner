@@ -53,7 +53,11 @@ export function TasksProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const createTask = async (input: NewTaskInput) => {
-    const tempId = `temp-${Date.now()}`;
+    // Random suffix, not just Date.now() — SyllabusUploadModal fires createTask
+    // for several deadlines back-to-back (Promise.allSettled), all synchronously
+    // before any of them await, so a timestamp alone can collide within the
+    // same millisecond and corrupt the optimistic-update replacement below.
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     setTasks((prev) => [...prev, { ...input, id: tempId, done: false }]);
     // Apple sync and reminder scheduling both run client-side — do both first so
     // the resulting ids ride along on the create request.

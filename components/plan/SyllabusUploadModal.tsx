@@ -126,7 +126,10 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
             category: 'academic',
             priority: 'medium',
             day: weekdayIndexMonday(d.date),
-            hour: 9,
+            // No specific time extracted from the syllabus — 23 matches
+            // NewTaskModal's "no time picked" convention, so these sort after
+            // actually time-scheduled tasks within the same priority tier.
+            hour: 23,
             time: '',
             dueDate: d.date.toISOString(),
             recurring: false,
