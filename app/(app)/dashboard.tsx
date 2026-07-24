@@ -221,6 +221,48 @@ export default function Dashboard() {
     }
   };
 
+  // Shared second row on every path's home page (right under the top stats/
+  // hero block) — a plain JSX value, not its own component, so it doesn't
+  // remount on every render the way a function defined in the render body would.
+  const quickLinksRow = (
+    <View style={styles.quickLinksRow}>
+      <Pressable
+        style={styles.quickLinkCard}
+        onPress={() => router.push(Routes.PLANNER)}
+      >
+        <View
+          style={[
+            styles.quickLinkIconBox,
+            { backgroundColor: Colors.infoSoft },
+          ]}
+        >
+          <IconSymbol
+            name="calendar"
+            color={Colors.primaryLight}
+            size={20}
+          />
+        </View>
+        <Text style={styles.quickLinkTitle}>Calendar</Text>
+        <Text style={styles.quickLinkSub}>Sync & timeline</Text>
+      </Pressable>
+      <Pressable
+        style={styles.quickLinkCard}
+        onPress={() => router.push(Routes.GOALS)}
+      >
+        <View
+          style={[
+            styles.quickLinkIconBox,
+            { backgroundColor: Colors.successSoft },
+          ]}
+        >
+          <IconSymbol name="target" color={Colors.success} size={20} />
+        </View>
+        <Text style={styles.quickLinkTitle}>Goals</Text>
+        <Text style={styles.quickLinkSub}>Track & create</Text>
+      </Pressable>
+    </View>
+  );
+
   return (
     <>
       <ScreenWrapper
@@ -266,6 +308,8 @@ export default function Dashboard() {
                     )}
                   </View>
                 </View>
+
+                {quickLinksRow}
 
                 {/* Today's Classes */}
                 <View style={styles.card}>
@@ -544,6 +588,8 @@ export default function Dashboard() {
                   </View>
                 )}
 
+                {quickLinksRow}
+
                 {/* My Exams */}
                 <View style={styles.card}>
                   <View style={styles.rowBetween}>
@@ -708,6 +754,8 @@ export default function Dashboard() {
                   </View>
                 </View>
 
+                {quickLinksRow}
+
                 {/* Career goal */}
                 <View style={styles.card}>
                   {careerGoal ? (
@@ -852,43 +900,6 @@ export default function Dashboard() {
               />
             </Pressable>
 
-            {/* Quick links */}
-            <View style={styles.quickLinksRow}>
-              <Pressable
-                style={styles.quickLinkCard}
-                onPress={() => router.push(Routes.PLANNER)}
-              >
-                <View
-                  style={[
-                    styles.quickLinkIconBox,
-                    { backgroundColor: Colors.infoSoft },
-                  ]}
-                >
-                  <IconSymbol
-                    name="calendar"
-                    color={Colors.primaryLight}
-                    size={20}
-                  />
-                </View>
-                <Text style={styles.quickLinkTitle}>Calendar</Text>
-                <Text style={styles.quickLinkSub}>Sync & timeline</Text>
-              </Pressable>
-              <Pressable
-                style={styles.quickLinkCard}
-                onPress={() => router.push(Routes.GOALS)}
-              >
-                <View
-                  style={[
-                    styles.quickLinkIconBox,
-                    { backgroundColor: Colors.successSoft },
-                  ]}
-                >
-                  <IconSymbol name="target" color={Colors.success} size={20} />
-                </View>
-                <Text style={styles.quickLinkTitle}>Goals</Text>
-                <Text style={styles.quickLinkSub}>Track & create</Text>
-              </Pressable>
-            </View>
           </View>
         )}
       </ScreenWrapper>
