@@ -118,7 +118,12 @@ const DEFAULT_SETTINGS: Settings = {
   googleCalendarConnected: false,
   calendarGateDismissed: false,
   remindersEnabled: false,
+  aiAccessTasks: true,
+  aiAccessGoals: true,
+  aiAccessCalendar: true,
 };
+
+type AiAccessKey = 'aiAccessTasks' | 'aiAccessGoals' | 'aiAccessCalendar';
 
 interface SettingsContextValue extends Settings {
   loading: boolean;
@@ -129,6 +134,7 @@ interface SettingsContextValue extends Settings {
   dismissCalendarGate: () => Promise<void>;
   enableReminders: () => Promise<boolean>;
   disableReminders: () => Promise<void>;
+  setAiAccess: (key: AiAccessKey, value: boolean) => Promise<void>;
 }
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
@@ -266,6 +272,17 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const setAiAccess = async (key: AiAccessKey, value: boolean) => {
+    const prevSettings = settings;
+    setSettings((s) => ({ ...s, [key]: value }));
+    try {
+      setSettings(await settingsService.patch({ [key]: value }));
+    } catch (err) {
+      setSettings(prevSettings);
+      console.error('[SettingsProvider] failed to update AI data access', err);
+    }
+  };
+
   return (
     <SettingsContext.Provider
       value={{
@@ -278,6 +295,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         dismissCalendarGate,
         enableReminders,
         disableReminders,
+        setAiAccess,
       }}
     >
       {children}

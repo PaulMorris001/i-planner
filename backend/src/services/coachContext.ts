@@ -36,18 +36,28 @@ function currentExamWeek(exam: ExamRecord): number {
   return Math.min(totalWeeks, Math.max(1, totalWeeks - weeksUntilExam + 1));
 }
 
+export interface CoachDataConsent {
+  tasks: boolean;
+  goals: boolean;
+  calendar: boolean;
+}
+
 // Builds a compact text summary of the user's real planner data, dropped into
 // the Coach's system prompt so it can give personalized (not generic) answers.
 // Shared across all 3 modes rather than mode-specific queries — simpler than
 // bespoke fetching per mode, and the system prompt's per-mode framing already
-// steers which parts of this the assistant actually leans on.
-export async function buildContextSummary(firebaseUid: string): Promise<string> {
+// steers which parts of this the assistant actually leans on. Each section is
+// gated by the matching Profile page "AI Data Access" toggle — habits have no
+// toggle of their own, so that section is never gated. Consent-disabled
+// sections aren't just omitted silently; queries for that data are skipped
+// entirely, so a disabled category never reaches this function's memory at all.
+export async function buildContextSummary(firebaseUid: string, consent: CoachDataConsent): Promise<string> {
   const [tasks, goals, habits, studentPlan, examPlan] = await Promise.all([
-    Task.find({ firebaseUid }),
-    Goal.find({ firebaseUid }),
+    consent.tasks ? Task.find({ firebaseUid }) : Promise.resolve([]),
+    consent.goals ? Goal.find({ firebaseUid }) : Promise.resolve([]),
     Habit.find({ firebaseUid }),
-    Plan.findOne({ firebaseUid, pathType: 'student' }),
-    Plan.findOne({ firebaseUid, pathType: 'exam' }),
+    consent.calendar ? Plan.findOne({ firebaseUid, pathType: 'student' }) : Promise.resolve(null),
+    consent.calendar ? Plan.findOne({ firebaseUid, pathType: 'exam' }) : Promise.resolve(null),
   ]);
 
   const sections: string[] = [];
@@ -126,5 +136,5 @@ export async function buildContextSummary(firebaseUid: string): Promise<string> 
 
   return sections.length
     ? sections.join('\n\n')
-    : 'The user has no tasks, goals, habits, classes, or exams set up yet.';
+    : 'The user has no accessible tasks, goals, habits, classes, or exams (some categories may be disabled in AI Data Access settings).';
 }

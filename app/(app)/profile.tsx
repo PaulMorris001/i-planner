@@ -31,9 +31,9 @@ function fromPathId(id: PathId): string {
 }
 
 const CONSENT_ROWS = [
-  { key: 'tasks', label: 'Tasks & deadlines', desc: 'Lets the AI plan around your to-dos' },
-  { key: 'goals', label: 'Goals & milestones', desc: 'Lets the AI connect tasks to your goals' },
-  { key: 'calendar', label: 'Calendar events', desc: 'Lets the AI schedule around your day' },
+  { key: 'aiAccessTasks', label: 'Tasks & deadlines', desc: 'Lets the AI plan around your to-dos' },
+  { key: 'aiAccessGoals', label: 'Goals & milestones', desc: 'Lets the AI connect tasks to your goals' },
+  { key: 'aiAccessCalendar', label: 'Calendar events', desc: 'Lets the AI schedule around your day' },
 ] as const;
 
 export default function Profile() {
@@ -44,21 +44,21 @@ export default function Profile() {
     appleCalendarConnected,
     googleCalendarConnected,
     remindersEnabled,
+    aiAccessTasks,
+    aiAccessGoals,
+    aiAccessCalendar,
     connectAppleCalendar,
     connectGoogleCalendar,
     disconnectAppleCalendar,
     disconnectGoogleCalendar,
     enableReminders,
     disableReminders,
+    setAiAccess,
   } = useSettings();
+  const consent = { aiAccessTasks, aiAccessGoals, aiAccessCalendar };
 
   const [pathMenuOpen, setPathMenuOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [consent, setConsent] = useState<Record<string, boolean>>({
-    tasks: true,
-    goals: true,
-    calendar: true,
-  });
 
   const currentPath = toPathId(focusProfile);
   const displayName = user?.fullName ?? 'Jordan';
@@ -299,7 +299,7 @@ export default function Profile() {
               </View>
               <Switch
                 value={consent[row.key]}
-                onValueChange={(v) => setConsent((c) => ({ ...c, [row.key]: v }))}
+                onValueChange={(v) => setAiAccess(row.key, v)}
                 trackColor={{ false: Colors.border, true: Colors.primaryLight }}
                 thumbColor={Colors.white}
               />

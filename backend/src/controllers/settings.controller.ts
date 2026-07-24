@@ -19,13 +19,19 @@ export async function updateSettings(req: AuthedRequest, res: Response) {
   // googleCalendarConnected is intentionally not settable here — it's only ever
   // set by the OAuth callback (googleOAuthCallback.controller.ts), which verifies a
   // real token exchange first.
-  const { appleCalendarConnected, calendarGateDismissed, remindersEnabled, timeZone } = req.body ?? {};
+  const {
+    appleCalendarConnected, calendarGateDismissed, remindersEnabled, timeZone,
+    aiAccessTasks, aiAccessGoals, aiAccessCalendar,
+  } = req.body ?? {};
 
   const update: Record<string, boolean | string> = {};
   if (appleCalendarConnected !== undefined) update.appleCalendarConnected = !!appleCalendarConnected;
   if (calendarGateDismissed !== undefined) update.calendarGateDismissed = !!calendarGateDismissed;
   if (remindersEnabled !== undefined) update.remindersEnabled = !!remindersEnabled;
   if (typeof timeZone === 'string' && timeZone) update.timeZone = timeZone;
+  if (aiAccessTasks !== undefined) update.aiAccessTasks = !!aiAccessTasks;
+  if (aiAccessGoals !== undefined) update.aiAccessGoals = !!aiAccessGoals;
+  if (aiAccessCalendar !== undefined) update.aiAccessCalendar = !!aiAccessCalendar;
 
   const settings = await Settings.findOneAndUpdate(
     { firebaseUid: req.userId },

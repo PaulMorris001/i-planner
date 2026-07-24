@@ -19,6 +19,13 @@ export interface SettingsDocument extends Document {
   // IANA timezone captured from the device (e.g. "America/New_York") — used so
   // synced Google Calendar events land at the correct local hour instead of UTC.
   timeZone?: string;
+  // AI Coach data-access consent (Profile page's "AI Data Access" toggles) —
+  // gates which sections coachContext.ts includes when building the Coach's
+  // context summary. Undefined (pre-existing users) is treated as true, since
+  // the toggles default to on.
+  aiAccessTasks?: boolean;
+  aiAccessGoals?: boolean;
+  aiAccessCalendar?: boolean;
 }
 
 const settingsSchema = new Schema<SettingsDocument>({
@@ -32,6 +39,9 @@ const settingsSchema = new Schema<SettingsDocument>({
   googleTokenExpiresAt: { type: Date },
   googleCalendarId: { type: String },
   timeZone: { type: String },
+  aiAccessTasks: { type: Boolean, default: true },
+  aiAccessGoals: { type: Boolean, default: true },
+  aiAccessCalendar: { type: Boolean, default: true },
 });
 
 export function toPublicSettings(doc: SettingsDocument | null) {
@@ -40,6 +50,9 @@ export function toPublicSettings(doc: SettingsDocument | null) {
     googleCalendarConnected: doc?.googleCalendarConnected ?? false,
     calendarGateDismissed: doc?.calendarGateDismissed ?? false,
     remindersEnabled: doc?.remindersEnabled ?? false,
+    aiAccessTasks: doc?.aiAccessTasks ?? true,
+    aiAccessGoals: doc?.aiAccessGoals ?? true,
+    aiAccessCalendar: doc?.aiAccessCalendar ?? true,
   };
 }
 

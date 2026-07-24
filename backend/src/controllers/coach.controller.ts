@@ -1,5 +1,6 @@
 import { Response } from 'express';
 import { CoachMessage, COACH_MODES, CoachModeId, toPublicCoachMessage } from '../models/CoachMessage';
+import { Settings } from '../models/Settings';
 import { AuthedRequest } from '../middleware/requireAuth';
 import { ApiError } from '../utils/ApiError';
 import { buildContextSummary } from '../services/coachContext';
@@ -40,7 +41,13 @@ export async function sendCoachMessage(req: AuthedRequest, res: Response) {
 
   await CoachMessage.create({ firebaseUid: req.userId, mode, role: 'user', content: trimmed });
 
-  const contextSummary = await buildContextSummary(req.userId!);
+  const settings = await Settings.findOne({ firebaseUid: req.userId });
+  const consent = {
+    tasks: settings?.aiAccessTasks ?? true,
+    goals: settings?.aiAccessGoals ?? true,
+    calendar: settings?.aiAccessCalendar ?? true,
+  };
+  const contextSummary = await buildContextSummary(req.userId!, consent);
   const replyText = await generateCoachReply({ mode, contextSummary, history, userMessage: trimmed });
 
   const assistantDoc = await CoachMessage.create({
