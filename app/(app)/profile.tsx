@@ -175,8 +175,10 @@ export default function Profile() {
                       i < PATH_OPTIONS.length - 1 && styles.pathOptionBorder,
                     ]}
                     onPress={async () => {
-                      await setFocusProfile(fromPathId(option.id));
                       setPathMenuOpen(false);
+                      if (isCurrent) return;
+                      await setFocusProfile(fromPathId(option.id));
+                      router.replace(Routes.DASHBOARD);
                     }}
                   >
                     <View style={{ flex: 1 }}>
