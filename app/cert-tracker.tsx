@@ -7,6 +7,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { BackButton } from '@/components/ui/BackButton';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { AnimatedProgressBar } from '@/components/ui/AnimatedProgressBar';
+import { StatCard } from '@/components/ui/StatCard';
 import { Colors, Spacing } from '@/constants/theme';
 import { usePlan } from '@/hooks/usePlan';
 
@@ -109,20 +110,18 @@ export default function CertTracker() {
       )}
 
       <View style={styles.statsRow}>
-        <View style={styles.statCard}>
-          <Text style={styles.statLabel}>Practice questions</Text>
+        <StatCard label="Practice questions" style={styles.statCard}>
           <Text style={styles.statValue}>{practiceLogged}</Text>
           <Pressable style={styles.statButton} onPress={logPractice}>
             <Text style={styles.statButtonText}>+ Log 10</Text>
           </Pressable>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statLabel}>Last mock exam</Text>
+        </StatCard>
+        <StatCard label="Last mock exam" style={styles.statCard}>
           <Text style={styles.statValue}>{mockLabel}</Text>
           <Pressable style={styles.statButton} onPress={logMock}>
             <Text style={styles.statButtonText}>+ Add score</Text>
           </Pressable>
-        </View>
+        </StatCard>
       </View>
 
       <View style={styles.confidenceCard}>
@@ -248,11 +247,6 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     borderRadius: 16,
     padding: 15,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: Colors.textMuted,
-    fontWeight: '600',
   },
   statValue: {
     fontSize: 24,

@@ -8,6 +8,11 @@ import { AnimatedProgressBar } from "@/components/ui/AnimatedProgressBar";
 import { DashboardSkeleton } from "@/components/ui/DashboardSkeleton";
 import { GreetingHeader } from "@/components/ui/GreetingHeader";
 import { IconSymbol } from "@/components/ui/icon-symbol";
+import { Card } from "@/components/ui/Card";
+import { StatCard } from "@/components/ui/StatCard";
+import { ViewAllRow } from "@/components/ui/ViewAllRow";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { SectionCardHeader } from "@/components/ui/SectionCardHeader";
 import { COURSE_COLORS } from "@/constants/classColors";
 import { Routes } from "@/constants/routes";
 import { TaskCategories } from "@/constants/taskMeta";
@@ -307,15 +312,13 @@ export default function Dashboard() {
               <>
                 {/* Study streak + Up next */}
                 <View style={styles.statsRow}>
-                  <View style={[styles.statCard, { flex: 1.3 }]}>
-                    <Text style={styles.statLabel}>Study streak</Text>
+                  <StatCard label="Study streak" flex={1.3}>
                     <View style={styles.statValueRow}>
                       <Text style={styles.statValue}>{taskStreak}</Text>
                       <Text style={styles.statUnit}>days</Text>
                     </View>
-                  </View>
-                  <View style={[styles.statCard, { flex: 0.7 }]}>
-                    <Text style={styles.statLabel}>Up next</Text>
+                  </StatCard>
+                  <StatCard label="Up next" flex={0.7}>
                     {studentUpcoming.length > 0 ? (
                       <>
                         <Text style={styles.statNextTitle} numberOfLines={1}>
@@ -330,13 +333,13 @@ export default function Dashboard() {
                         Nothing scheduled
                       </Text>
                     )}
-                  </View>
+                  </StatCard>
                 </View>
 
                 {quickLinksRow}
 
                 {/* Today's Classes */}
-                <View style={styles.card}>
+                <Card style={styles.card}>
                   <Text style={styles.todayTitle}>Today's Classes</Text>
                   {todaysClasses.length > 0 ? (
                     <View style={{ gap: 8, marginTop: 11 }}>
@@ -369,24 +372,15 @@ export default function Dashboard() {
                       No classes scheduled today.
                     </Text>
                   )}
-                </View>
+                </Card>
 
                 {/* My Classes */}
-                <View style={styles.card}>
-                  <View style={styles.rowBetween}>
-                    <Text style={styles.todayTitle}>My Classes</Text>
-                    <Pressable
-                      style={styles.addClassBtn}
-                      onPress={() => setClassModalOpen(true)}
-                    >
-                      <IconSymbol
-                        name="plus"
-                        color={Colors.primaryLight}
-                        size={13}
-                      />
-                      <Text style={styles.addClassBtnText}>Add Class</Text>
-                    </Pressable>
-                  </View>
+                <Card style={styles.card}>
+                  <SectionCardHeader
+                    title="My Classes"
+                    actionLabel="Add Class"
+                    onActionPress={() => setClassModalOpen(true)}
+                  />
                   {visibleClasses.length > 0 ? (
                     <View style={{ gap: 8, marginTop: 11 }}>
                       {visibleClasses.map((c) => {
@@ -418,19 +412,10 @@ export default function Dashboard() {
                         );
                       })}
                       {plan.classes.length > 3 && (
-                        <Pressable
-                          style={styles.viewAllRow}
+                        <ViewAllRow
+                          label={`View all ${plan.classes.length} classes`}
                           onPress={() => router.push(Routes.CLASSES)}
-                        >
-                          <Text style={styles.viewAllText}>
-                            View all {plan.classes.length} classes
-                          </Text>
-                          <IconSymbol
-                            name="chevron.right"
-                            color={Colors.primaryLight}
-                            size={14}
-                          />
-                        </Pressable>
+                        />
                       )}
                     </View>
                   ) : (
@@ -438,24 +423,15 @@ export default function Dashboard() {
                       No classes added yet.
                     </Text>
                   )}
-                </View>
+                </Card>
 
                 {/* My Syllabi */}
-                <View style={styles.card}>
-                  <View style={styles.rowBetween}>
-                    <Text style={styles.todayTitle}>My Syllabi</Text>
-                    <Pressable
-                      style={styles.addClassBtn}
-                      onPress={() => setSyllabusModalOpen(true)}
-                    >
-                      <IconSymbol
-                        name="plus"
-                        color={Colors.primaryLight}
-                        size={13}
-                      />
-                      <Text style={styles.addClassBtnText}>Add Syllabus</Text>
-                    </Pressable>
-                  </View>
+                <Card style={styles.card}>
+                  <SectionCardHeader
+                    title="My Syllabi"
+                    actionLabel="Add Syllabus"
+                    onActionPress={() => setSyllabusModalOpen(true)}
+                  />
                   {syllabi.length > 0 ? (
                     <View style={{ gap: 8, marginTop: 11 }}>
                       {syllabi.slice(0, 3).map((sy) => (
@@ -481,19 +457,10 @@ export default function Dashboard() {
                         </View>
                       ))}
                       {syllabi.length > 3 && (
-                        <Pressable
-                          style={styles.viewAllRow}
+                        <ViewAllRow
+                          label={`View all ${syllabi.length} syllabi`}
                           onPress={() => router.push(Routes.SYLLABI)}
-                        >
-                          <Text style={styles.viewAllText}>
-                            View all {syllabi.length} syllabi
-                          </Text>
-                          <IconSymbol
-                            name="chevron.right"
-                            color={Colors.primaryLight}
-                            size={14}
-                          />
-                        </Pressable>
+                        />
                       )}
                     </View>
                   ) : (
@@ -501,7 +468,7 @@ export default function Dashboard() {
                       No syllabi yet.
                     </Text>
                   )}
-                </View>
+                </Card>
 
                 {/* This week's goal(s) */}
                 <View style={{ gap: 9 }}>
@@ -509,23 +476,15 @@ export default function Dashboard() {
                     {thisWeeksGoals.length > 1 ? "THIS WEEK'S GOALS" : "THIS WEEK'S GOAL"}
                   </Text>
                   {thisWeeksGoals.length === 0 ? (
-                    <Pressable
-                      style={styles.placeholderRow}
+                    <EmptyState
+                      icon="target"
+                      title="No goals due this week"
+                      subtitle="Set a due date on a goal to see it here."
                       onPress={() => router.push(Routes.GOALS)}
-                    >
-                      <View style={styles.dashedIconBox}>
-                        <IconSymbol name="target" color={Colors.textMuted} size={19} />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.placeholderTitle}>No goals due this week</Text>
-                        <Text style={styles.placeholderSub}>
-                          Set a due date on a goal to see it here.
-                        </Text>
-                      </View>
-                    </Pressable>
+                    />
                   ) : (
                     thisWeeksGoals.map((goal) => (
-                      <View key={goal.id} style={styles.card}>
+                      <Card key={goal.id} style={styles.card}>
                         <View style={styles.rowBetween}>
                           <Text style={styles.weekGoalTitle} numberOfLines={1}>
                             {goal.title}
@@ -541,7 +500,7 @@ export default function Dashboard() {
                         >
                           <Text style={styles.viewButtonText}>View</Text>
                         </Pressable>
-                      </View>
+                      </Card>
                     ))
                   )}
                 </View>
@@ -587,49 +546,26 @@ export default function Dashboard() {
                     }
                   />
                 ) : (
-                  <View style={styles.card}>
+                  <Card style={styles.card}>
                     <Text style={styles.eyebrowMuted}>EXAM COUNTDOWN</Text>
-                    <Pressable
-                      style={styles.placeholderRow}
+                    <EmptyState
+                      icon="plus"
+                      title="No exam added yet"
+                      subtitle="Tap to set up your exam and generate a study plan."
                       onPress={() => setExamModalOpen(true)}
-                    >
-                      <View style={styles.dashedIconBox}>
-                        <IconSymbol
-                          name="plus"
-                          color={Colors.textMuted}
-                          size={19}
-                        />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.placeholderTitle}>
-                          No exam added yet
-                        </Text>
-                        <Text style={styles.placeholderSub}>
-                          Tap to set up your exam and generate a study plan.
-                        </Text>
-                      </View>
-                    </Pressable>
-                  </View>
+                    />
+                  </Card>
                 )}
 
                 {quickLinksRow}
 
                 {/* My Exams */}
-                <View style={styles.card}>
-                  <View style={styles.rowBetween}>
-                    <Text style={styles.todayTitle}>My Exams</Text>
-                    <Pressable
-                      style={styles.addClassBtn}
-                      onPress={() => setExamModalOpen(true)}
-                    >
-                      <IconSymbol
-                        name="plus"
-                        color={Colors.primaryLight}
-                        size={13}
-                      />
-                      <Text style={styles.addClassBtnText}>Add Exam</Text>
-                    </Pressable>
-                  </View>
+                <Card style={styles.card}>
+                  <SectionCardHeader
+                    title="My Exams"
+                    actionLabel="Add Exam"
+                    onActionPress={() => setExamModalOpen(true)}
+                  />
                   {sortedExams.length > 0 ? (
                     <View style={{ gap: 8, marginTop: 11 }}>
                       {sortedExams.slice(0, 3).map((exam) => (
@@ -659,19 +595,10 @@ export default function Dashboard() {
                         </View>
                       ))}
                       {sortedExams.length > 3 && (
-                        <Pressable
-                          style={styles.viewAllRow}
+                        <ViewAllRow
+                          label={`View all ${sortedExams.length} exams`}
                           onPress={() => router.push(Routes.EXAMS)}
-                        >
-                          <Text style={styles.viewAllText}>
-                            View all {sortedExams.length} exams
-                          </Text>
-                          <IconSymbol
-                            name="chevron.right"
-                            color={Colors.primaryLight}
-                            size={14}
-                          />
-                        </Pressable>
+                        />
                       )}
                     </View>
                   ) : (
@@ -679,11 +606,11 @@ export default function Dashboard() {
                       No exams added yet.
                     </Text>
                   )}
-                </View>
+                </Card>
 
                 {/* This week */}
                 {nearestExam && (
-                  <View style={styles.card}>
+                  <Card style={styles.card}>
                     <View style={styles.rowBetween}>
                       <Text style={styles.todayTitle}>This week — Week {nearestExamWeek}</Text>
                       <Text
@@ -738,20 +665,18 @@ export default function Dashboard() {
                         );
                       })}
                     </View>
-                  </View>
+                  </Card>
                 )}
 
                 {/* Study streak + Next session */}
                 <View style={styles.statsRow}>
-                  <View style={[styles.statCard, { flex: 1.3 }]}>
-                    <Text style={styles.statLabel}>Study streak</Text>
+                  <StatCard label="Study streak" flex={1.3}>
                     <View style={styles.statValueRow}>
                       <Text style={styles.statValue}>{taskStreak}</Text>
                       <Text style={styles.statUnit}>days</Text>
                     </View>
-                  </View>
-                  <View style={[styles.statCard, { flex: 0.7 }]}>
-                    <Text style={styles.statLabel}>Next session</Text>
+                  </StatCard>
+                  <StatCard label="Next session" flex={0.7}>
                     {nextTask ? (
                       <>
                         <Text style={styles.statNextTitle} numberOfLines={1}>
@@ -765,34 +690,32 @@ export default function Dashboard() {
                     ) : (
                       <Text style={styles.statNextTitle}>Nothing scheduled</Text>
                     )}
-                  </View>
+                  </StatCard>
                 </View>
               </>
             ) : (
               <>
                 {/* Today's tasks + Weekly action */}
                 <View style={styles.statsRow}>
-                  <View style={styles.statCard}>
-                    <Text style={styles.statLabel}>Today's tasks</Text>
+                  <StatCard label="Today's tasks">
                     <View style={styles.statValueRow}>
                       <Text style={styles.statValue}>{todaysTasksDone}</Text>
                       <Text style={styles.statUnit}>
                         / {todaysTasks.length} done
                       </Text>
                     </View>
-                  </View>
-                  <View style={styles.statCard}>
-                    <Text style={styles.statLabel}>Weekly action</Text>
+                  </StatCard>
+                  <StatCard label="Weekly action">
                     <Text style={styles.statNextTitle} numberOfLines={2}>
                       {nextCareerMilestone?.title ?? "Nothing this week"}
                     </Text>
-                  </View>
+                  </StatCard>
                 </View>
 
                 {quickLinksRow}
 
                 {/* Career goal */}
-                <View style={styles.card}>
+                <Card style={styles.card}>
                   {careerGoal ? (
                     <>
                       <View style={styles.rowBetween}>
@@ -865,29 +788,15 @@ export default function Dashboard() {
                   ) : (
                     <>
                       <Text style={styles.eyebrowMuted}>CAREER GOAL</Text>
-                      <Pressable
-                        style={styles.placeholderRow}
+                      <EmptyState
+                        icon="plus"
+                        title="Set a career goal"
+                        subtitle="Add one from the Goals page to track it here."
                         onPress={() => router.push(Routes.GOALS)}
-                      >
-                        <View style={styles.dashedIconBox}>
-                          <IconSymbol
-                            name="plus"
-                            color={Colors.textMuted}
-                            size={19}
-                          />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.placeholderTitle}>
-                            Set a career goal
-                          </Text>
-                          <Text style={styles.placeholderSub}>
-                            Add one from the Goals page to track it here.
-                          </Text>
-                        </View>
-                      </Pressable>
+                      />
                     </>
                   )}
-                </View>
+                </Card>
               </>
             )}
 
@@ -1052,51 +961,9 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: Colors.primaryLight,
   },
-  placeholderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 11,
-    marginTop: 13,
-  },
-  dashedIconBox: {
-    width: 38,
-    height: 38,
-    borderRadius: 11,
-    backgroundColor: Colors.offWhite,
-    borderWidth: 1,
-    borderStyle: "dashed",
-    borderColor: Colors.border,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  placeholderTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: Colors.textPrimary,
-  },
-  placeholderSub: {
-    fontSize: 12.5,
-    color: Colors.textMuted,
-    marginTop: 1,
-    lineHeight: 17,
-  },
   statsRow: {
     flexDirection: "row",
     gap: 11,
-  },
-  statCard: {
-    flex: 1,
-    minWidth: 0,
-    backgroundColor: Colors.white,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 17,
-    padding: 12,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: Colors.textMuted,
-    fontWeight: "600",
   },
   statValueRow: {
     flexDirection: "row",
@@ -1175,20 +1042,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: Colors.textPrimary,
   },
-  addClassBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    backgroundColor: Colors.infoSoft,
-    borderRadius: 999,
-    paddingVertical: 6,
-    paddingHorizontal: 11,
-  },
-  addClassBtnText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: Colors.primaryLight,
-  },
   classRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1240,18 +1093,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.textMuted,
     lineHeight: 18,
-  },
-  viewAllRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 5,
-    paddingVertical: 9,
-  },
-  viewAllText: {
-    fontSize: 12.5,
-    fontWeight: "700",
-    color: Colors.primaryLight,
   },
   weekGoalTitle: {
     fontSize: 15,
