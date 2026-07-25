@@ -22,8 +22,22 @@ export function taskOccursOnDay(task: Task, dayIdx: number): boolean {
   return task.day === dayIdx;
 }
 
-function localMidnight(date: Date): number {
+export function localMidnight(date: Date): number {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+}
+
+// True when dateIso's calendar day (local time) is today or later. Deliberately
+// ignores whatever time-of-day is embedded in the ISO string itself — that
+// varies by creation path (e.g. AI/syllabus-created tasks are pinned to UTC
+// midnight, manually-created ones carry whatever time the date picker's Date
+// object happened to hold) and isn't meaningful on its own, so comparing full
+// instants against Date.now() can wrongly drop something due later today. A
+// task's real time-of-day, when it has one, lives in its separate `hour`/`time`
+// fields instead.
+export function isDueTodayOrLater(dateIso: string): boolean {
+  const date = new Date(dateIso);
+  if (Number.isNaN(date.getTime())) return false;
+  return localMidnight(date) >= localMidnight(new Date());
 }
 
 // Current task-completion streak: counts consecutive "active" days (any

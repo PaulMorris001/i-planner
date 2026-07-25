@@ -25,7 +25,14 @@ import type {
   ExamPlan as ExamPlanType,
 } from "@/types/plan.types";
 import type { Goal } from "@/types/goal.types";
-import { formatMonthYear, weekdayIndexMonday, taskOccursOnDay, computeTaskStreak } from "@/utils/date";
+import {
+  formatMonthYear,
+  weekdayIndexMonday,
+  taskOccursOnDay,
+  computeTaskStreak,
+  localMidnight,
+  isDueTodayOrLater,
+} from "@/utils/date";
 import { parseTimeToMinutes } from "@/utils/time";
 import { syncClassToAppleCalendar } from "@/utils/appleCalendarSync";
 import { scheduleClassNotifications } from "@/utils/notifications";
@@ -146,9 +153,15 @@ export default function Dashboard() {
   // Soonest not-yet-done task with a due date — feeds the Exam path's "Next
   // session" stat card. Same filter/sort as studentUpcoming below, just
   // without the onboarding-only recruitment/other items the Student path has.
+  // Sorts by calendar day first (not raw dueDate instant — see
+  // isDueTodayOrLater), then by the task's real hour within that day so same-
+  // day tasks still land in the right order.
   const nextTask = tasks
-    .filter((t) => !!t.dueDate && !t.done && new Date(t.dueDate).getTime() >= Date.now())
-    .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())[0];
+    .filter((t) => !!t.dueDate && !t.done && isDueTodayOrLater(t.dueDate))
+    .sort((a, b) => {
+      const dayDiff = localMidnight(new Date(a.dueDate)) - localMidnight(new Date(b.dueDate));
+      return dayDiff !== 0 ? dayDiff : a.hour - b.hour;
+    })[0];
 
   // Most-recently-created first — class ids are Date.now() timestamps, so a
   // numeric sort on id doubles as a creation-order sort.
@@ -202,8 +215,12 @@ export default function Dashboard() {
         dotColor: TaskCategories[t.category].color,
       })),
   ]
-    .filter((item) => new Date(item.date).getTime() >= Date.now())
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    // Calendar-day comparison, not raw instant — recruitment/other/task dates
+    // each carry a different, essentially arbitrary time-of-day (see
+    // isDueTodayOrLater), so comparing full timestamps against Date.now() can
+    // wrongly drop something still due later today.
+    .filter((item) => isDueTodayOrLater(item.date))
+    .sort((a, b) => localMidnight(new Date(a.date)) - localMidnight(new Date(b.date)))
     .slice(0, 3);
 
   // Soonest-upcoming first — feeds both the countdown carousel and the "My
