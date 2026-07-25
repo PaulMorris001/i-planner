@@ -143,6 +143,13 @@ export default function Dashboard() {
   const todaysTasksDone = todaysTasks.filter((t) => t.done).length;
   const taskStreak = computeTaskStreak(tasks);
 
+  // Soonest not-yet-done task with a due date — feeds the Exam path's "Next
+  // session" stat card. Same filter/sort as studentUpcoming below, just
+  // without the onboarding-only recruitment/other items the Student path has.
+  const nextTask = tasks
+    .filter((t) => !!t.dueDate && !t.done && new Date(t.dueDate).getTime() >= Date.now())
+    .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())[0];
+
   // Most-recently-created first — class ids are Date.now() timestamps, so a
   // numeric sort on id doubles as a creation-order sort.
   const recentClasses = [...plan.classes].sort(
@@ -728,8 +735,19 @@ export default function Dashboard() {
                   </View>
                   <View style={[styles.statCard, { flex: 0.7 }]}>
                     <Text style={styles.statLabel}>Next session</Text>
-                    <Text style={styles.statNextTitle}>Today</Text>
-                    <Text style={styles.statNextDateMuted}>4:00 PM · 2h</Text>
+                    {nextTask ? (
+                      <>
+                        <Text style={styles.statNextTitle} numberOfLines={1}>
+                          {nextTask.title}
+                        </Text>
+                        <Text style={styles.statNextDateMuted}>
+                          {formatShortDate(nextTask.dueDate)}
+                          {nextTask.time ? ` · ${nextTask.time}` : ""}
+                        </Text>
+                      </>
+                    ) : (
+                      <Text style={styles.statNextTitle}>Nothing scheduled</Text>
+                    )}
                   </View>
                 </View>
               </>
