@@ -1,19 +1,19 @@
 import { useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { useRouter } from 'expo-router';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { NewGoalModal } from '@/components/goal/NewGoalModal';
 import { ItemActionSheet } from '@/components/ui/ItemActionSheet';
 import { AnimatedProgressBar } from '@/components/ui/AnimatedProgressBar';
 import { GoalsSkeleton } from '@/components/ui/GoalsSkeleton';
+import { BackButton } from '@/components/ui/BackButton';
+import { Card } from '@/components/ui/Card';
 import { confirmDelete } from '@/utils/confirmDelete';
 import { Colors, Spacing } from '@/constants/theme';
 import { useGoals } from '@/hooks/useGoals';
 import type { Goal, Milestone } from '@/types/goal.types';
 
 export default function Goals() {
-  const router = useRouter();
   const { goals, loading, createGoal, updateGoal, deleteGoal } = useGoals();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [actionSheetTarget, setActionSheetTarget] = useState<Goal | null>(null);
@@ -43,10 +43,7 @@ export default function Goals() {
 
   return (
     <ScreenWrapper backgroundColor={Colors.offWhite} scroll style={styles.scrollContent} edges={['top', 'right', 'left']}>
-      <Pressable style={styles.backRow} onPress={() => router.back()}>
-        <IconSymbol name="chevron.left" color={Colors.textSecondary} size={18} />
-        <Text style={styles.backText}>Back</Text>
-      </Pressable>
+      <BackButton />
 
       <View style={styles.body}>
         <View style={styles.headerRow}>
@@ -67,9 +64,8 @@ export default function Goals() {
         ) : (
           <View style={styles.list}>
             {goals.map((goal) => (
-              <Pressable
+              <Card
                 key={goal.id}
-                style={styles.card}
                 onLongPress={() => setActionSheetTarget(goal)}
               >
                 <View style={styles.cardHeaderRow}>
@@ -110,7 +106,7 @@ export default function Goals() {
                     ))}
                   </View>
                 )}
-              </Pressable>
+              </Card>
             ))}
           </View>
         )}
@@ -140,19 +136,6 @@ export default function Goals() {
 const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 80,
-  },
-  backRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.sm,
-    alignSelf: 'flex-start',
-  },
-  backText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.textSecondary,
   },
   body: {
     marginTop: Spacing.md,
@@ -205,13 +188,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.textMuted,
     marginTop: 4,
-  },
-  card: {
-    backgroundColor: Colors.white,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 16,
-    padding: 16,
   },
   cardHeaderRow: {
     flexDirection: 'row',

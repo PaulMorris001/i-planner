@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import { View, Text, Pressable, StyleSheet, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
+import { View, Text, StyleSheet, Alert } from 'react-native';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
-import { IconSymbol } from '@/components/ui/icon-symbol';
 import { AddClassModal } from '@/components/plan/AddClassModal';
 import { ItemActionSheet } from '@/components/ui/ItemActionSheet';
+import { BackButton } from '@/components/ui/BackButton';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { ListRow } from '@/components/ui/ListRow';
+import { DashedAddButton } from '@/components/ui/DashedAddButton';
 import { Colors, Spacing } from '@/constants/theme';
 import { COURSE_COLORS } from '@/constants/classColors';
 import { usePlan } from '@/hooks/usePlan';
@@ -23,7 +25,6 @@ function classDaysLabel(item: ClassItem): string {
 }
 
 export default function Classes() {
-  const router = useRouter();
   const { plan, savePlan } = usePlan();
   const { appleCalendarConnected, remindersEnabled } = useSettings();
   const [modalOpen, setModalOpen] = useState(false);
@@ -89,15 +90,9 @@ export default function Classes() {
 
   return (
     <ScreenWrapper backgroundColor={Colors.offWhite} scroll style={styles.scrollContent}>
-      <Pressable style={styles.backRow} onPress={() => router.back()}>
-        <IconSymbol name="chevron.left" color={Colors.textSecondary} size={18} />
-        <Text style={styles.backText}>Back</Text>
-      </Pressable>
+      <BackButton />
 
-      <Text style={styles.title}>Classes</Text>
-      <Text style={styles.subtitle}>
-        {classes.length} class{classes.length === 1 ? '' : 'es'}
-      </Text>
+      <PageHeader title="Classes" subtitle={`${classes.length} class${classes.length === 1 ? '' : 'es'}`} />
 
       <View style={styles.list}>
         {classes.length === 0 ? (
@@ -106,28 +101,19 @@ export default function Classes() {
           classes.map((c) => {
             const color = COURSE_COLORS[plan.classes.indexOf(c) % COURSE_COLORS.length];
             return (
-              <Pressable
+              <ListRow
                 key={c.id}
-                style={styles.classRow}
+                leading={{ type: 'bar', color }}
+                title={c.courseName}
+                meta={`${classDaysLabel(c)}${c.time ? ` · ${c.time}` : ''}`}
                 onLongPress={() => setActionSheetTarget(c)}
-              >
-                <View style={[styles.classBar, { backgroundColor: color }]} />
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={styles.classRowTitle} numberOfLines={1}>{c.courseName}</Text>
-                  <Text style={styles.classRowMeta}>{classDaysLabel(c)}{c.time ? ` · ${c.time}` : ''}</Text>
-                </View>
-                <Pressable onPress={() => setActionSheetTarget(c)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <IconSymbol name="ellipsis" color={Colors.textMuted} size={18} />
-                </Pressable>
-              </Pressable>
+                onMenuPress={() => setActionSheetTarget(c)}
+              />
             );
           })
         )}
 
-        <Pressable style={styles.addButton} onPress={() => setModalOpen(true)}>
-          <IconSymbol name="plus" color={Colors.primaryLight} size={18} />
-          <Text style={styles.addButtonText}>Add class</Text>
-        </Pressable>
+        <DashedAddButton label="Add class" onPress={() => setModalOpen(true)} />
       </View>
 
       <AddClassModal
@@ -154,33 +140,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 40,
   },
-  backRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.sm,
-    alignSelf: 'flex-start',
-  },
-  backText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: Colors.textPrimary,
-    letterSpacing: -0.3,
-    marginTop: 12,
-    paddingHorizontal: Spacing.md,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    marginTop: 5,
-    paddingHorizontal: Spacing.md,
-  },
   list: {
     marginTop: 20,
     paddingHorizontal: Spacing.md,
@@ -189,47 +148,5 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 13,
     color: Colors.textMuted,
-  },
-  classRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 11,
-    backgroundColor: Colors.white,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-  },
-  classBar: {
-    width: 4,
-    alignSelf: 'stretch',
-    borderRadius: 2,
-  },
-  classRowTitle: {
-    fontSize: 14.5,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-  },
-  classRowMeta: {
-    fontSize: 12,
-    color: Colors.textMuted,
-    marginTop: 2,
-  },
-  addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderColor: Colors.border,
-    borderRadius: 16,
-    padding: 16,
-  },
-  addButtonText: {
-    fontSize: 14.5,
-    fontWeight: '700',
-    color: Colors.primaryLight,
   },
 });

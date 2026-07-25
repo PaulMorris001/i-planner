@@ -1,7 +1,9 @@
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { useRouter } from 'expo-router';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { BackButton } from '@/components/ui/BackButton';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { Card } from '@/components/ui/Card';
 import { Colors, Spacing, Radius } from '@/constants/theme';
 
 interface Tier {
@@ -83,17 +85,16 @@ const TIERS: Tier[] = [
 ];
 
 export default function Plans() {
-  const router = useRouter();
-
   return (
     <ScreenWrapper backgroundColor={Colors.offWhite} scroll style={styles.scrollContent}>
-      <Pressable style={styles.backRow} onPress={() => router.back()}>
-        <IconSymbol name="chevron.left" color={Colors.textSecondary} size={18} />
-        <Text style={styles.backText}>Back</Text>
-      </Pressable>
+      <BackButton />
 
-      <Text style={styles.title}>Plans & pricing</Text>
-      <Text style={styles.subtitle}>Compare tiers — from free planning to full AI coaching.</Text>
+      <PageHeader
+        title="Plans & pricing"
+        subtitle="Compare tiers — from free planning to full AI coaching."
+        titleSize={25}
+        subtitleSize={13.5}
+      />
 
       <View style={styles.noticeBox}>
         <IconSymbol name="info.circle" color={Colors.warning} size={16} />
@@ -105,7 +106,7 @@ export default function Plans() {
 
       <View style={styles.tierList}>
         {TIERS.map((tier) => (
-          <View key={tier.id} style={[styles.card, tier.highlight && styles.cardHighlight]}>
+          <Card key={tier.id} style={[styles.card, tier.highlight && styles.cardHighlight]}>
             {tier.highlight && (
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>MOST POPULAR</Text>
@@ -146,7 +147,7 @@ export default function Plans() {
                 {tier.cta}
               </Text>
             </Pressable>
-          </View>
+          </Card>
         ))}
       </View>
     </ScreenWrapper>
@@ -156,33 +157,6 @@ export default function Plans() {
 const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 40,
-  },
-  backRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.sm,
-    alignSelf: 'flex-start',
-  },
-  backText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-  },
-  title: {
-    fontSize: 25,
-    fontWeight: '800',
-    color: Colors.textPrimary,
-    letterSpacing: -0.3,
-    marginTop: 12,
-    paddingHorizontal: Spacing.md,
-  },
-  subtitle: {
-    fontSize: 13.5,
-    color: Colors.textSecondary,
-    marginTop: 5,
-    paddingHorizontal: Spacing.md,
   },
   noticeBox: {
     flexDirection: 'row',

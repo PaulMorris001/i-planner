@@ -1,16 +1,18 @@
 import { useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { BackButton } from '@/components/ui/BackButton';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { AnimatedProgressBar } from '@/components/ui/AnimatedProgressBar';
 import { Colors, Spacing } from '@/constants/theme';
 import { usePlan } from '@/hooks/usePlan';
 
 const CONFIDENCE_WORDS = ['', 'Shaky', 'Building', 'Steady', 'Strong', 'Exam-ready'];
 
 export default function CertTracker() {
-  const router = useRouter();
   const { examId } = useLocalSearchParams<{ examId?: string }>();
   const { examPlan, toggleExamTopic } = usePlan();
   const [practiceLogged, setPracticeLogged] = useState(0);
@@ -45,11 +47,8 @@ export default function CertTracker() {
   if (!exam) {
     return (
       <ScreenWrapper backgroundColor={Colors.offWhite} scroll style={styles.scrollContent}>
-        <Pressable style={styles.backRow} onPress={() => router.back()}>
-          <IconSymbol name="chevron.left" color={Colors.textSecondary} size={18} />
-          <Text style={styles.backText}>Back</Text>
-        </Pressable>
-        <Text style={styles.title}>No exam yet</Text>
+        <BackButton />
+        <PageHeader title="No exam yet" titleSize={25} />
         <Text style={[styles.emptyText, { paddingHorizontal: Spacing.md }]}>
           Add an exam from the dashboard to start tracking progress.
         </Text>
@@ -59,12 +58,9 @@ export default function CertTracker() {
 
   return (
     <ScreenWrapper backgroundColor={Colors.offWhite} scroll style={styles.scrollContent}>
-      <Pressable style={styles.backRow} onPress={() => router.back()}>
-        <IconSymbol name="chevron.left" color={Colors.textSecondary} size={18} />
-        <Text style={styles.backText}>Back</Text>
-      </Pressable>
+      <BackButton />
 
-      <Text style={styles.title}>{exam.name} progress</Text>
+      <PageHeader title={`${exam.name} progress`} titleSize={25} />
 
       <LinearGradient
         colors={['#8B3FD1', '#5A2A99']}
@@ -80,7 +76,7 @@ export default function CertTracker() {
         </View>
         <Text style={styles.heroPct}>{certPct}%</Text>
         <View style={styles.heroProgressTrack}>
-          <View style={[styles.heroProgressFill, { width: `${certPct}%` }]} />
+          <AnimatedProgressBar pct={certPct} color={Colors.white} />
         </View>
       </LinearGradient>
 
@@ -155,27 +151,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 40,
   },
-  backRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.sm,
-    alignSelf: 'flex-start',
-  },
-  backText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-  },
-  title: {
-    fontSize: 25,
-    fontWeight: '800',
-    color: Colors.textPrimary,
-    letterSpacing: -0.3,
-    marginTop: 12,
-    paddingHorizontal: Spacing.md,
-  },
   emptyText: {
     fontSize: 13.5,
     color: Colors.textMuted,
@@ -217,11 +192,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.25)',
     marginTop: 10,
     overflow: 'hidden',
-  },
-  heroProgressFill: {
-    height: '100%',
-    borderRadius: 999,
-    backgroundColor: Colors.white,
   },
   eyebrow: {
     fontSize: 12,

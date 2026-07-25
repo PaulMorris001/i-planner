@@ -1,10 +1,13 @@
 import { useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
-import { useRouter } from 'expo-router';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { BottomSheetModal } from '@/components/ui/BottomSheetModal';
 import { ItemActionSheet } from '@/components/ui/ItemActionSheet';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { BackButton } from '@/components/ui/BackButton';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { DashedAddButton } from '@/components/ui/DashedAddButton';
+import { Card } from '@/components/ui/Card';
 import { Colors, Spacing } from '@/constants/theme';
 import { TaskCategories, TaskCategoryId } from '@/constants/taskMeta';
 import { useHabits } from '@/hooks/useHabits';
@@ -45,7 +48,6 @@ function mondayOfCurrentWeek(): Date {
 }
 
 export default function Habits() {
-  const router = useRouter();
   const { habits, createHabit, toggleToday, updateHabit, deleteHabit } = useHabits();
 
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -108,21 +110,12 @@ export default function Habits() {
 
   return (
     <ScreenWrapper backgroundColor={Colors.offWhite} scroll style={styles.scrollContent}>
-      <Pressable style={styles.backRow} onPress={() => router.back()}>
-        <IconSymbol name="chevron.left" color={Colors.textSecondary} size={18} />
-        <Text style={styles.backText}>Back</Text>
-      </Pressable>
+      <BackButton />
 
-      <Text style={styles.title}>Habits</Text>
-      <Text style={styles.subtitle}>
-        {doneToday} of {habits.length} done today
-      </Text>
+      <PageHeader title="Habits" subtitle={`${doneToday} of ${habits.length} done today`} />
 
       <View style={styles.topActionRow}>
-        <Pressable style={styles.newHabitButton} onPress={openSheet}>
-          <IconSymbol name="plus" color={Colors.primaryLight} size={18} />
-          <Text style={styles.newHabitText}>New habit</Text>
-        </Pressable>
+        <DashedAddButton label="New habit" onPress={openSheet} />
       </View>
 
       <View style={styles.list}>
@@ -132,7 +125,7 @@ export default function Habits() {
           const createdDate = new Date(habit.createdAt);
           createdDate.setHours(0, 0, 0, 0);
           return (
-            <Pressable
+            <Card
               key={habit.id}
               style={styles.card}
               onLongPress={() => setActionSheetTarget(habit)}
@@ -192,7 +185,7 @@ export default function Habits() {
                   );
                 })}
               </View>
-            </Pressable>
+            </Card>
           );
         })}
       </View>
@@ -276,33 +269,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 40,
   },
-  backRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.sm,
-    alignSelf: 'flex-start',
-  },
-  backText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: Colors.textPrimary,
-    letterSpacing: -0.3,
-    marginTop: 12,
-    paddingHorizontal: Spacing.md,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    marginTop: 5,
-    paddingHorizontal: Spacing.md,
-  },
   topActionRow: {
     marginTop: 16,
     paddingHorizontal: Spacing.md,
@@ -376,22 +342,6 @@ const styles = StyleSheet.create({
     fontSize: 10.5,
     fontWeight: '700',
     color: Colors.textMuted,
-  },
-  newHabitButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderColor: Colors.border,
-    borderRadius: 16,
-    padding: 16,
-  },
-  newHabitText: {
-    fontSize: 14.5,
-    fontWeight: '700',
-    color: Colors.primaryLight,
   },
   sheetTitle: {
     fontSize: 19,

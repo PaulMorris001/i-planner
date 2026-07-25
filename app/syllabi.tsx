@@ -1,9 +1,11 @@
 import { useState } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { useRouter } from 'expo-router';
-import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
-import { IconSymbol } from '@/components/ui/icon-symbol';
+import { View, Text, StyleSheet } from 'react-native';
 import { SyllabusUploadModal } from '@/components/plan/SyllabusUploadModal';
+import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
+import { BackButton } from '@/components/ui/BackButton';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { ListRow } from '@/components/ui/ListRow';
+import { DashedAddButton } from '@/components/ui/DashedAddButton';
 import { Colors, Spacing } from '@/constants/theme';
 import { useSyllabi } from '@/hooks/useSyllabi';
 
@@ -12,21 +14,14 @@ function formatShortDate(iso: string): string {
 }
 
 export default function Syllabi() {
-  const router = useRouter();
   const { syllabi, loading } = useSyllabi();
   const [uploadOpen, setUploadOpen] = useState(false);
 
   return (
     <ScreenWrapper backgroundColor={Colors.offWhite} scroll style={styles.scrollContent}>
-      <Pressable style={styles.backRow} onPress={() => router.back()}>
-        <IconSymbol name="chevron.left" color={Colors.textSecondary} size={18} />
-        <Text style={styles.backText}>Back</Text>
-      </Pressable>
+      <BackButton />
 
-      <Text style={styles.title}>Syllabi</Text>
-      <Text style={styles.subtitle}>
-        {syllabi.length} syllab{syllabi.length === 1 ? 'us' : 'i'}
-      </Text>
+      <PageHeader title="Syllabi" subtitle={`${syllabi.length} syllab${syllabi.length === 1 ? 'us' : 'i'}`} />
 
       <View style={styles.list}>
         {loading ? (
@@ -35,24 +30,16 @@ export default function Syllabi() {
           <Text style={styles.emptyText}>No syllabi added yet.</Text>
         ) : (
           syllabi.map((sy) => (
-            <View key={sy.id} style={styles.row}>
-              <View style={styles.iconBox}>
-                <IconSymbol name="doc.fill" color={Colors.primaryLight} size={16} />
-              </View>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={styles.rowTitle} numberOfLines={1}>{sy.courseName}</Text>
-                <Text style={styles.rowMeta} numberOfLines={1}>
-                  {sy.fileName} · Added {formatShortDate(sy.createdAt)}
-                </Text>
-              </View>
-            </View>
+            <ListRow
+              key={sy.id}
+              leading={{ type: 'icon', name: 'doc.fill', color: Colors.primaryLight, background: Colors.infoSoft }}
+              title={sy.courseName}
+              meta={`${sy.fileName} · Added ${formatShortDate(sy.createdAt)}`}
+            />
           ))
         )}
 
-        <Pressable style={styles.addButton} onPress={() => setUploadOpen(true)}>
-          <IconSymbol name="plus" color={Colors.primaryLight} size={18} />
-          <Text style={styles.addButtonText}>Add syllabus</Text>
-        </Pressable>
+        <DashedAddButton label="Add syllabus" onPress={() => setUploadOpen(true)} />
       </View>
 
       <SyllabusUploadModal visible={uploadOpen} onClose={() => setUploadOpen(false)} />
@@ -64,33 +51,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 40,
   },
-  backRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.sm,
-    alignSelf: 'flex-start',
-  },
-  backText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: Colors.textPrimary,
-    letterSpacing: -0.3,
-    marginTop: 12,
-    paddingHorizontal: Spacing.md,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    marginTop: 5,
-    paddingHorizontal: Spacing.md,
-  },
   list: {
     marginTop: 20,
     paddingHorizontal: Spacing.md,
@@ -99,50 +59,5 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 13,
     color: Colors.textMuted,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 11,
-    backgroundColor: Colors.white,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-  },
-  iconBox: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: Colors.infoSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rowTitle: {
-    fontSize: 14.5,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-  },
-  rowMeta: {
-    fontSize: 12,
-    color: Colors.textMuted,
-    marginTop: 2,
-  },
-  addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderColor: Colors.border,
-    borderRadius: 16,
-    padding: 16,
-  },
-  addButtonText: {
-    fontSize: 14.5,
-    fontWeight: '700',
-    color: Colors.primaryLight,
   },
 });
