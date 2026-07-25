@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/Button';
+import { OnboardingStepHeader } from '@/components/onboarding/OnboardingStepHeader';
 import { Colors, Spacing, Typography, Radius } from '@/constants/theme';
 import { Routes } from '@/constants/routes';
 import { usePlan } from '@/hooks/usePlan';
@@ -184,25 +185,7 @@ export default function ProfessionalPlan() {
   return (
     <View style={{ flex: 1, backgroundColor: Colors.offWhite }}>
 
-      {/* ── Sticky header ── */}
-      <View style={[styles.stickyHeader, { paddingTop: insets.top + Spacing.sm }]}>
-        <View style={styles.headerRow}>
-          <TouchableOpacity
-            style={styles.backBtn}
-            onPress={() => router.back()}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.backArrow}>←</Text>
-            <Text style={styles.backLabel}>Back</Text>
-          </TouchableOpacity>
-          <View style={styles.stepBadge}>
-            <Text style={styles.stepText}>Step 2 of 3</Text>
-          </View>
-        </View>
-        <View style={styles.progressTrack}>
-          <View style={[styles.progressFill, { width: `${PROGRESS * 100}%` }]} />
-        </View>
-      </View>
+      <OnboardingStepHeader stepLabel="Step 2 of 3" progress={PROGRESS} />
 
       <ScrollView
         contentContainerStyle={[
@@ -538,67 +521,6 @@ export default function ProfessionalPlan() {
 }
 
 const styles = StyleSheet.create({
-  // ── Sticky header ──
-  stickyHeader: {
-    backgroundColor: Colors.white,
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOpacity: 0.06,
-        shadowOffset: { width: 0, height: 3 },
-        shadowRadius: 8,
-      },
-      android: { elevation: 3 },
-    }),
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: Spacing.md,
-  },
-  backBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  backArrow: {
-    fontSize: 18,
-    color: Colors.textSecondary,
-    lineHeight: 22,
-  },
-  backLabel: {
-    ...Typography.body,
-    fontWeight: '500',
-    color: Colors.textSecondary,
-  },
-  stepBadge: {
-    backgroundColor: Colors.overlay,
-    borderRadius: Radius.full,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  stepText: {
-    ...Typography.caption,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-  },
-  progressTrack: {
-    height: 5,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.border,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: Radius.full,
-    backgroundColor: Colors.primary,
-  },
-
   // ── Scroll ──
   scroll: {
     flexGrow: 1,

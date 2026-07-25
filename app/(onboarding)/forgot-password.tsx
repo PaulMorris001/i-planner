@@ -1,11 +1,14 @@
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { useState } from 'react';
 import { router } from 'expo-router';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { BackButton } from '@/components/ui/BackButton';
+import { AuthHeader } from '@/components/onboarding/AuthHeader';
+import { FormErrorBanner } from '@/components/onboarding/FormErrorBanner';
 import { authService } from '@/services/auth.service';
-import { Colors, Spacing, Typography, Radius } from '@/constants/theme';
+import { Colors, Spacing, Typography } from '@/constants/theme';
 
 export default function ForgotPassword() {
   const [email, setEmail]     = useState('');
@@ -53,22 +56,11 @@ export default function ForgotPassword() {
     <ScreenWrapper scroll backgroundColor={Colors.white}>
       <View style={styles.root}>
 
-        <TouchableOpacity style={styles.back} onPress={() => router.back()}>
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
+        <BackButton variant="text" />
 
-        <View style={styles.header}>
-          <Text style={styles.title}>Reset password</Text>
-          <Text style={styles.subtitle}>
-            Enter your email and we'll send you a reset link.
-          </Text>
-        </View>
+        <AuthHeader title="Reset password" subtitle="Enter your email and we'll send you a reset link." />
 
-        {error ? (
-          <View style={styles.errorBox}>
-            <Text style={styles.errorBoxText}>{error}</Text>
-          </View>
-        ) : null}
+        <FormErrorBanner message={error} />
 
         <Input
           label="Email"
@@ -97,39 +89,6 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: Spacing.lg,
     paddingBottom: Spacing.xxl,
-  },
-  back: {
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.sm,
-    alignSelf: 'flex-start',
-  },
-  backText: {
-    ...Typography.body,
-    color: Colors.textSecondary,
-    fontWeight: '500',
-  },
-  header: {
-    marginTop: Spacing.xl,
-    marginBottom: Spacing.xl,
-  },
-  title: {
-    ...Typography.h1,
-    color: Colors.textPrimary,
-    marginBottom: 6,
-  },
-  subtitle: {
-    ...Typography.body,
-    color: Colors.textSecondary,
-  },
-  errorBox: {
-    backgroundColor: Colors.errorBg,
-    borderRadius: Radius.md,
-    padding: Spacing.md,
-    marginBottom: Spacing.md,
-  },
-  errorBoxText: {
-    ...Typography.caption,
-    color: Colors.error,
   },
   cta: {
     marginTop: Spacing.sm,

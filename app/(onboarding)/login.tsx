@@ -4,9 +4,12 @@ import { router } from 'expo-router';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { BackButton } from '@/components/ui/BackButton';
+import { AuthHeader } from '@/components/onboarding/AuthHeader';
+import { FormErrorBanner } from '@/components/onboarding/FormErrorBanner';
 import { useAuth } from '@/hooks/useAuth';
 import { useOnboarding } from '@/hooks/useOnboarding';
-import { Colors, Spacing, Typography, Radius } from '@/constants/theme';
+import { Colors, Spacing, Typography } from '@/constants/theme';
 import { Routes } from '@/constants/routes';
 
 export default function Login() {
@@ -40,23 +43,11 @@ export default function Login() {
     <ScreenWrapper scroll backgroundColor={Colors.white}>
       <View style={styles.root}>
 
-        {/* Back */}
-        <TouchableOpacity style={styles.back} onPress={() => router.back()}>
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
+        <BackButton variant="text" />
 
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Welcome back</Text>
-          <Text style={styles.subtitle}>Sign in to continue planning</Text>
-        </View>
+        <AuthHeader title="Welcome back" subtitle="Sign in to continue planning" />
 
-        {/* General error */}
-        {errors.general && (
-          <View style={styles.errorBox}>
-            <Text style={styles.errorBoxText}>{errors.general}</Text>
-          </View>
-        )}
+        <FormErrorBanner message={errors.general} />
 
         {/* Form */}
         <View style={styles.form}>
@@ -114,39 +105,6 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: Spacing.lg,
     paddingBottom: Spacing.xxl,
-  },
-  back: {
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.sm,
-    alignSelf: 'flex-start',
-  },
-  backText: {
-    ...Typography.body,
-    color: Colors.textSecondary,
-    fontWeight: '500',
-  },
-  header: {
-    marginTop: Spacing.xl,
-    marginBottom: Spacing.xl,
-  },
-  title: {
-    ...Typography.h1,
-    color: Colors.textPrimary,
-    marginBottom: 6,
-  },
-  subtitle: {
-    ...Typography.body,
-    color: Colors.textSecondary,
-  },
-  errorBox: {
-    backgroundColor: Colors.errorBg,
-    borderRadius: Radius.md,
-    padding: Spacing.md,
-    marginBottom: Spacing.md,
-  },
-  errorBoxText: {
-    ...Typography.caption,
-    color: Colors.error,
   },
   form: {
     gap: 4,

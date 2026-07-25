@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet } from "react-native";
 import { router } from "expo-router";
 import { ScreenWrapper } from "@/components/layout/ScreenWrapper";
 import { Button } from "@/components/ui/Button";
@@ -51,13 +51,13 @@ export default function Welcome() {
             textStyle={{ color: Colors.primary }}
           />
 
-          <TouchableOpacity
-            style={styles.secondaryBtn}
+          <Button
+            label="I already have an account"
             onPress={() => router.push(Routes.LOGIN)}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.secondaryText}>I already have an account</Text>
-          </TouchableOpacity>
+            variant="ghost"
+            style={styles.secondaryBtn}
+            textStyle={styles.secondaryText}
+          />
         </View>
       </View>
     </ScreenWrapper>
