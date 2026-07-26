@@ -201,7 +201,7 @@ async function deleteEvent(accessToken: string, calendarId: string, eventId: str
   }
 }
 
-export async function upsertClassEvents(
+export async function upsertClassEvent(
   settings: SettingsDocument,
   item: SyncableClassItem
 ): Promise<string | undefined> {
@@ -221,7 +221,7 @@ export async function upsertClassEvents(
   return upsertEvent(ctx.accessToken, ctx.calendarId, item.googleEventId, body);
 }
 
-export async function deleteClassEvents(
+export async function deleteClassEvent(
   settings: SettingsDocument,
   item: { googleEventId?: string }
 ): Promise<void> {

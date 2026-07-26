@@ -25,14 +25,14 @@ export default function Register() {
   }>({});
 
   const validate = () => {
-    const e: typeof errors = {};
-    if (!fullName) e.fullName = "Full name is required.";
-    if (!email) e.email = "Email is required.";
-    if (!password) e.password = "Password is required.";
+    const nextErrors: typeof errors = {};
+    if (!fullName) nextErrors.fullName = "Full name is required.";
+    if (!email) nextErrors.email = "Email is required.";
+    if (!password) nextErrors.password = "Password is required.";
     else if (password.length < 8)
-      e.password = "Password must be at least 8 characters.";
-    setErrors(e);
-    return Object.keys(e).length === 0;
+      nextErrors.password = "Password must be at least 8 characters.";
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
   };
 
   const handleRegister = async () => {

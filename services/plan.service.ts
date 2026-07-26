@@ -1,19 +1,19 @@
 import { authedRequest } from './authedRequest';
 import type { StudentPlan, ExamPlan, ProfessionalPlan, ExamTopic } from '@/types/plan.types';
 
-type PathType = 'student' | 'exam' | 'professional';
+type PlanKind = 'student' | 'exam' | 'professional';
 
 export const planService = {
-  get: async <T>(pathType: PathType): Promise<T | null> => {
-    const res = await authedRequest<{ data: T | null }>(`/plans/${pathType}`);
+  get: async <T>(planKind: PlanKind): Promise<T | null> => {
+    const res = await authedRequest<{ data: T | null }>(`/plans/${planKind}`);
     return res.data;
   },
 
   save: async <T extends StudentPlan | ExamPlan | ProfessionalPlan>(
-    pathType: PathType,
+    planKind: PlanKind,
     data: T
   ): Promise<T> => {
-    const res = await authedRequest<{ data: T }>(`/plans/${pathType}`, {
+    const res = await authedRequest<{ data: T }>(`/plans/${planKind}`, {
       method: 'PUT',
       body: { data },
     });

@@ -3,7 +3,7 @@ import { Plan, PATH_TYPES, PathType } from '../models/Plan';
 import { Settings } from '../models/Settings';
 import { AuthedRequest } from '../middleware/requireAuth';
 import { ApiError } from '../utils/ApiError';
-import { deleteClassEvents, upsertClassEvents, SyncableClassItem } from '../services/googleCalendarSync';
+import { deleteClassEvent, upsertClassEvent, SyncableClassItem } from '../services/googleCalendarSync';
 import { generateExamTopics as generateExamTopicsService } from '../services/examTopics';
 
 function assertValidPathType(pathType: string): asserts pathType is PathType {
@@ -81,7 +81,7 @@ async function syncClassesToGoogle(firebaseUid: string, newClasses: ClassRecord[
 
   for (const old of oldClasses) {
     if (!newById.has(old.id)) {
-      await deleteClassEvents(settings, old);
+      await deleteClassEvent(settings, old);
     }
   }
 
@@ -101,6 +101,6 @@ async function syncClassesToGoogle(firebaseUid: string, newClasses: ClassRecord[
       continue;
     }
 
-    item.googleEventId = await upsertClassEvents(settings, { ...item, googleEventId: old?.googleEventId });
+    item.googleEventId = await upsertClassEvent(settings, { ...item, googleEventId: old?.googleEventId });
   }
 }

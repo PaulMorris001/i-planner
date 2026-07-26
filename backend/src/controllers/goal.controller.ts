@@ -5,7 +5,7 @@ import { ApiError } from '../utils/ApiError';
 import { findOwnedOrThrow } from '../utils/ownedDoc';
 import { generateGoalMilestones } from '../services/goalMilestones';
 
-interface MilestoneDoc {
+interface NewMilestoneInput {
   title: string;
   done: boolean;
   dueLabel: string;
@@ -31,7 +31,7 @@ export async function createGoal(req: AuthedRequest, res: Response) {
     throw new ApiError(400, 'Type, tag and color are required.', 'general');
   }
 
-  const milestoneDocs: MilestoneDoc[] = Array.isArray(milestones)
+  const milestoneInputs: NewMilestoneInput[] = Array.isArray(milestones)
     ? milestones
         .filter((m): m is { title: string; dueLabel?: string } => !!m?.title)
         .map((m) => ({ title: m.title, done: false, dueLabel: m.dueLabel ?? '' }))
@@ -43,11 +43,11 @@ export async function createGoal(req: AuthedRequest, res: Response) {
     tag,
     title: title.trim(),
     color,
-    milestones: milestoneDocs,
+    milestones: milestoneInputs,
     // Freshly created milestones are always undone, so pct is always 0 here
     // regardless of count — pctFromMilestones is still used for consistency with
     // updateGoal, where it does the real work.
-    pct: pctFromMilestones(milestoneDocs),
+    pct: pctFromMilestones(milestoneInputs),
     targetRole,
     targetIndustry,
     targetDate,

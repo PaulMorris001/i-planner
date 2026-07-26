@@ -50,7 +50,7 @@ export default function Coach() {
   const visibleModes = MODES.filter((m) => m.id !== 'study' || focusProfile !== 'professional');
   const mode = modeOverride && visibleModes.some((m) => m.id === modeOverride) ? modeOverride : visibleModes[0].id;
 
-  const empty = EMPTY_STATE[mode];
+  const emptyState = EMPTY_STATE[mode];
 
   // Conversation history is per mode, stored server-side — reload whenever the
   // active mode changes.
@@ -159,8 +159,8 @@ export default function Coach() {
           </View>
         ) : messages.length === 0 ? (
           <View style={styles.emptyWrap}>
-            <Text style={styles.emptyTitle}>{empty.title}</Text>
-            <Text style={styles.emptyDesc}>{empty.desc}</Text>
+            <Text style={styles.emptyTitle}>{emptyState.title}</Text>
+            <Text style={styles.emptyDesc}>{emptyState.desc}</Text>
           </View>
         ) : (
           <ScrollView

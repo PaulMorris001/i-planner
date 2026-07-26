@@ -21,11 +21,11 @@ export default function Login() {
   const [errors, setErrors]     = useState<{ email?: string; password?: string; general?: string }>({});
 
   const validate = () => {
-    const e: typeof errors = {};
-    if (!email)    e.email    = 'Email is required.';
-    if (!password) e.password = 'Password is required.';
-    setErrors(e);
-    return Object.keys(e).length === 0;
+    const nextErrors: typeof errors = {};
+    if (!email)    nextErrors.email    = 'Email is required.';
+    if (!password) nextErrors.password = 'Password is required.';
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
   };
 
   const handleLogin = async () => {

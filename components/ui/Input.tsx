@@ -25,7 +25,7 @@ export function Input({
   ...props
 }: InputProps) {
   const [focused, setFocused] = useState(false);
-  const [hidden, setHidden] = useState(true);
+  const [isPasswordHidden, setIsPasswordHidden] = useState(true);
 
   const isPasswordField = !!secureTextEntry;
 
@@ -43,16 +43,16 @@ export function Input({
           placeholderTextColor={Colors.textMuted}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
-          secureTextEntry={isPasswordField ? hidden : secureTextEntry}
+          secureTextEntry={isPasswordField ? isPasswordHidden : secureTextEntry}
           {...props}
         />
         {isPasswordField && (
           <Pressable
             style={styles.toggleButton}
-            onPress={() => setHidden((h) => !h)}
+            onPress={() => setIsPasswordHidden((prev) => !prev)}
             hitSlop={8}
           >
-            <IconSymbol name={hidden ? 'eye' : 'eye.slash'} color={Colors.textMuted} size={20} />
+            <IconSymbol name={isPasswordHidden ? 'eye' : 'eye.slash'} color={Colors.textMuted} size={20} />
           </Pressable>
         )}
       </View>

@@ -65,7 +65,7 @@ export function NewGoalModal({ visible, onClose, onCreate, editingGoal, onSave }
   const [milestones, setMilestones] = useState<DraftMilestone[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
-  const canGenerate = goalName.trim().length > 0;
+  const isFormValid = goalName.trim().length > 0;
 
   const reset = () => {
     setStep('form');
@@ -98,17 +98,17 @@ export function NewGoalModal({ visible, onClose, onCreate, editingGoal, onSave }
   };
 
   const handleSaveEdit = async () => {
-    if (!editingGoal || !onSave || !canGenerate) return;
-    const type = GOAL_TYPES.find((t) => t.id === goalType)!;
+    if (!editingGoal || !onSave || !isFormValid) return;
+    const selectedType = GOAL_TYPES.find((t) => t.id === goalType)!;
     setSubmitting(true);
     try {
       await onSave(editingGoal.id, {
         title: goalName.trim(),
-        type: type.id,
-        tag: type.label,
-        color: type.color,
+        type: selectedType.id,
+        tag: selectedType.label,
+        color: selectedType.color,
         targetDate: targetDate ? targetDate.toISOString() : '',
-        ...(type.id === 'career'
+        ...(selectedType.id === 'career'
           ? { targetRole: targetRole.trim(), targetIndustry: targetIndustry.trim() }
           : {}),
       });
@@ -122,7 +122,7 @@ export function NewGoalModal({ visible, onClose, onCreate, editingGoal, onSave }
   };
 
   const handleGenerate = async () => {
-    if (!canGenerate) return;
+    if (!isFormValid) return;
     setStep('generating');
     try {
       const { milestones: suggestions } = await goalService.generateMilestones({
@@ -153,19 +153,19 @@ export function NewGoalModal({ visible, onClose, onCreate, editingGoal, onSave }
   };
 
   const handleCreate = async () => {
-    const type = GOAL_TYPES.find((t) => t.id === goalType)!;
+    const selectedType = GOAL_TYPES.find((t) => t.id === goalType)!;
     setSubmitting(true);
     try {
       await onCreate({
-        type: type.id,
-        tag: type.label,
+        type: selectedType.id,
+        tag: selectedType.label,
         title: goalName.trim(),
-        color: type.color,
+        color: selectedType.color,
         milestones: milestones
           .filter((m) => m.title.trim().length > 0)
           .map((m) => ({ title: m.title.trim(), dueLabel: m.dueLabel.trim() })),
         targetDate: targetDate ? targetDate.toISOString() : '',
-        ...(type.id === 'career'
+        ...(selectedType.id === 'career'
           ? { targetRole: targetRole.trim(), targetIndustry: targetIndustry.trim() }
           : {}),
       });
@@ -244,11 +244,11 @@ export function NewGoalModal({ visible, onClose, onCreate, editingGoal, onSave }
             )}
 
             <Pressable
-              style={[styles.primaryButton, (!canGenerate || submitting) && styles.primaryButtonDisabled]}
-              disabled={!canGenerate || submitting}
+              style={[styles.primaryButton, (!isFormValid || submitting) && styles.primaryButtonDisabled]}
+              disabled={!isFormValid || submitting}
               onPress={editingGoal ? handleSaveEdit : handleGenerate}
             >
-              <Text style={[styles.primaryButtonText, (!canGenerate || submitting) && styles.primaryButtonTextDisabled]}>
+              <Text style={[styles.primaryButtonText, (!isFormValid || submitting) && styles.primaryButtonTextDisabled]}>
                 {editingGoal ? (submitting ? 'Saving…' : 'Save changes') : 'Generate plan'}
               </Text>
             </Pressable>

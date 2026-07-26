@@ -267,15 +267,15 @@ export default function StudentPlan() {
         {/* ── Multi-select focus chips ── */}
         <View style={styles.chipWrapRow}>
           {SECTIONS.map(sec => {
-            const on = selectedSections.includes(sec.key);
+            const isSelected = selectedSections.includes(sec.key);
             return (
               <TouchableOpacity
                 key={sec.key}
-                style={[styles.focusChip, on && { backgroundColor: sec.accent, borderColor: sec.accent }]}
+                style={[styles.focusChip, isSelected && { backgroundColor: sec.accent, borderColor: sec.accent }]}
                 onPress={() => toggleSection(sec.key)}
                 activeOpacity={0.75}
               >
-                <Text style={[styles.focusChipText, on && styles.focusChipTextActive]}>{sec.label}</Text>
+                <Text style={[styles.focusChipText, isSelected && styles.focusChipTextActive]}>{sec.label}</Text>
               </TouchableOpacity>
             );
           })}

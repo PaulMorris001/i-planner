@@ -7,6 +7,11 @@ export interface Task {
   title: string;
   category: TaskCategoryId;
   priority: TaskPriorityId;
+  // Planner grid position (Monday-start weekday index, and hour 0-23 with 23
+  // meaning "no specific time") — independent of dueDate/time below, which are
+  // the task's actual due date/time. day/hour place the task in Planner's
+  // day/week grid; dueDate/time are what's shown as the due date and used for
+  // calendar sync and reminders.
   day: number;
   hour: number;
   time: string;

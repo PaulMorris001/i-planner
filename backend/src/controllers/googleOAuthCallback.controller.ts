@@ -4,7 +4,7 @@ import { Plan } from '../models/Plan';
 import { Task } from '../models/Task';
 import { env } from '../config/env';
 import { verifyState } from '../utils/googleOAuthState';
-import { upsertClassEvents, upsertTaskEvent, SyncableClassItem } from '../services/googleCalendarSync';
+import { upsertClassEvent, upsertTaskEvent, SyncableClassItem } from '../services/googleCalendarSync';
 
 const APP_REDIRECT = 'iplanner://oauth2redirect';
 
@@ -24,7 +24,7 @@ async function backfillGoogleSync(firebaseUid: string, settings: SettingsDocumen
 
     let classesChanged = false;
     for (const item of classes) {
-      const eventId = await upsertClassEvents(settings, item);
+      const eventId = await upsertClassEvent(settings, item);
       if (eventId !== item.googleEventId) {
         item.googleEventId = eventId;
         classesChanged = true;

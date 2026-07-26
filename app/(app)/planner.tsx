@@ -232,15 +232,15 @@ export default function Planner() {
             </Pressable>
             {plan.classes.map((c, idx) => {
               const color = COURSE_COLORS[idx % COURSE_COLORS.length];
-              const on = courseFilter === c.id;
+              const isSelected = courseFilter === c.id;
               return (
                 <Pressable
                   key={c.id}
-                  style={[styles.courseChip, on && { backgroundColor: color, borderColor: color }]}
-                  onPress={() => setCourseFilter(on ? null : c.id)}
+                  style={[styles.courseChip, isSelected && { backgroundColor: color, borderColor: color }]}
+                  onPress={() => setCourseFilter(isSelected ? null : c.id)}
                 >
-                  <View style={[styles.courseDot, { backgroundColor: on ? Colors.white : color }]} />
-                  <Text style={[styles.courseChipText, on && styles.courseChipTextActive]} numberOfLines={1}>
+                  <View style={[styles.courseDot, { backgroundColor: isSelected ? Colors.white : color }]} />
+                  <Text style={[styles.courseChipText, isSelected && styles.courseChipTextActive]} numberOfLines={1}>
                     {c.courseName}
                   </Text>
                 </Pressable>
@@ -260,8 +260,8 @@ export default function Planner() {
               {dayItems.length === 0 ? (
                 <Text style={styles.noTasks}>No tasks yet — tap the + button to add one.</Text>
               ) : (
-                dayItems.map((di) =>
-                  di.kind === 'class' ? renderClassRow(di.item, di.color, di.soft) : renderTaskRow(di.task)
+                dayItems.map((entry) =>
+                  entry.kind === 'class' ? renderClassRow(entry.item, entry.color, entry.soft) : renderTaskRow(entry.task)
                 )
               )}
             </View>
@@ -280,11 +280,11 @@ export default function Planner() {
                   {day.items.length === 0 ? (
                     <Text style={styles.noTasks}>No tasks</Text>
                   ) : (
-                    day.items.map((di) => {
-                      if (di.kind === 'class') {
-                        return renderClassRow(di.item, di.color, di.soft);
+                    day.items.map((entry) => {
+                      if (entry.kind === 'class') {
+                        return renderClassRow(entry.item, entry.color, entry.soft);
                       }
-                      const task = di.task;
+                      const task = entry.task;
                       const category = TaskCategories[task.category];
                       return (
                         <Pressable

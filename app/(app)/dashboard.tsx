@@ -434,8 +434,8 @@ export default function Dashboard() {
                   />
                   {syllabi.length > 0 ? (
                     <View style={{ gap: 8, marginTop: 11 }}>
-                      {syllabi.slice(0, 3).map((sy) => (
-                        <View key={sy.id} style={styles.syllabusRow}>
+                      {syllabi.slice(0, 3).map((syllabus) => (
+                        <View key={syllabus.id} style={styles.syllabusRow}>
                           <View style={styles.syllabusIconBox}>
                             <IconSymbol
                               name="doc.fill"
@@ -448,10 +448,10 @@ export default function Dashboard() {
                               style={styles.classRowTitle}
                               numberOfLines={1}
                             >
-                              {sy.courseName}
+                              {syllabus.courseName}
                             </Text>
                             <Text style={styles.classRowMeta} numberOfLines={1}>
-                              {sy.fileName}
+                              {syllabus.fileName}
                             </Text>
                           </View>
                         </View>

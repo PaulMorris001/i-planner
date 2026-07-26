@@ -20,8 +20,8 @@ export function DeleteAccountModal({ visible, onClose }: DeleteAccountModalProps
   const [needsPassword, setNeedsPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  const identifier = user?.fullName?.trim() || user?.email || 'my';
-  const requiredPhrase = `Delete ${identifier} account`;
+  const accountLabel = user?.fullName?.trim() || user?.email || 'my';
+  const requiredPhrase = `Delete ${accountLabel} account`;
   const canConfirm = confirmText === requiredPhrase;
 
   const reset = () => {

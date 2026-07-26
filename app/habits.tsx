@@ -163,7 +163,7 @@ export default function Habits() {
               </View>
 
               <View style={styles.weekRow}>
-                {habit.week.map((on, i) => {
+                {habit.week.map((doneThisDay, i) => {
                   const cellDate = new Date(monday);
                   cellDate.setDate(monday.getDate() + i);
                   const beforeCreation = cellDate < createdDate;
@@ -174,10 +174,10 @@ export default function Habits() {
                           styles.weekBox,
                           beforeCreation
                             ? styles.weekBoxDisabled
-                            : { backgroundColor: on ? category.color : Colors.border },
+                            : { backgroundColor: doneThisDay ? category.color : Colors.border },
                         ]}
                       >
-                        {on && !beforeCreation && (
+                        {doneThisDay && !beforeCreation && (
                           <IconSymbol name="checkmark" color={Colors.white} size={14} />
                         )}
                       </View>

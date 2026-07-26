@@ -29,12 +29,12 @@ export default function Syllabi() {
         ) : syllabi.length === 0 ? (
           <Text style={styles.emptyText}>No syllabi added yet.</Text>
         ) : (
-          syllabi.map((sy) => (
+          syllabi.map((syllabus) => (
             <ListRow
-              key={sy.id}
+              key={syllabus.id}
               leading={{ type: 'icon', name: 'doc.fill', color: Colors.primaryLight, background: Colors.infoSoft }}
-              title={sy.courseName}
-              meta={`${sy.fileName} · Added ${formatShortDate(sy.createdAt)}`}
+              title={syllabus.courseName}
+              meta={`${syllabus.fileName} · Added ${formatShortDate(syllabus.createdAt)}`}
             />
           ))
         )}

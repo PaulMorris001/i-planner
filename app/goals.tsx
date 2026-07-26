@@ -87,20 +87,20 @@ export default function Goals() {
 
                 {goal.milestones.length > 0 && (
                   <View style={styles.milestoneList}>
-                    {goal.milestones.map((m) => (
+                    {goal.milestones.map((milestone) => (
                       <Pressable
-                        key={m.id}
+                        key={milestone.id}
                         style={styles.milestoneRow}
-                        onPress={() => toggleMilestone(goal.id, goal.milestones, m.id)}
+                        onPress={() => toggleMilestone(goal.id, goal.milestones, milestone.id)}
                       >
-                        <View style={[styles.checkbox, m.done && { backgroundColor: goal.color, borderColor: goal.color }]}>
-                          {m.done && <Text style={styles.checkmark}>✓</Text>}
+                        <View style={[styles.checkbox, milestone.done && { backgroundColor: goal.color, borderColor: goal.color }]}>
+                          {milestone.done && <Text style={styles.checkmark}>✓</Text>}
                         </View>
                         <View style={styles.milestoneTextBlock}>
-                          <Text style={[styles.milestoneTitle, m.done && styles.milestoneTitleDone]} numberOfLines={2}>
-                            {m.title}
+                          <Text style={[styles.milestoneTitle, milestone.done && styles.milestoneTitleDone]} numberOfLines={2}>
+                            {milestone.title}
                           </Text>
-                          {!!m.dueLabel && <Text style={styles.milestoneDue}>{m.dueLabel}</Text>}
+                          {!!milestone.dueLabel && <Text style={styles.milestoneDue}>{milestone.dueLabel}</Text>}
                         </View>
                       </Pressable>
                     ))}
