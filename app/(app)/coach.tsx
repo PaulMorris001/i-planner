@@ -5,6 +5,7 @@ import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { SegmentedToggle } from '@/components/ui/SegmentedToggle';
 import { useOnboarding } from '@/hooks/useOnboarding';
 import { useTasks } from '@/hooks/useTasks';
 import { coachService } from '@/services/coach.service';
@@ -143,17 +144,13 @@ export default function Coach() {
             <Text style={styles.headerTitle}>AI Coach</Text>
           </View>
 
-          <View style={styles.segmented}>
-            {visibleModes.map((m) => (
-              <Pressable
-                key={m.id}
-                style={[styles.segment, mode === m.id && styles.segmentActive]}
-                onPress={() => setModeOverride(m.id)}
-              >
-                <Text style={mode === m.id ? styles.segmentTextActive : styles.segmentText}>{m.label}</Text>
-              </Pressable>
-            ))}
-          </View>
+          <SegmentedToggle
+            options={visibleModes.map((m) => ({ key: m.id, label: m.label }))}
+            value={mode}
+            onChange={setModeOverride}
+            style={styles.segmented}
+            textSize={12.5}
+          />
         </View>
 
         {loadingHistory ? (
@@ -295,38 +292,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   segmented: {
-    flexDirection: 'row',
-    gap: 5,
-    backgroundColor: Colors.offWhite,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 12,
-    padding: 4,
     marginTop: 14,
-  },
-  segment: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 9,
-    borderRadius: 9,
-  },
-  segmentActive: {
-    backgroundColor: Colors.white,
-    shadowColor: Colors.textPrimary,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
-    elevation: 1,
-  },
-  segmentText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: Colors.textMuted,
-  },
-  segmentTextActive: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: Colors.textPrimary,
   },
   emptyWrap: {
     flex: 1,

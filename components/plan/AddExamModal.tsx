@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Pressable, ActivityIndicator, Alert, ScrollView, StyleSheet } from 'react-native';
 import { BottomSheetModal } from '@/components/ui/BottomSheetModal';
+import { ModalCloseButton } from '@/components/ui/ModalCloseButton';
 import { Colors, Spacing } from '@/constants/theme';
 import { planService } from '@/services/plan.service';
 import {
@@ -127,9 +128,7 @@ export function AddExamModal({ visible, onClose, onAdd, editingExam }: AddExamMo
           <>
             <View style={styles.headerRow}>
               <Text style={styles.title}>{editingExam ? 'Edit exam' : 'Set up your exam'}</Text>
-              <TouchableOpacity style={styles.closeBtn} onPress={handleClose}>
-                <Text style={styles.closeBtnText}>✕</Text>
-              </TouchableOpacity>
+              <ModalCloseButton onPress={handleClose} />
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
@@ -214,11 +213,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14,
   },
   title: { fontSize: 19, fontWeight: '800', color: Colors.textPrimary, letterSpacing: -0.3, flex: 1, marginRight: 10 },
-  closeBtn: {
-    width: 32, height: 32, borderRadius: 16, backgroundColor: Colors.border,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  closeBtnText: { fontSize: 13, color: Colors.textSecondary },
   saveBtn: {
     marginTop: 20, backgroundColor: Colors.primary, borderRadius: 14,
     paddingVertical: 15, alignItems: 'center', justifyContent: 'center',

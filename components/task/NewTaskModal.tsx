@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable, Switch, ScrollView, StyleSheet, Platform } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { BottomSheetModal } from '@/components/ui/BottomSheetModal';
+import { ModalCloseButton } from '@/components/ui/ModalCloseButton';
+import { Chip } from '@/components/ui/Chip';
 import { useNewTaskModal } from '@/contexts/NewTaskModalContext';
 import { useTasks } from '@/hooks/useTasks';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -132,9 +134,7 @@ export function NewTaskModal() {
     <BottomSheetModal visible={isOpen} onClose={handleClose}>
         <View style={styles.headerRow}>
           <Text style={styles.title}>{editingTask ? 'Edit task' : 'New task'}</Text>
-          <Pressable style={styles.closeButton} onPress={handleClose}>
-            <IconSymbol name="xmark" color={Colors.textSecondary} size={17} />
-          </Pressable>
+          <ModalCloseButton onPress={handleClose} variant="icon" />
         </View>
 
         <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
@@ -150,20 +150,14 @@ export function NewTaskModal() {
           <View style={styles.chipWrap}>
             {CATEGORY_ORDER.map((id) => {
               const c = TaskCategories[id];
-              const on = category === id;
               return (
-                <Pressable
+                <Chip
                   key={id}
-                  style={[
-                    styles.pillChip,
-                    { backgroundColor: on ? c.color : Colors.white, borderColor: on ? c.color : Colors.border },
-                  ]}
+                  label={c.label}
+                  selected={category === id}
                   onPress={() => setCategory(id)}
-                >
-                  <Text style={[styles.pillChipText, { color: on ? Colors.white : Colors.textSecondary }]}>
-                    {c.label}
-                  </Text>
-                </Pressable>
+                  activeColor={c.color}
+                />
               );
             })}
           </View>
@@ -259,18 +253,16 @@ export function NewTaskModal() {
 
           {recurring && (
             <View style={styles.freqChipRow}>
-              {TASK_FREQ_OPTIONS.map((f) => {
-                const on = freq === f.key;
-                return (
-                  <Pressable
-                    key={f.key}
-                    style={[styles.freqChip, on && styles.freqChipActive]}
-                    onPress={() => setFreq(f.key)}
-                  >
-                    <Text style={[styles.freqChipText, on && styles.freqChipTextActive]}>{f.label}</Text>
-                  </Pressable>
-                );
-              })}
+              {TASK_FREQ_OPTIONS.map((f) => (
+                <Chip
+                  key={f.key}
+                  label={f.label}
+                  selected={freq === f.key}
+                  onPress={() => setFreq(f.key)}
+                  activeColor={Colors.primaryLight}
+                  size="compact"
+                />
+              ))}
             </View>
           )}
 
@@ -315,14 +307,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: Colors.textPrimary,
     letterSpacing: -0.3,
-  },
-  closeButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: Colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   input: {
     borderWidth: 1.5,
@@ -380,16 +364,6 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
   },
-  pillChip: {
-    borderWidth: 1.5,
-    borderRadius: 999,
-    paddingVertical: 9,
-    paddingHorizontal: 14,
-  },
-  pillChipText: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
   priorityRow: {
     flexDirection: 'row',
     gap: 8,
@@ -432,28 +406,6 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
     marginTop: 10,
-  },
-  freqChip: {
-    paddingHorizontal: 14,
-    height: 34,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.white,
-  },
-  freqChipActive: {
-    backgroundColor: Colors.primaryLight,
-    borderColor: Colors.primaryLight,
-  },
-  freqChipText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-  },
-  freqChipTextActive: {
-    color: Colors.white,
   },
   footerRow: {
     flexDirection: 'row',

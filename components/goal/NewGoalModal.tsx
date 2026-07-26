@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { BottomSheetModal } from '@/components/ui/BottomSheetModal';
+import { Chip } from '@/components/ui/Chip';
 import { Colors, Spacing, Radius } from '@/constants/theme';
 import { TaskCategories } from '@/constants/taskMeta';
 import { goalService } from '@/services/goal.service';
@@ -185,23 +186,15 @@ export function NewGoalModal({ visible, onClose, onCreate, editingGoal, onSave }
 
             <Text style={styles.sheetEyebrow}>Type</Text>
             <View style={styles.typeRow}>
-              {GOAL_TYPES.map((t) => {
-                const on = goalType === t.id;
-                return (
-                  <Pressable
-                    key={t.id}
-                    style={[
-                      styles.typeChip,
-                      { backgroundColor: on ? t.color : Colors.white, borderColor: on ? t.color : Colors.border },
-                    ]}
-                    onPress={() => setGoalType(t.id)}
-                  >
-                    <Text style={[styles.typeChipText, { color: on ? Colors.white : Colors.textSecondary }]}>
-                      {t.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+              {GOAL_TYPES.map((t) => (
+                <Chip
+                  key={t.id}
+                  label={t.label}
+                  selected={goalType === t.id}
+                  onPress={() => setGoalType(t.id)}
+                  activeColor={t.color}
+                />
+              ))}
             </View>
 
             <TextInput
@@ -347,16 +340,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-  },
-  typeChip: {
-    borderWidth: 1.5,
-    borderRadius: 999,
-    paddingVertical: 9,
-    paddingHorizontal: 14,
-  },
-  typeChipText: {
-    fontSize: 13,
-    fontWeight: '700',
   },
   input: {
     marginTop: 16,

@@ -8,6 +8,7 @@ import { BackButton } from '@/components/ui/BackButton';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { DashedAddButton } from '@/components/ui/DashedAddButton';
 import { Card } from '@/components/ui/Card';
+import { Chip } from '@/components/ui/Chip';
 import { Colors, Spacing } from '@/constants/theme';
 import { TaskCategories, TaskCategoryId } from '@/constants/taskMeta';
 import { useHabits } from '@/hooks/useHabits';
@@ -205,43 +206,29 @@ export default function Habits() {
           <View style={styles.chipWrap}>
             {CATEGORY_ORDER.map((id) => {
               const c = TaskCategories[id];
-              const on = habitCategory === id;
               return (
-                <Pressable
+                <Chip
                   key={id}
-                  style={[
-                    styles.categoryChip,
-                    { backgroundColor: on ? c.color : Colors.white, borderColor: on ? c.color : Colors.border },
-                  ]}
+                  label={c.label}
+                  selected={habitCategory === id}
                   onPress={() => setHabitCategory(id)}
-                >
-                  <Text style={[styles.categoryChipText, { color: on ? Colors.white : Colors.textSecondary }]}>
-                    {c.label}
-                  </Text>
-                </Pressable>
+                  activeColor={c.color}
+                />
               );
             })}
           </View>
 
           <Text style={styles.sheetEyebrow}>Repeats</Text>
           <View style={styles.chipWrap}>
-            {FREQ_OPTIONS.map((f) => {
-              const on = habitFreq === f.id;
-              return (
-                <Pressable
-                  key={f.id}
-                  style={[
-                    styles.categoryChip,
-                    { backgroundColor: on ? Colors.primary : Colors.white, borderColor: on ? Colors.primary : Colors.border },
-                  ]}
-                  onPress={() => setHabitFreq(f.id)}
-                >
-                  <Text style={[styles.categoryChipText, { color: on ? Colors.white : Colors.textSecondary }]}>
-                    {f.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
+            {FREQ_OPTIONS.map((f) => (
+              <Chip
+                key={f.id}
+                label={f.label}
+                selected={habitFreq === f.id}
+                onPress={() => setHabitFreq(f.id)}
+                activeColor={Colors.primary}
+              />
+            ))}
           </View>
 
           <Pressable
@@ -372,16 +359,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-  },
-  categoryChip: {
-    borderWidth: 1.5,
-    borderRadius: 999,
-    paddingVertical: 9,
-    paddingHorizontal: 14,
-  },
-  categoryChipText: {
-    fontSize: 13,
-    fontWeight: '700',
   },
   createButton: {
     alignItems: 'center',

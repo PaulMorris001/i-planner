@@ -5,6 +5,7 @@ import { GreetingHeader } from '@/components/ui/GreetingHeader';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { CalendarConnectGate } from '@/components/plan/CalendarConnectGate';
 import { ItemActionSheet } from '@/components/ui/ItemActionSheet';
+import { SegmentedToggle } from '@/components/ui/SegmentedToggle';
 import { Colors, Spacing } from '@/constants/theme';
 import { TaskCategories, TaskPriorities, TaskPriorityId } from '@/constants/taskMeta';
 import { COURSE_COLORS, COURSE_SOFT_COLORS } from '@/constants/classColors';
@@ -17,6 +18,11 @@ import { weekdayIndexMonday, taskOccursOnDay } from '@/utils/date';
 import { parseTimeToMinutes } from '@/utils/time';
 import type { Task } from '@/types/task.types';
 import type { ClassItem } from '@/types/plan.types';
+
+const VIEW_OPTIONS: { key: 'day' | 'week'; label: string }[] = [
+  { key: 'day', label: 'Day' },
+  { key: 'week', label: 'Week' },
+];
 
 const DAY_FULL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -208,20 +214,7 @@ export default function Planner() {
       <GreetingHeader />
 
       <View style={styles.body}>
-        <View style={styles.segmented}>
-          <Pressable
-            style={[styles.segment, view === 'day' && styles.segmentActive]}
-            onPress={() => setView('day')}
-          >
-            <Text style={view === 'day' ? styles.segmentTextActive : styles.segmentText}>Day</Text>
-          </Pressable>
-          <Pressable
-            style={[styles.segment, view === 'week' && styles.segmentActive]}
-            onPress={() => setView('week')}
-          >
-            <Text style={view === 'week' ? styles.segmentTextActive : styles.segmentText}>Week</Text>
-          </Pressable>
-        </View>
+        <SegmentedToggle options={VIEW_OPTIONS} value={view} onChange={setView} />
 
         {plan.classes.length > 0 && (
           <ScrollView
@@ -356,39 +349,6 @@ const styles = StyleSheet.create({
   body: {
     marginTop: Spacing.md,
     paddingHorizontal: Spacing.md,
-  },
-  segmented: {
-    flexDirection: 'row',
-    gap: 5,
-    backgroundColor: Colors.offWhite,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 12,
-    padding: 4,
-  },
-  segment: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 9,
-    borderRadius: 9,
-  },
-  segmentActive: {
-    backgroundColor: Colors.white,
-    shadowColor: Colors.textPrimary,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
-    elevation: 1,
-  },
-  segmentText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.textMuted,
-  },
-  segmentTextActive: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.textPrimary,
   },
   courseFilterRow: {
     flexDirection: 'row',

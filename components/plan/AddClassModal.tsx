@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Platform } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { BottomSheetModal } from '@/components/ui/BottomSheetModal';
+import { ModalCloseButton } from '@/components/ui/ModalCloseButton';
+import { Chip } from '@/components/ui/Chip';
 import { Colors, Spacing, Radius } from '@/constants/theme';
 import { weekdayIndexMonday } from '@/utils/date';
 import { parseTimeToMinutes } from '@/utils/time';
@@ -101,9 +103,7 @@ export function AddClassModal({ visible, onClose, onAdd, editingClass }: AddClas
     <BottomSheetModal visible={visible} onClose={handleClose} maxHeightPct={88}>
         <View style={styles.sheetHeaderRow}>
           <Text style={styles.sheetTitle}>{editingClass ? 'Edit class' : 'Add a class'}</Text>
-          <TouchableOpacity style={styles.closeBtn} onPress={handleClose}>
-            <Text style={styles.closeBtnText}>✕</Text>
-          </TouchableOpacity>
+          <ModalCloseButton onPress={handleClose} />
         </View>
         <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           <TextInput
@@ -147,14 +147,14 @@ export function AddClassModal({ visible, onClose, onAdd, editingClass }: AddClas
           {recurring && (
             <View style={styles.chipRow}>
               {CLASS_FREQ_OPTIONS.map(f => (
-                <TouchableOpacity
+                <Chip
                   key={f.key}
-                  style={[styles.chip, freq === f.key && { backgroundColor: '#6366F1', borderColor: '#6366F1' }]}
+                  label={f.label}
+                  selected={freq === f.key}
                   onPress={() => setFreq(f.key)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.chipText, freq === f.key && styles.chipTextActive]}>{f.label}</Text>
-                </TouchableOpacity>
+                  activeColor="#6366F1"
+                  size="compact"
+                />
               ))}
             </View>
           )}
@@ -192,11 +192,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14,
   },
   sheetTitle: { fontSize: 19, fontWeight: '800', color: Colors.textPrimary, letterSpacing: -0.3, flex: 1, marginRight: 10 },
-  closeBtn: {
-    width: 32, height: 32, borderRadius: 16, backgroundColor: Colors.border,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  closeBtnText: { fontSize: 13, color: Colors.textSecondary },
   sheetEyebrow: {
     fontSize: 12, fontWeight: '700', color: Colors.textMuted,
     textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 16, marginBottom: 9,
@@ -206,14 +201,6 @@ const styles = StyleSheet.create({
     padding: 14, fontSize: 15, color: Colors.textPrimary, backgroundColor: Colors.white,
   },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
-  chip: {
-    paddingHorizontal: 14, height: 34, borderRadius: Radius.full,
-    borderWidth: 1, borderColor: Colors.border,
-    alignItems: 'center', justifyContent: 'center',
-    backgroundColor: Colors.white,
-  },
-  chipText:       { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
-  chipTextActive: { color: Colors.white },
 
   datePicker: {
     height: 48, borderRadius: Radius.md, borderWidth: 1.5,
