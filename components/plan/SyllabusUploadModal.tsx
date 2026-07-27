@@ -74,10 +74,22 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
       const file = new File(asset.uri);
       const fileBase64 = await file.base64();
       const extraction = await syllabusService.extract({ fileBase64, filename: asset.name });
+      const extractedDeadlines = extraction.deadlines.map((d, i) => ({
+        key: `ex-${i}`,
+        title: d.title,
+        date: new Date(d.date),
+      }));
       setFileName(asset.name);
       setCourseName(extraction.courseName);
       setDeadlines(
-        extraction.deadlines.map((d, i) => ({ key: `ex-${i}`, title: d.title, date: new Date(d.date) }))
+        extractedDeadlines.length > 0
+          ? extractedDeadlines
+          // AI found no deadlines — start the review screen with one blank,
+          // already-editable row instead of just the "no deadlines detected"
+          // message, so there's something on screen the user can immediately
+          // type into rather than a separate "+ Add deadline" button they'd
+          // have to notice and tap first.
+          : [{ key: `custom-${Date.now()}`, title: '', date: new Date() }]
       );
       setStep('review');
     } catch (err) {
