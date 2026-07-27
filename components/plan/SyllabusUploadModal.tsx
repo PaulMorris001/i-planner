@@ -4,6 +4,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import * as DocumentPicker from 'expo-document-picker';
 import { File } from 'expo-file-system';
 import { BottomSheetModal } from '@/components/ui/BottomSheetModal';
+import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors, Spacing, Radius } from '@/constants/theme';
 import { syllabusService } from '@/services/syllabus.service';
 import { usePlan } from '@/hooks/usePlan';
@@ -18,11 +19,18 @@ interface DraftDeadline {
   date: Date;
 }
 
-type Step = 'pick' | 'extracting' | 'review' | 'creating';
+type Step = 'pick' | 'extracting' | 'review' | 'creating' | 'success';
 
 interface SyllabusUploadModalProps {
   visible: boolean;
   onClose: () => void;
+}
+
+interface SuccessSummary {
+  courseName: string;
+  savedCount: number;
+  totalCount: number;
+  failedCount: number;
 }
 
 function formatDate(date: Date): string {
@@ -46,6 +54,7 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
   // than real dated deadlines — changes the review screen's copy so the
   // placeholder dates don't look like something the AI actually found.
   const [showingTopicsFallback, setShowingTopicsFallback] = useState(false);
+  const [successSummary, setSuccessSummary] = useState<SuccessSummary | null>(null);
 
   const reset = () => {
     setStep('pick');
@@ -54,6 +63,7 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
     setDeadlines([]);
     setDatePickerKey(null);
     setShowingTopicsFallback(false);
+    setSuccessSummary(null);
   };
 
   useEffect(() => {
@@ -167,14 +177,13 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
         console.error('[SyllabusUploadModal] failed to record syllabus metadata', err);
       });
 
-      onClose();
-      reset();
-      Alert.alert(
-        'Syllabus added',
-        failed > 0
-          ? `${name} was added with ${validDeadlines.length - failed} of ${validDeadlines.length} deadlines — ${failed} failed to save, add those manually.`
-          : `${name} was added with ${validDeadlines.length} deadline${validDeadlines.length === 1 ? '' : 's'}.`
-      );
+      setSuccessSummary({
+        courseName: name,
+        savedCount: validDeadlines.length - failed,
+        totalCount: validDeadlines.length,
+        failedCount: failed,
+      });
+      setStep('success');
     } catch (err) {
       console.error('[SyllabusUploadModal] failed to save syllabus', err);
       Alert.alert("Couldn't save", 'Check your connection and try again.');
@@ -282,6 +291,23 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
             </Pressable>
           </View>
         </>
+      )}
+
+      {step === 'success' && successSummary && (
+        <View style={styles.successBox}>
+          <View style={styles.successIcon}>
+            <IconSymbol name="checkmark" color={Colors.success} size={26} />
+          </View>
+          <Text style={styles.successTitle}>Syllabus added</Text>
+          <Text style={styles.successSub}>
+            {successSummary.failedCount > 0
+              ? `${successSummary.courseName} was added with ${successSummary.savedCount} of ${successSummary.totalCount} deadlines — ${successSummary.failedCount} failed to save, add those manually.`
+              : `${successSummary.courseName} was added with ${successSummary.totalCount} deadline${successSummary.totalCount === 1 ? '' : 's'}.`}
+          </Text>
+          <Pressable style={styles.successButton} onPress={handleClose}>
+            <Text style={styles.successButtonText}>Done</Text>
+          </Pressable>
+        </View>
       )}
     </BottomSheetModal>
   );
@@ -434,6 +460,47 @@ const styles = StyleSheet.create({
   },
   confirmButtonText: {
     fontSize: 15,
+    fontWeight: '700',
+    color: Colors.white,
+  },
+  successBox: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  successIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: Colors.successSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  successTitle: {
+    fontSize: 19,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+    letterSpacing: -0.3,
+  },
+  successSub: {
+    fontSize: 13.5,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 19,
+    marginTop: 6,
+    paddingHorizontal: 6,
+  },
+  successButton: {
+    marginTop: 22,
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primaryLight,
+    borderRadius: 14,
+    paddingVertical: 15,
+  },
+  successButtonText: {
+    fontSize: 16,
     fontWeight: '700',
     color: Colors.white,
   },
