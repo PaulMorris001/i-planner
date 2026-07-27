@@ -10,7 +10,7 @@ import { SectionCardHeader } from '@/components/ui/SectionCardHeader';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { COURSE_COLORS } from '@/constants/classColors';
 import { Routes } from '@/constants/routes';
-import { TaskCategories } from '@/constants/taskMeta';
+import { TaskCategories, TaskPriorities, type TaskCategoryId, type TaskPriorityId } from '@/constants/taskMeta';
 import { Colors } from '@/constants/theme';
 import { usePlan } from '@/hooks/usePlan';
 import { useTasks } from '@/hooks/useTasks';
@@ -77,8 +77,16 @@ export function StudentPathView({ quickLinks, onAddClass, onAddSyllabus, onViewG
   // Nearest dated items from onboarding (recruitment tasks + "other" items
   // that were given a date) plus real tasks with a due date, soonest-first
   // and excluding anything already past or done — this feeds both the "Up
-  // next" stat card and the UPCOMING list below.
-  const studentUpcoming = [
+  // next" stat card and the UPCOMING list below. Only real tasks carry
+  // category/priority/time — recruitment/other items don't have that data.
+  const studentUpcoming: {
+    title: string;
+    date: string;
+    dotColor: string;
+    category?: TaskCategoryId;
+    priority?: TaskPriorityId;
+    time?: string;
+  }[] = [
     ...plan.recruitment.map((r) => ({
       title: `${r.company} — ${r.taskType}`,
       date: r.date,
@@ -93,6 +101,9 @@ export function StudentPathView({ quickLinks, onAddClass, onAddSyllabus, onViewG
         title: t.title,
         date: t.dueDate,
         dotColor: TaskCategories[t.category].color,
+        category: t.category,
+        priority: t.priority,
+        time: t.time,
       })),
   ]
     // Calendar-day comparison, not raw instant — recruitment/other/task dates
@@ -264,9 +275,36 @@ export function StudentPathView({ quickLinks, onAddClass, onAddSyllabus, onViewG
         {studentUpcoming.map((item) => (
           <View key={`${item.title}-${item.date}`} style={styles.upcomingRow}>
             <View style={[styles.upcomingDot, { backgroundColor: item.dotColor }]} />
-            <Text style={styles.upcomingTitle} numberOfLines={1}>
-              {item.title}
-            </Text>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.upcomingTitle} numberOfLines={1}>
+                {item.title}
+              </Text>
+              {(item.category || item.priority || item.time) && (
+                <View style={styles.upcomingMetaRow}>
+                  {item.category && (
+                    <Text
+                      style={[
+                        styles.upcomingMetaChip,
+                        { color: TaskCategories[item.category].color, backgroundColor: TaskCategories[item.category].soft },
+                      ]}
+                    >
+                      {TaskCategories[item.category].label}
+                    </Text>
+                  )}
+                  {item.priority && (
+                    <Text
+                      style={[
+                        styles.upcomingMetaChip,
+                        { color: TaskPriorities[item.priority].color, backgroundColor: TaskPriorities[item.priority].soft },
+                      ]}
+                    >
+                      {TaskPriorities[item.priority].label}
+                    </Text>
+                  )}
+                  {!!item.time && <Text style={styles.upcomingMetaTime}>{item.time}</Text>}
+                </View>
+              )}
+            </View>
             <Text style={styles.upcomingDate}>{formatShortDate(item.date)}</Text>
           </View>
         ))}

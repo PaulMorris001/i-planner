@@ -260,10 +260,28 @@ export const dashboardStyles = StyleSheet.create({
     borderRadius: 3.5,
   },
   upcomingTitle: {
-    flex: 1,
     fontSize: 14,
     fontWeight: '500',
     color: Colors.textPrimary,
+  },
+  upcomingMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 3,
+  },
+  upcomingMetaChip: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  upcomingMetaTime: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.textMuted,
   },
   upcomingDate: {
     fontSize: 12.5,
