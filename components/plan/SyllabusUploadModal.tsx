@@ -42,6 +42,10 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
   const [courseName, setCourseName] = useState('');
   const [deadlines, setDeadlines] = useState<DraftDeadline[]>([]);
   const [datePickerKey, setDatePickerKey] = useState<string | null>(null);
+  // True when `deadlines` was seeded from the syllabus's topic outline rather
+  // than real dated deadlines — changes the review screen's copy so the
+  // placeholder dates don't look like something the AI actually found.
+  const [showingTopicsFallback, setShowingTopicsFallback] = useState(false);
 
   const reset = () => {
     setStep('pick');
@@ -49,6 +53,7 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
     setCourseName('');
     setDeadlines([]);
     setDatePickerKey(null);
+    setShowingTopicsFallback(false);
   };
 
   useEffect(() => {
@@ -79,16 +84,23 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
         title: d.title,
         date: new Date(d.date),
       }));
+      // No dated deadlines — fall back to the syllabus's topic outline
+      // instead (subtopics never have a real date, so every row starts on
+      // today and the user picks the actual ones). Only if even that comes
+      // back empty do we fall back further to one blank row to type into.
+      const topicFallback = extraction.subtopics.map((title, i) => ({
+        key: `topic-${i}`,
+        title,
+        date: new Date(),
+      }));
       setFileName(asset.name);
       setCourseName(extraction.courseName);
+      setShowingTopicsFallback(extractedDeadlines.length === 0 && topicFallback.length > 0);
       setDeadlines(
         extractedDeadlines.length > 0
           ? extractedDeadlines
-          // AI found no deadlines — start the review screen with one blank,
-          // already-editable row instead of just the "no deadlines detected"
-          // message, so there's something on screen the user can immediately
-          // type into rather than a separate "+ Add deadline" button they'd
-          // have to notice and tap first.
+          : topicFallback.length > 0
+          ? topicFallback
           : [{ key: `custom-${Date.now()}`, title: '', date: new Date() }]
       );
       setStep('review');
@@ -205,7 +217,15 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
             style={styles.input}
           />
 
-          <Text style={[styles.fieldLabel, { marginTop: 16 }]}>Deadlines</Text>
+          <Text style={[styles.fieldLabel, { marginTop: 16 }]}>
+            {showingTopicsFallback ? "Topics — set a date for each" : 'Deadlines'}
+          </Text>
+          {showingTopicsFallback && (
+            <Text style={styles.topicsNote}>
+              No dated deadlines found, so here's the course's topic outline instead — pick a date for
+              each one you want tracked, or remove ones you don't.
+            </Text>
+          )}
           <ScrollView style={styles.deadlineList} keyboardShouldPersistTaps="handled">
             {deadlines.map((d) => (
               <View key={d.key} style={styles.deadlineRow}>
@@ -320,6 +340,13 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: Colors.textPrimary,
     backgroundColor: Colors.white,
+  },
+  topicsNote: {
+    fontSize: 12.5,
+    color: Colors.textSecondary,
+    lineHeight: 17,
+    marginTop: -4,
+    marginBottom: 10,
   },
   deadlineList: {
     marginTop: 4,
