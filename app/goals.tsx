@@ -11,7 +11,7 @@ import { Card } from '@/components/ui/Card';
 import { confirmDelete } from '@/utils/confirmDelete';
 import { Colors, Spacing } from '@/constants/theme';
 import { useGoals } from '@/hooks/useGoals';
-import type { Goal, Milestone } from '@/types/goal.types';
+import type { Goal, Milestone, MilestonePatch } from '@/types/goal.types';
 
 export default function Goals() {
   const { goals, loading, createGoal, updateGoal, deleteGoal } = useGoals();
@@ -28,7 +28,16 @@ export default function Goals() {
 
   const handleSaveGoal = async (
     id: string,
-    patch: { title: string; type: Goal['type']; tag: string; color: string; targetRole?: string; targetIndustry?: string; targetDate?: string }
+    patch: {
+      title: string;
+      type: Goal['type'];
+      tag: string;
+      color: string;
+      targetRole?: string;
+      targetIndustry?: string;
+      targetDate?: string;
+      milestones?: MilestonePatch[];
+    }
   ) => {
     await updateGoal(id, patch);
   };

@@ -18,6 +18,7 @@ import { useOnboarding } from '@/hooks/useOnboarding';
 import { useSettings } from '@/hooks/useSettings';
 import { syncClassToAppleCalendar } from '@/utils/appleCalendarSync';
 import { scheduleClassNotifications } from '@/utils/notifications';
+import { parseISODateLocal } from '@/utils/date';
 import type {
   StudentPlan as StudentPlanType,
   ClassItem,
@@ -71,7 +72,7 @@ function formatTime(date: Date): string {
 
 function classLabel(item: ClassItem): string {
   if (!item.recurring) {
-    return `One time · ${formatDate(new Date(item.startDate))}`;
+    return `One time · ${formatDate(parseISODateLocal(item.startDate))}`;
   }
   const map: Record<ClassFrequency, string> = {
     weekly:   `Weekly on ${DAY_FULL[item.dayIdxs?.[0] ?? 0]}`,
@@ -339,7 +340,7 @@ export default function StudentPlan() {
                         </View>
                         <View style={styles.itemTextBlock}>
                           <Text style={styles.itemTitle} numberOfLines={1}>{item.company}</Text>
-                          <Text style={styles.itemMeta}>{item.taskType} · {formatDate(new Date(item.date))}</Text>
+                          <Text style={styles.itemMeta}>{item.taskType} · {formatDate(parseISODateLocal(item.date))}</Text>
                         </View>
                         <View style={styles.itemCheck}>
                           <Text style={styles.itemCheckMark}>✓</Text>

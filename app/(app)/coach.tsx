@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Alert, StyleSheet } from 'react-native';
+import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Alert, Animated, StyleSheet } from 'react-native';
+import type { ReactNode } from 'react';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { SegmentedToggle } from '@/components/ui/SegmentedToggle';
+import { CoachMessageText } from '@/components/coach/CoachMessageText';
+import { TypingMessageText } from '@/components/coach/TypingMessageText';
 import { useOnboarding } from '@/hooks/useOnboarding';
 import { useTasks } from '@/hooks/useTasks';
 import { coachService } from '@/services/coach.service';
@@ -35,6 +38,24 @@ const SUGGESTIONS: Record<CoachModeId, string[]> = {
   goal: ['Set a study goal this week', 'Break down my exam prep', 'Suggest a habit'],
 };
 
+// Fades + slides a bubble in on mount only — since each message keeps the
+// same `key` (m.id) across re-renders, React never remounts an already-shown
+// bubble, so this only plays once per message, the moment it's first added,
+// rather than replaying on every re-render.
+function AnimatedMessageRow({ children }: { children: ReactNode }) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(10)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(opacity, { toValue: 1, duration: 240, useNativeDriver: true }),
+      Animated.spring(translateY, { toValue: 0, useNativeDriver: true, friction: 8, tension: 60 }),
+    ]).start();
+  }, [opacity, translateY]);
+
+  return <Animated.View style={{ opacity, transform: [{ translateY }] }}>{children}</Animated.View>;
+}
+
 export default function Coach() {
   const { focusProfile } = useOnboarding();
   const { refetch: refetchTasks, syncExternallyCreatedTask } = useTasks();
@@ -45,6 +66,10 @@ export default function Coach() {
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [sending, setSending] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  // The one reply that should type in — set the instant it arrives, then
+  // never reassigned for that id again, so its typing effect plays exactly
+  // once and every other bubble (history, older replies) renders in full.
+  const [typingMessageId, setTypingMessageId] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
 
   const visibleModes = MODES.filter((m) => m.id !== 'study' || focusProfile !== 'professional');
@@ -57,6 +82,7 @@ export default function Coach() {
   useEffect(() => {
     let cancelled = false;
     setMessages([]);
+    setTypingMessageId(null);
     setLoadingHistory(true);
     coachService
       .list(mode)
@@ -113,6 +139,7 @@ export default function Coach() {
     try {
       const reply = await coachService.send(mode, text);
       setMessages((prev) => [...prev, reply]);
+      setTypingMessageId(reply.id);
       if (reply.createdTaskIds?.length) {
         // The AI-created task(s) exist server-side (with Google sync already
         // applied) but still need the client-side Apple Calendar/notification
@@ -125,7 +152,15 @@ export default function Coach() {
       }
     } catch (err) {
       console.error('[Coach] failed to send message', err);
-      Alert.alert("Couldn't send message", 'Check your connection and try again.');
+      // The AI-usage-cap error (429) has a specific, useful message from the
+      // server — show it as-is rather than the generic connection message.
+      const status = (err as { status?: number } | null)?.status;
+      const serverMessage = (err as { message?: string } | null)?.message;
+      if (status === 429 && serverMessage) {
+        Alert.alert("You've hit your AI Coach limit", serverMessage);
+      } else {
+        Alert.alert("Couldn't send message", 'Check your connection and try again.');
+      }
       setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
       setInput(text);
     } finally {
@@ -171,32 +206,42 @@ export default function Coach() {
             keyboardShouldPersistTaps="handled"
           >
             {messages.map((m) => (
-              <View
-                key={m.id}
-                style={[styles.bubbleRow, m.role === 'user' ? styles.bubbleRowUser : styles.bubbleRowAssistant]}
-              >
-                <Pressable
-                  onLongPress={() => handleCopyMessage(m)}
-                  style={[styles.bubble, m.role === 'user' ? styles.bubbleUser : styles.bubbleAssistant]}
-                >
-                  <Text style={m.role === 'user' ? styles.bubbleTextUser : styles.bubbleTextAssistant}>
-                    {m.content}
-                  </Text>
-                  {copiedId === m.id && (
-                    <View style={styles.copiedPill}>
-                      <IconSymbol name="checkmark" color={Colors.white} size={11} />
-                      <Text style={styles.copiedPillText}>Copied</Text>
-                    </View>
-                  )}
-                </Pressable>
-              </View>
+              <AnimatedMessageRow key={m.id}>
+                <View style={[styles.bubbleRow, m.role === 'user' ? styles.bubbleRowUser : styles.bubbleRowAssistant]}>
+                  <View style={[styles.bubble, m.role === 'user' ? styles.bubbleUser : styles.bubbleAssistant]}>
+                    {m.role === 'user' ? (
+                      <CoachMessageText content={m.content} variant="user" />
+                    ) : (
+                      <>
+                        <TypingMessageText content={m.content} variant="assistant" animate={m.id === typingMessageId} />
+                        <Pressable
+                          style={styles.copyButton}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          onPress={() => handleCopyMessage(m)}
+                        >
+                          <IconSymbol name="doc.on.doc" color={Colors.textMuted} size={13} />
+                          <Text style={styles.copyButtonText}>Copy</Text>
+                        </Pressable>
+                      </>
+                    )}
+                    {copiedId === m.id && (
+                      <View style={styles.copiedPill}>
+                        <IconSymbol name="checkmark" color={Colors.white} size={11} />
+                        <Text style={styles.copiedPillText}>Copied</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              </AnimatedMessageRow>
             ))}
             {sending && (
-              <View style={[styles.bubbleRow, styles.bubbleRowAssistant]}>
-                <View style={[styles.bubble, styles.bubbleAssistant]}>
-                  <ActivityIndicator size="small" color={Colors.textMuted} />
+              <AnimatedMessageRow>
+                <View style={[styles.bubbleRow, styles.bubbleRowAssistant]}>
+                  <View style={[styles.bubble, styles.bubbleAssistant]}>
+                    <ActivityIndicator size="small" color={Colors.textMuted} />
+                  </View>
                 </View>
-              </View>
+              </AnimatedMessageRow>
             )}
           </ScrollView>
         )}
@@ -349,15 +394,20 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     borderBottomLeftRadius: 4,
   },
-  bubbleTextUser: {
-    fontSize: 14.5,
-    color: Colors.white,
-    lineHeight: 20,
+  copyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 5,
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
   },
-  bubbleTextAssistant: {
-    fontSize: 14.5,
-    color: Colors.textPrimary,
-    lineHeight: 20,
+  copyButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textMuted,
   },
   copiedPill: {
     position: 'absolute',

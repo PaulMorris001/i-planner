@@ -8,9 +8,10 @@ import { ListRow } from '@/components/ui/ListRow';
 import { DashedAddButton } from '@/components/ui/DashedAddButton';
 import { Colors, Spacing } from '@/constants/theme';
 import { useSyllabi } from '@/hooks/useSyllabi';
+import { parseISODateLocal } from '@/utils/date';
 
 function formatShortDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return parseISODateLocal(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
 export default function Syllabi() {

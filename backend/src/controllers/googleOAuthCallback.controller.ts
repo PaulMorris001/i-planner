@@ -4,6 +4,7 @@ import { Plan } from '../models/Plan';
 import { Task } from '../models/Task';
 import { env } from '../config/env';
 import { verifyState } from '../utils/googleOAuthState';
+import { encryptToken } from '../utils/tokenCrypto';
 import { upsertClassEvent, upsertTaskEvent, SyncableClassItem } from '../services/googleCalendarSync';
 
 const APP_REDIRECT = 'iplanner://oauth2redirect';
@@ -99,10 +100,10 @@ export async function handleGoogleCalendarCallback(req: Request, res: Response) 
       {
         $set: {
           googleCalendarConnected: true,
-          googleAccessToken: tokenData.access_token,
+          googleAccessToken: encryptToken(tokenData.access_token),
           // Google only returns a refresh_token on the first consent — don't
           // overwrite a previously-stored one with undefined on reconnect.
-          ...(tokenData.refresh_token ? { googleRefreshToken: tokenData.refresh_token } : {}),
+          ...(tokenData.refresh_token ? { googleRefreshToken: encryptToken(tokenData.refresh_token) } : {}),
           googleTokenExpiresAt: new Date(Date.now() + tokenData.expires_in * 1000),
         },
       },

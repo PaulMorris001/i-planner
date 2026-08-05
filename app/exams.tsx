@@ -10,10 +10,11 @@ import { DashedAddButton } from '@/components/ui/DashedAddButton';
 import { Colors, Spacing } from '@/constants/theme';
 import { usePlan } from '@/hooks/usePlan';
 import { confirmDelete } from '@/utils/confirmDelete';
+import { parseISODateLocal } from '@/utils/date';
 import type { Exam } from '@/types/plan.types';
 
 function formatShortDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return parseISODateLocal(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
 export default function Exams() {

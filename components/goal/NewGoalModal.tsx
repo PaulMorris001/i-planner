@@ -16,7 +16,8 @@ import { Chip } from '@/components/ui/Chip';
 import { Colors, Spacing, Radius } from '@/constants/theme';
 import { TaskCategories } from '@/constants/taskMeta';
 import { goalService } from '@/services/goal.service';
-import type { Goal, GoalTypeId, NewGoalInput } from '@/types/goal.types';
+import { parseISODateLocal } from '@/utils/date';
+import type { Goal, GoalTypeId, MilestonePatch, NewGoalInput } from '@/types/goal.types';
 
 function formatDate(date: Date): string {
   return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -31,8 +32,13 @@ const GOAL_TYPES: { id: GoalTypeId; label: string; color: string }[] = [
 
 interface DraftMilestone {
   key: string;
+  // Present for a milestone that already exists on the goal being edited (so
+  // its identity/done state round-trips); absent for one just added here,
+  // which the backend assigns a fresh id to.
+  id?: string;
   title: string;
   dueLabel: string;
+  done?: boolean;
 }
 
 type Step = 'form' | 'generating' | 'review';
@@ -50,7 +56,7 @@ interface NewGoalModalProps {
   editingGoal?: Goal | null;
   onSave?: (
     id: string,
-    patch: { title: string; type: GoalTypeId; tag: string; color: string } & CareerGoalFields
+    patch: { title: string; type: GoalTypeId; tag: string; color: string; milestones?: MilestonePatch[] } & CareerGoalFields
   ) => Promise<void>;
 }
 
@@ -85,7 +91,10 @@ export function NewGoalModal({ visible, onClose, onCreate, editingGoal, onSave }
       setGoalName(editingGoal.title);
       setTargetRole(editingGoal.targetRole ?? '');
       setTargetIndustry(editingGoal.targetIndustry ?? '');
-      setTargetDate(editingGoal.targetDate ? new Date(editingGoal.targetDate) : null);
+      setTargetDate(editingGoal.targetDate ? parseISODateLocal(editingGoal.targetDate) : null);
+      setMilestones(
+        editingGoal.milestones.map((m) => ({ key: m.id, id: m.id, title: m.title, dueLabel: m.dueLabel, done: m.done }))
+      );
     } else {
       reset();
     }
@@ -108,6 +117,9 @@ export function NewGoalModal({ visible, onClose, onCreate, editingGoal, onSave }
         tag: selectedType.label,
         color: selectedType.color,
         targetDate: targetDate ? targetDate.toISOString() : '',
+        milestones: milestones
+          .filter((m) => m.title.trim().length > 0)
+          .map((m) => ({ id: m.id, title: m.title.trim(), done: m.done ?? false, dueLabel: m.dueLabel.trim() })),
         ...(selectedType.id === 'career'
           ? { targetRole: targetRole.trim(), targetIndustry: targetIndustry.trim() }
           : {}),
@@ -241,6 +253,40 @@ export function NewGoalModal({ visible, onClose, onCreate, editingGoal, onSave }
                   if (date) setTargetDate(date);
                 }}
               />
+            )}
+
+            {editingGoal && (
+              <>
+                <Text style={styles.sheetEyebrow}>Milestones</Text>
+                <ScrollView style={styles.editMilestoneList} keyboardShouldPersistTaps="handled">
+                  {milestones.map((m) => (
+                    <View key={m.key} style={styles.milestoneRow}>
+                      <View style={styles.milestoneInputs}>
+                        <TextInput
+                          value={m.title}
+                          onChangeText={(text) => updateMilestone(m.key, { title: text })}
+                          placeholder="Milestone"
+                          placeholderTextColor={Colors.textMuted}
+                          style={[styles.milestoneTitleInput, m.done && styles.milestoneTitleDone]}
+                        />
+                        <TextInput
+                          value={m.dueLabel}
+                          onChangeText={(text) => updateMilestone(m.key, { dueLabel: text })}
+                          placeholder="When? (e.g. This month)"
+                          placeholderTextColor={Colors.textMuted}
+                          style={styles.milestoneDueInput}
+                        />
+                      </View>
+                      <Pressable onPress={() => removeMilestone(m.key)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                        <Text style={styles.removeText}>✕</Text>
+                      </Pressable>
+                    </View>
+                  ))}
+                  <Pressable style={styles.addMilestoneButton} onPress={addMilestone}>
+                    <Text style={styles.addMilestoneText}>+ Add milestone</Text>
+                  </Pressable>
+                </ScrollView>
+              </>
             )}
 
             <Pressable
@@ -409,6 +455,12 @@ const styles = StyleSheet.create({
   milestoneList: {
     marginTop: 14,
   },
+  // Same list, but bounded — used in the edit form where it sits alongside
+  // other fields in one screen rather than owning the whole sheet.
+  editMilestoneList: {
+    marginTop: 10,
+    maxHeight: 220,
+  },
   milestoneRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -430,6 +482,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.textPrimary,
     padding: 0,
+  },
+  // Already-completed milestones (done state isn't editable here — that
+  // happens on the goal summary sheet — but still worth showing at a glance).
+  milestoneTitleDone: {
+    color: Colors.textMuted,
+    textDecorationLine: 'line-through',
   },
   milestoneDueInput: {
     fontSize: 12.5,

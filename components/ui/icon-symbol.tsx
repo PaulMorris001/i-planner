@@ -44,6 +44,7 @@ const MAPPING = {
   'trash': 'delete',
   'bell.fill': 'notifications',
   'info.circle': 'info',
+  'doc.on.doc': 'content-copy',
 } as IconMapping;
 
 /**

@@ -1,21 +1,31 @@
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { useState } from 'react';
+import { View, Text, Pressable, ActivityIndicator, Alert, StyleSheet } from 'react-native';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { BackButton } from '@/components/ui/BackButton';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card } from '@/components/ui/Card';
+import { SegmentedToggle } from '@/components/ui/SegmentedToggle';
 import { Colors, Spacing, Radius } from '@/constants/theme';
+import { usePurchases } from '@/contexts/PurchasesContext';
+import type { SubscriptionTier } from '@/types/subscription.types';
 
 interface Tier {
-  id: string;
+  id: SubscriptionTier;
   name: string;
-  price: string;
-  billed?: string;
+  monthlyPrice: string;
+  // Annual cost expressed as a per-month equivalent, for the "Annual" toggle
+  // state, plus the real yearly total shown as a small caption underneath.
+  annualMonthlyEquivalent: string;
+  annualTotal: string;
   desc: string;
   features: string[];
   highlight?: boolean;
-  cta: string;
-  ctaDisabled?: boolean;
+  // Product identifiers this tier's monthly/annual buttons map to — must
+  // match exactly what's created in App Store Connect / Play Console. Free
+  // has neither; it's never purchasable.
+  monthlyProductId?: string;
+  annualProductId?: string;
 }
 
 // Only features with real, shipped functionality behind them — no invented
@@ -25,7 +35,9 @@ const TIERS: Tier[] = [
   {
     id: 'free',
     name: 'Free',
-    price: '$0',
+    monthlyPrice: '$0',
+    annualMonthlyEquivalent: '$0',
+    annualTotal: '',
     desc: 'Start planning with the basics.',
     features: [
       'Basic task planning',
@@ -34,14 +46,13 @@ const TIERS: Tier[] = [
       'Reminders (15 min before + at due time)',
       'Progress tracking',
     ],
-    cta: 'Current plan',
-    ctaDisabled: true,
   },
   {
     id: 'student',
     name: 'Student / Edu',
-    price: '$6.99',
-    billed: '$69.90/yr',
+    monthlyPrice: '$6.99',
+    annualMonthlyEquivalent: '$5.83',
+    annualTotal: '$69.90/yr',
     desc: 'Stay on top of classes, exams, and deadlines.',
     features: [
       'Everything in Free',
@@ -52,14 +63,15 @@ const TIERS: Tier[] = [
       'Habit tracking with streaks',
       'Exam countdown',
     ],
-    cta: 'Coming soon',
-    ctaDisabled: true,
+    monthlyProductId: 'student_monthly',
+    annualProductId: 'student_annual',
   },
   {
     id: 'professional',
     name: 'Professional',
-    price: '$11.99',
-    billed: '$119.90/yr',
+    monthlyPrice: '$11.99',
+    annualMonthlyEquivalent: '$9.99',
+    annualTotal: '$119.90/yr',
     desc: 'Plan your work, career, and goals.',
     features: [
       'Everything in Student / Edu',
@@ -69,22 +81,55 @@ const TIERS: Tier[] = [
       'AI Plan My Day & AI Goal Coach',
     ],
     highlight: true,
-    cta: 'Coming soon',
-    ctaDisabled: true,
+    monthlyProductId: 'professional_monthly',
+    annualProductId: 'professional_annual',
   },
   {
     id: 'premium',
     name: 'Premium AI',
-    price: '$29',
-    billed: '$290/yr',
+    monthlyPrice: '$29',
+    annualMonthlyEquivalent: '$24.17',
+    annualTotal: '$290/yr',
     desc: 'Advanced AI planning for high-stakes goals.',
     features: ['Everything in Professional'],
-    cta: 'Coming soon',
-    ctaDisabled: true,
+    monthlyProductId: 'premium_monthly',
+    annualProductId: 'premium_annual',
   },
 ];
 
+const TIER_RANK: Record<SubscriptionTier, number> = { free: 0, student: 1, professional: 2, premium: 3 };
+
+const PERIOD_OPTIONS: { key: 'monthly' | 'annual'; label: string }[] = [
+  { key: 'monthly', label: 'Monthly' },
+  { key: 'annual', label: 'Annual' },
+];
+
 export default function Plans() {
+  const { ready, tier: currentTier, subscriptions, purchasing, purchase, restorePurchases } = usePurchases();
+  const [period, setPeriod] = useState<'monthly' | 'annual'>('monthly');
+  const [restoring, setRestoring] = useState(false);
+
+  const fetchedProductIds = new Set(subscriptions.map((s) => s.id));
+
+  const handleSubscribe = (tierRow: Tier) => {
+    const productId = period === 'monthly' ? tierRow.monthlyProductId : tierRow.annualProductId;
+    if (!productId) return;
+    purchase(productId);
+  };
+
+  const handleRestore = async () => {
+    setRestoring(true);
+    try {
+      await restorePurchases();
+      Alert.alert('Restored', "Any previous purchases tied to this account have been restored.");
+    } catch (err) {
+      console.error('[Plans] restore failed', err);
+      Alert.alert("Couldn't restore purchases", 'Check your connection and try again.');
+    } finally {
+      setRestoring(false);
+    }
+  };
+
   return (
     <ScreenWrapper backgroundColor={Colors.offWhite} scroll style={styles.scrollContent}>
       <BackButton />
@@ -96,60 +141,116 @@ export default function Plans() {
         subtitleSize={13.5}
       />
 
-      <View style={styles.noticeBox}>
-        <IconSymbol name="info.circle" color={Colors.warning} size={16} />
-        <Text style={styles.noticeText}>
-          Pricing shown is indicative and not final. Billing isn't live yet — every feature above is
-          currently available on the Free plan.
-        </Text>
-      </View>
+      {!ready && (
+        <View style={styles.noticeBox}>
+          <IconSymbol name="info.circle" color={Colors.warning} size={16} />
+          <Text style={styles.noticeText}>
+            Pricing shown is indicative and not final. Subscribing isn&apos;t available in this build yet —
+            every feature above is currently available on the Free plan.
+          </Text>
+        </View>
+      )}
+
+      <SegmentedToggle options={PERIOD_OPTIONS} value={period} onChange={setPeriod} style={styles.periodToggle} />
 
       <View style={styles.tierList}>
-        {TIERS.map((tier) => (
-          <Card key={tier.id} style={[styles.card, tier.highlight && styles.cardHighlight]}>
-            {tier.highlight && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>MOST POPULAR</Text>
-              </View>
-            )}
-            <Text style={styles.tierName}>{tier.name}</Text>
-            <Text style={styles.tierDesc}>{tier.desc}</Text>
-            <View style={styles.priceRow}>
-              <Text style={styles.price}>{tier.price}</Text>
-              <Text style={styles.priceUnit}>/mo</Text>
-            </View>
-            {tier.billed && <Text style={styles.billed}>{tier.billed}</Text>}
+        {TIERS.map((tierRow) => {
+          const isFree = tierRow.id === 'free';
+          const isCurrent = ready && currentTier === tierRow.id;
+          const productId = period === 'monthly' ? tierRow.monthlyProductId : tierRow.annualProductId;
+          const purchasable = ready && !isFree && !!productId && fetchedProductIds.has(productId);
+          const isPurchasingThis = !!productId && purchasing === productId;
 
-            <View style={styles.featureList}>
-              {tier.features.map((f) => (
-                <View key={f} style={styles.featureRow}>
-                  <IconSymbol name="checkmark" color={tier.highlight ? Colors.primaryLight : Colors.success} size={13} />
-                  <Text style={styles.featureText}>{f}</Text>
+          let ctaLabel: string;
+          let ctaDisabled: boolean;
+          if (isFree || isCurrent) {
+            ctaLabel = 'Current plan';
+            ctaDisabled = true;
+          } else if (!purchasable) {
+            ctaLabel = 'Coming soon';
+            ctaDisabled = true;
+          } else if (currentTier !== 'free') {
+            ctaLabel = TIER_RANK[tierRow.id] > TIER_RANK[currentTier] ? 'Upgrade' : 'Switch plan';
+            ctaDisabled = false;
+          } else {
+            ctaLabel = 'Subscribe';
+            ctaDisabled = false;
+          }
+
+          // Once the store has actually returned this product, always show its
+          // real localized price instead of the static estimate below — the
+          // static strings are US-only guesses and go stale the moment a
+          // price changes in App Store Connect / Play Console without a
+          // matching code change. The annual live price is the true yearly
+          // total (not a derived per-month figure, which would need parsing
+          // a formatted currency string back into a number), so its unit
+          // label reads "/yr" instead of "/mo" and needs no separate caption.
+          const liveProduct = productId ? subscriptions.find((s) => s.id === productId) : undefined;
+          const displayPrice =
+            liveProduct?.displayPrice ?? (period === 'monthly' ? tierRow.monthlyPrice : tierRow.annualMonthlyEquivalent);
+          const priceUnit = liveProduct ? (period === 'monthly' ? '/mo' : '/yr') : '/mo';
+          const displayCaption =
+            !liveProduct && period === 'annual' && tierRow.annualTotal ? `Billed ${tierRow.annualTotal}` : undefined;
+
+          return (
+            <Card key={tierRow.id} style={[styles.card, tierRow.highlight && styles.cardHighlight]}>
+              {tierRow.highlight && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>MOST POPULAR</Text>
                 </View>
-              ))}
-            </View>
+              )}
+              <Text style={styles.tierName}>{tierRow.name}</Text>
+              <Text style={styles.tierDesc}>{tierRow.desc}</Text>
+              <View style={styles.priceRow}>
+                <Text style={styles.price}>{displayPrice}</Text>
+                <Text style={styles.priceUnit}>{priceUnit}</Text>
+              </View>
+              {!!displayCaption && <Text style={styles.billed}>{displayCaption}</Text>}
 
-            <Pressable
-              style={[
-                styles.ctaButton,
-                tier.highlight && styles.ctaButtonHighlight,
-                tier.ctaDisabled && styles.ctaButtonDisabled,
-              ]}
-              disabled={tier.ctaDisabled}
-            >
-              <Text
+              <View style={styles.featureList}>
+                {tierRow.features.map((f) => (
+                  <View key={f} style={styles.featureRow}>
+                    <IconSymbol name="checkmark" color={tierRow.highlight ? Colors.primaryLight : Colors.success} size={13} />
+                    <Text style={styles.featureText}>{f}</Text>
+                  </View>
+                ))}
+              </View>
+
+              <Pressable
                 style={[
-                  styles.ctaText,
-                  tier.highlight && styles.ctaTextHighlight,
-                  tier.ctaDisabled && styles.ctaTextDisabled,
+                  styles.ctaButton,
+                  tierRow.highlight && !ctaDisabled && styles.ctaButtonHighlight,
+                  ctaDisabled && styles.ctaButtonDisabled,
                 ]}
+                disabled={ctaDisabled || isPurchasingThis}
+                onPress={() => handleSubscribe(tierRow)}
               >
-                {tier.cta}
-              </Text>
-            </Pressable>
-          </Card>
-        ))}
+                {isPurchasingThis ? (
+                  <ActivityIndicator size="small" color={tierRow.highlight ? Colors.white : Colors.textSecondary} />
+                ) : (
+                  <Text
+                    style={[
+                      styles.ctaText,
+                      tierRow.highlight && !ctaDisabled && styles.ctaTextHighlight,
+                      ctaDisabled && styles.ctaTextDisabled,
+                    ]}
+                  >
+                    {ctaLabel}
+                  </Text>
+                )}
+              </Pressable>
+            </Card>
+          );
+        })}
       </View>
+
+      <Pressable style={styles.restoreButton} onPress={handleRestore} disabled={restoring || !ready}>
+        {restoring ? (
+          <ActivityIndicator size="small" color={Colors.textSecondary} />
+        ) : (
+          <Text style={styles.restoreText}>Restore purchases</Text>
+        )}
+      </Pressable>
     </ScreenWrapper>
   );
 }
@@ -175,6 +276,10 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     color: Colors.textPrimary,
     lineHeight: 18,
+  },
+  periodToggle: {
+    marginHorizontal: Spacing.md,
+    marginTop: 16,
   },
   tierList: {
     paddingHorizontal: Spacing.md,
@@ -280,5 +385,16 @@ const styles = StyleSheet.create({
   },
   ctaTextDisabled: {
     color: Colors.textMuted,
+  },
+  restoreButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20,
+    paddingVertical: 10,
+  },
+  restoreText: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: Colors.primaryLight,
   },
 });

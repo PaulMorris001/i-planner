@@ -10,7 +10,7 @@ import { syllabusService } from '@/services/syllabus.service';
 import { usePlan } from '@/hooks/usePlan';
 import { useTasks } from '@/hooks/useTasks';
 import { useSyllabi } from '@/hooks/useSyllabi';
-import { weekdayIndexMonday } from '@/utils/date';
+import { weekdayIndexMonday, parseISODateLocal } from '@/utils/date';
 import type { ClassItem } from '@/types/plan.types';
 
 interface DraftDeadline {
@@ -89,10 +89,14 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
       const file = new File(asset.uri);
       const fileBase64 = await file.base64();
       const extraction = await syllabusService.extract({ fileBase64, filename: asset.name });
+      // d.date is a plain "YYYY-MM-DD" from the extraction — parsed as local
+      // midnight (not `new Date(d.date)`'s UTC midnight) so the date this
+      // becomes a task's dueDate later round-trips to the same calendar day
+      // for users west of UTC instead of landing on the previous day.
       const extractedDeadlines = extraction.deadlines.map((d, i) => ({
         key: `ex-${i}`,
         title: d.title,
-        date: new Date(d.date),
+        date: parseISODateLocal(d.date),
       }));
       // No dated deadlines — fall back to the syllabus's topic outline
       // instead (subtopics never have a real date, so every row starts on

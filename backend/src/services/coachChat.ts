@@ -47,7 +47,9 @@ export async function generateCoachReply(input: {
     'Keep replies conversational and concise (a few sentences to a short paragraph, unless the user ' +
     "asks for something longer like a quiz or a detailed plan). Use the user's real planner data below " +
     'to personalize your answers — reference specific tasks, goals, classes, or exams by name where ' +
-    'relevant, rather than speaking generically.\n\n' +
+    'relevant, rather than speaking generically. The app renders markdown, so feel free to use ' +
+    '**bold** for key terms, "- " bullet lists, `inline code`, and "## " headings when they make a ' +
+    "longer answer easier to scan — but don't force them into a short, simple reply.\n\n" +
     `--- User's current planner data ---\n${input.contextSummary}`;
 
   // Only "Plan My Day" can create tasks — the one mode actually about

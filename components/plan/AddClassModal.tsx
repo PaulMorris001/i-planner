@@ -5,7 +5,7 @@ import { BottomSheetModal } from '@/components/ui/BottomSheetModal';
 import { ModalCloseButton } from '@/components/ui/ModalCloseButton';
 import { Chip } from '@/components/ui/Chip';
 import { Colors, Spacing, Radius } from '@/constants/theme';
-import { weekdayIndexMonday } from '@/utils/date';
+import { weekdayIndexMonday, parseISODateLocal } from '@/utils/date';
 import { parseTimeToMinutes } from '@/utils/time';
 import type { ClassItem, ClassFrequency } from '@/types/plan.types';
 
@@ -59,7 +59,7 @@ export function AddClassModal({ visible, onClose, onAdd, editingClass }: AddClas
     if (!visible) return;
     if (editingClass) {
       setClassName(editingClass.courseName);
-      setStartDate(new Date(editingClass.startDate));
+      setStartDate(parseISODateLocal(editingClass.startDate));
       setRecurring(editingClass.recurring);
       setFreq(editingClass.freq);
       setTime(editingClass.time ? parseTimeToDate(editingClass.time) : null);

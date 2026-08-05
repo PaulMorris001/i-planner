@@ -1,6 +1,7 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { parseTimeToMinutes } from '@/utils/time';
+import { parseISODateLocal } from '@/utils/date';
 
 // Local, on-device scheduling via expo-notifications — no backend involvement.
 // Shared by Tasks and Classes: each gets two notifications per occurrence — one
@@ -108,7 +109,7 @@ async function scheduleOccurrence(spec: OccurrenceSpec): Promise<string[]> {
 
     if (spec.recurring && spec.freq === 'monthly') {
       const { hour, minute } = leadHourMinute(spec.time, spec.leadMinutes);
-      const day = new Date(spec.dateIso).getDate();
+      const day = parseISODateLocal(spec.dateIso).getDate();
       const id = await Notifications.scheduleNotificationAsync({
         content: { title: spec.title, body: spec.bodyForMinutes(spec.leadMinutes) },
         trigger: { type: Notifications.SchedulableTriggerInputTypes.MONTHLY, day, hour, minute, channelId },
@@ -122,7 +123,7 @@ async function scheduleOccurrence(spec: OccurrenceSpec): Promise<string[]> {
     // scheduling nothing. For leadMinutes=0 this never triggers, since the ideal
     // moment IS the due time, already guaranteed to be in the future below.
     const minutes = parseTimeToMinutes(spec.time);
-    const due = new Date(spec.dateIso);
+    const due = parseISODateLocal(spec.dateIso);
     due.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
     if (due.getTime() <= Date.now()) return []; // already passed — nothing to notify about
 

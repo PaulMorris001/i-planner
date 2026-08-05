@@ -26,3 +26,9 @@ export interface Goal {
 export type NewGoalInput = Omit<Goal, 'id' | 'pct' | 'milestones'> & {
   milestones?: { title: string; dueLabel: string }[];
 };
+
+// Used when saving edits to an existing goal's milestones: `id` is present for
+// milestones that already exist (so the backend preserves their identity/done
+// state) and omitted for ones just added in this edit, which the backend
+// assigns a fresh id to.
+export type MilestonePatch = Omit<Milestone, 'id'> & { id?: string };

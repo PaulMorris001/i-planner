@@ -18,7 +18,7 @@ import { useGoals } from '@/hooks/useGoals';
 import { useSyllabi } from '@/hooks/useSyllabi';
 import type { ClassItem } from '@/types/plan.types';
 import type { Goal } from '@/types/goal.types';
-import { computeTaskStreak, weekdayIndexMonday, isDueTodayOrLater, localMidnight } from '@/utils/date';
+import { computeTaskStreak, weekdayIndexMonday, isDueTodayOrLater, localMidnight, parseISODateLocal } from '@/utils/date';
 import { parseTimeToMinutes } from '@/utils/time';
 import { formatShortDate } from './dashboardHelpers';
 import { dashboardStyles as styles } from './dashboardStyles';
@@ -33,7 +33,7 @@ function classDaysLabel(item: ClassItem): string {
 
 // True when dateIso falls within the current Monday-Sunday week.
 function isThisWeek(dateIso: string): boolean {
-  const date = new Date(dateIso);
+  const date = parseISODateLocal(dateIso);
   if (Number.isNaN(date.getTime())) return false;
   const now = new Date();
   const monday = new Date(now);
@@ -111,7 +111,7 @@ export function StudentPathView({ quickLinks, onAddClass, onAddSyllabus, onViewG
     // isDueTodayOrLater), so comparing full timestamps against Date.now() can
     // wrongly drop something still due later today.
     .filter((item) => isDueTodayOrLater(item.date))
-    .sort((a, b) => localMidnight(new Date(a.date)) - localMidnight(new Date(b.date)))
+    .sort((a, b) => localMidnight(parseISODateLocal(a.date)) - localMidnight(parseISODateLocal(b.date)))
     .slice(0, 3);
 
   return (

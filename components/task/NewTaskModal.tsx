@@ -9,7 +9,7 @@ import { useTasks } from '@/hooks/useTasks';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors, Spacing } from '@/constants/theme';
 import { TaskCategories, TaskCategoryId, TaskPriorities, TaskPriorityId } from '@/constants/taskMeta';
-import { weekdayIndexMonday } from '@/utils/date';
+import { weekdayIndexMonday, parseISODateLocal } from '@/utils/date';
 import { parseTimeToMinutes } from '@/utils/time';
 import type { TaskFrequency } from '@/types/task.types';
 
@@ -76,7 +76,7 @@ export function NewTaskModal() {
       setCategory(editingTask.category);
       setPriority(editingTask.priority);
       setDueTime(editingTask.time ? parseTimeToDate(editingTask.time) : null);
-      setDueDate(editingTask.dueDate ? new Date(editingTask.dueDate) : null);
+      setDueDate(editingTask.dueDate ? parseISODateLocal(editingTask.dueDate) : null);
       setRecurring(editingTask.recurring);
       setFreq(editingTask.freq ?? 'weekly');
       setNotes(editingTask.notes);

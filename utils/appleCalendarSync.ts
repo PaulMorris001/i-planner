@@ -1,6 +1,6 @@
 import * as Calendar from 'expo-calendar';
 import { Platform } from 'react-native';
-import { weekdayIndexMonday } from '@/utils/date';
+import { weekdayIndexMonday, parseISODateLocal } from '@/utils/date';
 import { parseTimeToMinutes } from '@/utils/time';
 import type { ClassItem } from '@/types/plan.types';
 import type { TaskFrequency } from '@/types/task.types';
@@ -31,7 +31,7 @@ async function getWritableCalendarId(): Promise<string | null> {
 
 function eventWindow(dateIso: string, time: string | undefined, durationMinutes: number) {
   const minutes = parseTimeToMinutes(time || '9:00 AM');
-  const start = new Date(dateIso);
+  const start = parseISODateLocal(dateIso);
   start.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
   const end = new Date(start.getTime() + durationMinutes * 60_000);
   return { start, end };
@@ -75,7 +75,7 @@ async function createRecurringEvents(calendarId: string, input: RecurrenceInput)
 
   if (freq === 'weekly' || freq === 'weekdays') {
     for (const wd of dayIdxs ?? []) {
-      const occurrence = nextOccurrenceOnWeekday(new Date(baseDateIso), wd);
+      const occurrence = nextOccurrenceOnWeekday(parseISODateLocal(baseDateIso), wd);
       const { start, end } = eventWindow(occurrence.toISOString(), time, durationMinutes);
       eventIds.push(
         await Calendar.createEventAsync(calendarId, {

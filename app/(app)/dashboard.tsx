@@ -3,6 +3,7 @@ import { ScreenWrapper } from "@/components/layout/ScreenWrapper";
 import { AddClassModal } from "@/components/plan/AddClassModal";
 import { AddExamModal } from "@/components/plan/AddExamModal";
 import { SyllabusUploadModal } from "@/components/plan/SyllabusUploadModal";
+import { ProfileInfoModal } from "@/components/profile/ProfileInfoModal";
 import { DashboardSkeleton } from "@/components/ui/DashboardSkeleton";
 import { GreetingHeader } from "@/components/ui/GreetingHeader";
 import { IconSymbol } from "@/components/ui/icon-symbol";
@@ -23,6 +24,7 @@ import type { ClassItem, Exam, ExamPlan as ExamPlanType } from "@/types/plan.typ
 import type { Goal } from "@/types/goal.types";
 import { syncClassToAppleCalendar } from "@/utils/appleCalendarSync";
 import { scheduleClassNotifications } from "@/utils/notifications";
+import { isDueTodayOrLater, localMidnight, parseISODateLocal } from "@/utils/date";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Alert, Pressable, Text, View } from "react-native";
@@ -35,11 +37,29 @@ function toPathKey(focusProfile: string | null): PathKey {
   return "professional";
 }
 
-const AI_TIP: Record<PathKey, string> = {
-  student: "Case Memo 1 is due in 3 days — want me to block study time?",
-  exam: "You're on Week 4. Want a quick quiz on this week's topics?",
-  professional: "Your first action is due in 2 days. Want a reminder?",
+// Shown when there's no real upcoming task to reference.
+const AI_TIP_FALLBACK: Record<PathKey, string> = {
+  student: "Nothing urgent on your plate right now — want help planning ahead?",
+  exam: "Nothing urgent on your plate right now — want a quick quiz on your topics?",
+  professional: "Nothing urgent on your plate right now — want to review your goals?",
 };
+
+// Built from the user's actual nearest-due task once one exists, per path.
+const AI_TIP_TEMPLATE: Record<PathKey, (title: string, when: string) => string> = {
+  student: (title, when) => `${title} is due ${when} — want me to block study time?`,
+  exam: (title, when) => `${title} is due ${when} — want a quick quiz on it?`,
+  professional: (title, when) => `${title} is due ${when} — want a reminder?`,
+};
+
+// "today" / "tomorrow" / "in N days" — calendar-day comparison (see
+// isDueTodayOrLater) so a task due later today still reads as "today", not
+// "in 0 days" or wrongly dropped as past.
+function relativeDueLabel(dueDateIso: string): string {
+  const days = Math.round((localMidnight(parseISODateLocal(dueDateIso)) - localMidnight(new Date())) / 86400000);
+  if (days <= 0) return "today";
+  if (days === 1) return "tomorrow";
+  return `in ${days} days`;
+}
 
 // Thin orchestrator: owns the data/state genuinely shared across every path
 // (loading, pull-to-refresh, the four modals, the AI Coach/Habits cards) and
@@ -59,7 +79,7 @@ export default function Dashboard() {
   const { focusProfile } = useOnboarding();
   const { appleCalendarConnected, remindersEnabled } = useSettings();
   const { habits, loading: habitsLoading, refetch: refetchHabits } = useHabits();
-  const { loading: tasksLoading, refetch: refetchTasks } = useTasks();
+  const { tasks, loading: tasksLoading, refetch: refetchTasks } = useTasks();
   const { loading: goalsLoading, refetch: refetchGoals } = useGoals();
   const { loading: syllabiLoading, refetch: refetchSyllabi } = useSyllabi();
   const dashboardLoading =
@@ -79,6 +99,7 @@ export default function Dashboard() {
   const [examModalOpen, setExamModalOpen] = useState(false);
   const [syllabusModalOpen, setSyllabusModalOpen] = useState(false);
   const [goalSummaryOpen, setGoalSummaryOpen] = useState(false);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [viewingGoal, setViewingGoal] = useState<Goal | null>(null);
   const openGoalSummary = (goal: Goal | null) => {
     setViewingGoal(goal);
@@ -86,6 +107,16 @@ export default function Dashboard() {
   };
 
   const pathKey = toPathKey(focusProfile);
+
+  // Nearest real, undone, dated task — soonest due date first — feeds the AI
+  // Coach card below so its tip reflects what's actually on the user's plate
+  // instead of a fixed placeholder.
+  const nextTask = [...tasks]
+    .filter((t) => !t.done && !!t.dueDate && isDueTodayOrLater(t.dueDate))
+    .sort((a, b) => localMidnight(parseISODateLocal(a.dueDate)) - localMidnight(parseISODateLocal(b.dueDate)))[0];
+  const coachTip = nextTask
+    ? AI_TIP_TEMPLATE[pathKey](nextTask.title, relativeDueLabel(nextTask.dueDate))
+    : AI_TIP_FALLBACK[pathKey];
 
   const handleAddClass = async (item: ClassItem) => {
     const appleEventIds = appleCalendarConnected ? await syncClassToAppleCalendar(item) : [];
@@ -163,7 +194,7 @@ export default function Dashboard() {
         onRefresh={handleRefresh}
         refreshing={refreshing}
       >
-        <GreetingHeader />
+        <GreetingHeader onAvatarPress={() => setProfileModalOpen(true)} />
 
         {dashboardLoading ? (
           <DashboardSkeleton />
@@ -192,7 +223,7 @@ export default function Dashboard() {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.coachEyebrow}>AI COACH</Text>
-                <Text style={styles.coachText}>{AI_TIP[pathKey]}</Text>
+                <Text style={styles.coachText}>{coachTip}</Text>
               </View>
               <IconSymbol
                 name="chevron.right"
@@ -247,6 +278,11 @@ export default function Dashboard() {
       <SyllabusUploadModal
         visible={syllabusModalOpen}
         onClose={() => setSyllabusModalOpen(false)}
+      />
+      <ProfileInfoModal
+        visible={profileModalOpen}
+        onClose={() => setProfileModalOpen(false)}
+        focusProfile={focusProfile}
       />
     </>
   );

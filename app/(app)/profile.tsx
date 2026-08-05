@@ -5,6 +5,7 @@ import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { Button } from '@/components/ui/Button';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { DeleteAccountModal } from '@/components/profile/DeleteAccountModal';
+import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { useAuth } from '@/hooks/useAuth';
 import { useOnboarding } from '@/hooks/useOnboarding';
 import { useSettings } from '@/hooks/useSettings';
@@ -38,7 +39,7 @@ const CONSENT_ROWS = [
 
 export default function Profile() {
   const router = useRouter();
-  const { user, logout } = useAuth();
+  const { user, initializing, logout } = useAuth();
   const { focusProfile, setFocusProfile } = useOnboarding();
   const {
     appleCalendarConnected,
@@ -135,11 +136,19 @@ export default function Profile() {
         <Text style={styles.pageTitle}>Profile & settings</Text>
 
         <View style={styles.profileCard}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{avatarInitial}</Text>
-          </View>
+          {initializing ? (
+            <SkeletonBlock width={48} height={48} borderRadius={24} />
+          ) : (
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>{avatarInitial}</Text>
+            </View>
+          )}
           <View>
-            <Text style={styles.profileName}>{displayName}</Text>
+            {initializing ? (
+              <SkeletonBlock width={120} height={16} borderRadius={5} />
+            ) : (
+              <Text style={styles.profileName}>{displayName}</Text>
+            )}
             <Text style={styles.profilePlan}>I-Planner · Free plan</Text>
           </View>
         </View>

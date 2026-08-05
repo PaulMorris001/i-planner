@@ -10,10 +10,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@apple/app-store-server-library": "^3.1.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "firebase-admin": "^14.1.0",
+    "googleapis": "^173.0.0",
     "mongoose": "^8.6.0",
     "openai": "^6.48.0"
   },

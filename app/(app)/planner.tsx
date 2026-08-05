@@ -6,6 +6,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { CalendarConnectGate } from '@/components/plan/CalendarConnectGate';
 import { ItemActionSheet } from '@/components/ui/ItemActionSheet';
 import { SegmentedToggle } from '@/components/ui/SegmentedToggle';
+import { MonthCalendarView } from '@/components/planner/MonthCalendarView';
 import { Colors, Spacing } from '@/constants/theme';
 import { TaskCategories, TaskPriorities, TaskPriorityId } from '@/constants/taskMeta';
 import { COURSE_COLORS, COURSE_SOFT_COLORS } from '@/constants/classColors';
@@ -19,9 +20,10 @@ import { parseTimeToMinutes } from '@/utils/time';
 import type { Task } from '@/types/task.types';
 import type { ClassItem } from '@/types/plan.types';
 
-const VIEW_OPTIONS: { key: 'day' | 'week'; label: string }[] = [
+const VIEW_OPTIONS: { key: 'day' | 'week' | 'month'; label: string }[] = [
   { key: 'day', label: 'Day' },
   { key: 'week', label: 'Week' },
+  { key: 'month', label: 'Month' },
 ];
 
 const DAY_FULL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -53,7 +55,7 @@ type DayItem =
   | { kind: 'class'; time: number; item: ClassItem; color: string; soft: string };
 
 export default function Planner() {
-  const [view, setView] = useState<'day' | 'week'>('day');
+  const [view, setView] = useState<'day' | 'week' | 'month'>('day');
   const [courseFilter, setCourseFilter] = useState<string | null>(null);
   const [actionSheetTarget, setActionSheetTarget] = useState<Task | null>(null);
   const { tasks, toggleDone, removeTask } = useTasks();
@@ -249,7 +251,13 @@ export default function Planner() {
           </ScrollView>
         )}
 
-        {view === 'day' ? (
+        {view === 'month' ? (
+          <MonthCalendarView
+            classes={plan.classes}
+            courseFilter={courseFilter}
+            onTaskLongPress={setActionSheetTarget}
+          />
+        ) : view === 'day' ? (
           <>
             <View style={styles.dateRow}>
               <Text style={styles.dateTitle}>Today</Text>

@@ -9,6 +9,10 @@ export interface SettingsDocument extends Document {
   remindersEnabled: boolean;
   // Google OAuth tokens — never exposed via toPublicSettings(). The client secret
   // for the Google OAuth client itself lives only in backend env, not here.
+  // Encrypted at rest (see utils/tokenCrypto.ts) — always encryptToken() before
+  // writing either field and decryptToken() after reading, never store or use
+  // the raw value directly. Written by googleOAuthCallback.controller.ts and
+  // googleCalendarSync.ts's refreshAccessTokenIfNeeded.
   googleAccessToken?: string;
   googleRefreshToken?: string;
   googleTokenExpiresAt?: Date;

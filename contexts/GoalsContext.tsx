@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '@/config/firebase';
 import { goalService } from '@/services/goal.service';
-import type { Goal, Milestone, NewGoalInput } from '@/types/goal.types';
+import type { Goal, Milestone, MilestonePatch, NewGoalInput } from '@/types/goal.types';
 
 // Mirrors the backend's pct derivation (goal.controller.ts) so the optimistic local
 // update can move the progress bar immediately instead of waiting on the round trip.
@@ -12,8 +12,8 @@ function pctFromMilestones(milestones: Pick<Milestone, 'done'>[]): number {
 }
 
 type GoalUpdatePatch = Partial<
-  Pick<Goal, 'milestones' | 'title' | 'tag' | 'color' | 'type' | 'targetRole' | 'targetIndustry' | 'targetDate'>
->;
+  Pick<Goal, 'title' | 'tag' | 'color' | 'type' | 'targetRole' | 'targetIndustry' | 'targetDate'>
+> & { milestones?: MilestonePatch[] };
 
 interface GoalsContextValue {
   goals: Goal[];
@@ -66,9 +66,20 @@ export function GoalsProvider({ children }: { children: ReactNode }) {
 
   const updateGoal = async (id: string, patch: GoalUpdatePatch) => {
     const prevGoals = goals;
-    const optimisticPatch = patch.milestones
-      ? { ...patch, pct: pctFromMilestones(patch.milestones) }
-      : patch;
+    // Milestones added in this same edit (no real id yet — the backend assigns
+    // one) need a placeholder id for the optimistic Goal object's type/React
+    // keys; it's overwritten within moments by the real one from the server.
+    const { milestones: patchMilestones, ...restPatch } = patch;
+    const optimisticMilestones: Milestone[] | undefined = patchMilestones?.map((m, i) => ({
+      id: m.id ?? `temp-${i}`,
+      title: m.title,
+      done: m.done ?? false,
+      dueLabel: m.dueLabel,
+    }));
+    const optimisticPatch: Partial<Goal> = {
+      ...restPatch,
+      ...(optimisticMilestones ? { milestones: optimisticMilestones, pct: pctFromMilestones(optimisticMilestones) } : {}),
+    };
     setGoals((prev) => prev.map((g) => (g.id === id ? { ...g, ...optimisticPatch } : g)));
     try {
       const updated = await goalService.update(id, patch);

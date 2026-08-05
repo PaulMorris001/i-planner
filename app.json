@@ -11,6 +11,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.obitoventures.iplanner",
+      "deploymentTarget": "15.0",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -18,7 +19,7 @@
     "android": {
       "package": "com.obitoventures.iplanner",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#ffffff",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -56,7 +57,9 @@
           "calendarPermission": "Allow $(PRODUCT_NAME) to access your calendar so it can plan around your schedule."
         }
       ],
-      "expo-notifications"
+      "expo-notifications",
+      "expo-secure-store",
+      "expo-iap"
     ],
     "experiments": {
       "typedRoutes": true,
@@ -65,8 +68,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "b7b0f10a-bc8b-4a7d-ad37-7a6693fe309c"
+        "projectId": "22268dca-48a3-4f38-bd01-f28f664fa74d"
       }
-    }
+    },
+    "owner": "obitoven1"
   }
 }

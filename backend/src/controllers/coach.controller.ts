@@ -1,10 +1,12 @@
 import { Response } from 'express';
 import { CoachMessage, COACH_MODES, CoachModeId, toPublicCoachMessage } from '../models/CoachMessage';
 import { Settings } from '../models/Settings';
+import { Subscription } from '../models/Subscription';
 import { AuthedRequest } from '../middleware/requireAuth';
 import { ApiError } from '../utils/ApiError';
 import { buildContextSummary } from '../services/coachContext';
 import { generateCoachReply } from '../services/coachChat';
+import { checkAndConsumeQuery } from '../services/aiUsageLimiter';
 
 // How many past messages ride along as conversation history on each request —
 // caps token growth for a long-running chat rather than sending the full history.
@@ -34,6 +36,22 @@ export async function sendCoachMessage(req: AuthedRequest, res: Response) {
   }
   const trimmed = content.trim();
 
+  const [settings, subscription] = await Promise.all([
+    Settings.findOne({ firebaseUid: req.userId }),
+    Subscription.findOne({ firebaseUid: req.userId }),
+  ]);
+
+  const usage = await checkAndConsumeQuery(req.userId!, subscription?.tier ?? 'free');
+  if (!usage.allowed) {
+    const period = usage.period === 'week' ? 'week' : 'month';
+    const resetLabel = usage.resetsAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    throw new ApiError(
+      429,
+      `You've used all ${usage.cap} AI Coach messages for this ${period}. It resets ${resetLabel}.`,
+      'general'
+    );
+  }
+
   const recentDocs = await CoachMessage.find({ firebaseUid: req.userId, mode })
     .sort({ createdAt: -1 })
     .limit(HISTORY_LIMIT);
@@ -41,7 +59,6 @@ export async function sendCoachMessage(req: AuthedRequest, res: Response) {
 
   await CoachMessage.create({ firebaseUid: req.userId, mode, role: 'user', content: trimmed });
 
-  const settings = await Settings.findOne({ firebaseUid: req.userId });
   const consent = {
     tasks: settings?.aiAccessTasks ?? true,
     goals: settings?.aiAccessGoals ?? true,

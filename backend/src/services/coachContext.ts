@@ -29,6 +29,17 @@ function weekdayIndexMonday(date: Date): number {
   return (date.getDay() + 6) % 7;
 }
 
+// Date-only "YYYY-MM-DD" values (AI/syllabus-created tasks) mean exactly what
+// their digits say — parsing them through `new Date()` here would reinterpret
+// them as UTC midnight in *this server's* timezone, which isn't necessarily
+// the user's. Full-timestamp values (manually-created tasks) still go through
+// standard parsing; this is just informational text for the model, and the
+// server has no reliable way to know the user's own timezone here.
+function formatDueForCoach(dueDateIso: string): string {
+  if (!dueDateIso.includes('T')) return dueDateIso;
+  return new Date(dueDateIso).toDateString();
+}
+
 function currentExamWeek(exam: ExamRecord): number {
   const totalWeeks = exam.topics?.length || exam.weeksRemaining;
   const msPerWeek = 7 * 24 * 60 * 60 * 1000;
@@ -73,7 +84,7 @@ export async function buildContextSummary(firebaseUid: string, consent: CoachDat
       'TASKS (not done, soonest due first):\n' +
       upcomingTasks
         .map((t) => {
-          const due = t.dueDate ? ` — due ${new Date(t.dueDate).toDateString()}${t.time ? ` ${t.time}` : ''}` : ' — no due date';
+          const due = t.dueDate ? ` — due ${formatDueForCoach(t.dueDate)}${t.time ? ` ${t.time}` : ''}` : ' — no due date';
           return `- "${t.title}" [${t.category}/${t.priority}]${due}${t.recurring ? ' (recurring)' : ''}`;
         })
         .join('\n')

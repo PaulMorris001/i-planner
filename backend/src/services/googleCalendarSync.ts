@@ -1,5 +1,6 @@
 import { SettingsDocument } from '../models/Settings';
 import { env } from '../config/env';
+import { encryptToken, decryptToken } from '../utils/tokenCrypto';
 
 // Hand-rolled fetch calls against Calendar API v3 — matches this backend's existing
 // no-extra-HTTP-client convention (see googleOAuthCallback.controller.ts's token
@@ -56,14 +57,30 @@ function formatFloating(ms: number): string {
   return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}T${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:00`;
 }
 
+// dueDate/startDate is either a plain "YYYY-MM-DD" (no time-of-day at all —
+// its digits ARE the intended calendar day, full stop) or a full timestamp
+// from a date picker's `Date.toISOString()` (an arbitrary but real moment).
+// Naively slicing the first 10 characters is only correct for the first case
+// — for the second, those digits are the instant's *UTC* day, which can
+// differ from the user's actual local day (e.g. a late-evening pick rolls
+// into the next UTC day). Resolving via the user's own stored timeZone
+// handles both correctly.
+function localDatePart(dateIso: string, timeZone: string): string {
+  if (!dateIso.includes('T')) return dateIso.slice(0, 10);
+  const date = new Date(dateIso);
+  if (Number.isNaN(date.getTime())) return dateIso.slice(0, 10);
+  // en-CA formats as YYYY-MM-DD, exactly what this needs.
+  return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
+}
+
 // Builds floating (no-offset) local datetime strings for the event window. Paired
 // with an explicit IANA timeZone in toGoogleEventTime, Google interprets the
 // wall-clock hour/minute literally in the user's timezone rather than treating it
 // as a UTC instant — so a class set for "9:00 AM" lands at 9:00 AM local time,
 // not 9:00 AM UTC.
-function buildEventWindow(dateIso: string, time: string | undefined, durationMinutes: number) {
+function buildEventWindow(dateIso: string, time: string | undefined, durationMinutes: number, timeZone: string) {
   const { hour, minute } = parseTime(time);
-  const datePart = dateIso.slice(0, 10); // "YYYY-MM-DD"
+  const datePart = localDatePart(dateIso, timeZone);
   const startMs = Date.UTC(
     Number(datePart.slice(0, 4)),
     Number(datePart.slice(5, 7)) - 1,
@@ -93,10 +110,12 @@ function buildRRule(freq: SyncableClassItem['freq'], dayIdxs: number[]): string 
 
 async function refreshAccessTokenIfNeeded(settings: SettingsDocument): Promise<string | null> {
   const expiresAt = settings.googleTokenExpiresAt?.getTime() ?? 0;
-  if (settings.googleAccessToken && expiresAt > Date.now() + 60_000) {
-    return settings.googleAccessToken;
+  const currentAccessToken = decryptToken(settings.googleAccessToken);
+  if (currentAccessToken && expiresAt > Date.now() + 60_000) {
+    return currentAccessToken;
   }
-  if (!settings.googleRefreshToken) return null;
+  const refreshToken = decryptToken(settings.googleRefreshToken);
+  if (!refreshToken) return null;
 
   const res = await fetch(TOKEN_URL, {
     method: 'POST',
@@ -104,7 +123,7 @@ async function refreshAccessTokenIfNeeded(settings: SettingsDocument): Promise<s
     body: new URLSearchParams({
       client_id: env.googleOAuthClientId,
       client_secret: env.googleOAuthClientSecret,
-      refresh_token: settings.googleRefreshToken,
+      refresh_token: refreshToken,
       grant_type: 'refresh_token',
     }).toString(),
   });
@@ -115,10 +134,10 @@ async function refreshAccessTokenIfNeeded(settings: SettingsDocument): Promise<s
     return null;
   }
 
-  settings.googleAccessToken = data.access_token;
+  settings.googleAccessToken = encryptToken(data.access_token);
   settings.googleTokenExpiresAt = new Date(Date.now() + (data.expires_in ?? 3600) * 1000);
   await settings.save();
-  return settings.googleAccessToken;
+  return data.access_token;
 }
 
 async function ensureSyncCalendar(settings: SettingsDocument, accessToken: string): Promise<string | null> {
@@ -208,8 +227,8 @@ export async function upsertClassEvent(
   const ctx = await prepareSync(settings);
   if (!ctx) return undefined;
 
-  const { start, end } = buildEventWindow(item.startDate, item.time, 60);
   const timeZone = settings.timeZone || 'UTC';
+  const { start, end } = buildEventWindow(item.startDate, item.time, 60, timeZone);
   const body: Record<string, unknown> = {
     summary: item.courseName,
     start: toGoogleEventTime(start, timeZone),
@@ -239,8 +258,8 @@ export async function upsertTaskEvent(
   const ctx = await prepareSync(settings);
   if (!ctx) return undefined;
 
-  const { start, end } = buildEventWindow(task.dueDate, task.time, 30);
   const timeZone = settings.timeZone || 'UTC';
+  const { start, end } = buildEventWindow(task.dueDate, task.time, 30, timeZone);
   const body: Record<string, unknown> = {
     summary: task.title,
     start: toGoogleEventTime(start, timeZone),

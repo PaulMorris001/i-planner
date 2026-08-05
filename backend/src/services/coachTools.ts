@@ -118,10 +118,20 @@ export async function createTasksFromDrafts(
     let dueDateIso = '';
     let day = weekdayIndexMonday(new Date());
     if (typeof raw.dueDate === 'string' && raw.dueDate) {
-      const parsed = new Date(raw.dueDate);
-      if (!Number.isNaN(parsed.getTime())) {
-        dueDateIso = parsed.toISOString();
-        day = weekdayIndexMonday(parsed);
+      // Keep the model's date-only "YYYY-MM-DD" as-is rather than round-tripping
+      // it through `new Date(...).toISOString()` — that anchors it to this
+      // server's own UTC midnight, and the client later reading it back as a
+      // local calendar day can land on the previous day for anyone west of
+      // UTC. The server has no idea what the user's timezone even is, so the
+      // only correct move is to leave the date-only value for the client to
+      // resolve in its own local time (see utils/date.ts's parseISODateLocal).
+      const match = raw.dueDate.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (match) {
+        dueDateIso = `${match[1]}-${match[2]}-${match[3]}`;
+        // getUTCDay, not getDay — this must stay independent of whatever
+        // timezone this particular server process happens to run in.
+        const utcDate = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+        day = (utcDate.getUTCDay() + 6) % 7;
       }
     }
 

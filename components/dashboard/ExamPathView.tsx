@@ -13,7 +13,7 @@ import { TaskCategories } from '@/constants/taskMeta';
 import { Colors } from '@/constants/theme';
 import { usePlan } from '@/hooks/usePlan';
 import { useTasks } from '@/hooks/useTasks';
-import { isDueTodayOrLater, localMidnight, computeTaskStreak } from '@/utils/date';
+import { isDueTodayOrLater, localMidnight, computeTaskStreak, parseISODateLocal } from '@/utils/date';
 import { formatShortDate, currentExamWeek } from './dashboardHelpers';
 import { dashboardStyles as styles } from './dashboardStyles';
 
@@ -38,7 +38,7 @@ export function ExamPathView({ quickLinks, onAddExam }: ExamPathViewProps) {
   const nextTask = tasks
     .filter((t) => !!t.dueDate && !t.done && isDueTodayOrLater(t.dueDate))
     .sort((a, b) => {
-      const dayDiff = localMidnight(new Date(a.dueDate)) - localMidnight(new Date(b.dueDate));
+      const dayDiff = localMidnight(parseISODateLocal(a.dueDate)) - localMidnight(parseISODateLocal(b.dueDate));
       return dayDiff !== 0 ? dayDiff : a.hour - b.hour;
     })[0];
 
