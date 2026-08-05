@@ -9,14 +9,24 @@ import { parseISODateLocal } from '@/utils/date';
 const REMINDER_LEAD_MINUTES = 15;
 const ANDROID_CHANNEL_ID = 'planner-reminders';
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
+let handlerRegistered = false;
+
+// Registers expo-notifications' foreground handler — a native event-listener
+// call, so it's deliberately deferred to run from an effect after first mount
+// (see app/_layout.tsx) rather than at module-import time, which runs before
+// React (and the native bridge) has finished its own startup sequence.
+export function initNotificationHandler(): void {
+  if (handlerRegistered) return;
+  handlerRegistered = true;
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+    }),
+  });
+}
 
 async function ensureAndroidChannel(): Promise<void> {
   if (Platform.OS !== 'android') return;

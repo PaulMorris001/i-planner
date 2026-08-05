@@ -105,11 +105,9 @@ const PERIOD_OPTIONS: { key: 'monthly' | 'annual'; label: string }[] = [
 ];
 
 export default function Plans() {
-  const { ready, tier: currentTier, subscriptions, purchasing, purchase, restorePurchases } = usePurchases();
+  const { ready, tier: currentTier, purchasing, purchase, restorePurchases } = usePurchases();
   const [period, setPeriod] = useState<'monthly' | 'annual'>('monthly');
   const [restoring, setRestoring] = useState(false);
-
-  const fetchedProductIds = new Set(subscriptions.map((s) => s.id));
 
   const handleSubscribe = (tierRow: Tier) => {
     const productId = period === 'monthly' ? tierRow.monthlyProductId : tierRow.annualProductId;
@@ -158,7 +156,7 @@ export default function Plans() {
           const isFree = tierRow.id === 'free';
           const isCurrent = ready && currentTier === tierRow.id;
           const productId = period === 'monthly' ? tierRow.monthlyProductId : tierRow.annualProductId;
-          const purchasable = ready && !isFree && !!productId && fetchedProductIds.has(productId);
+          const purchasable = ready && !isFree && !!productId;
           const isPurchasingThis = !!productId && purchasing === productId;
 
           let ctaLabel: string;
@@ -177,20 +175,10 @@ export default function Plans() {
             ctaDisabled = false;
           }
 
-          // Once the store has actually returned this product, always show its
-          // real localized price instead of the static estimate below — the
-          // static strings are US-only guesses and go stale the moment a
-          // price changes in App Store Connect / Play Console without a
-          // matching code change. The annual live price is the true yearly
-          // total (not a derived per-month figure, which would need parsing
-          // a formatted currency string back into a number), so its unit
-          // label reads "/yr" instead of "/mo" and needs no separate caption.
-          const liveProduct = productId ? subscriptions.find((s) => s.id === productId) : undefined;
-          const displayPrice =
-            liveProduct?.displayPrice ?? (period === 'monthly' ? tierRow.monthlyPrice : tierRow.annualMonthlyEquivalent);
-          const priceUnit = liveProduct ? (period === 'monthly' ? '/mo' : '/yr') : '/mo';
+          const displayPrice = period === 'monthly' ? tierRow.monthlyPrice : tierRow.annualMonthlyEquivalent;
+          const priceUnit = '/mo';
           const displayCaption =
-            !liveProduct && period === 'annual' && tierRow.annualTotal ? `Billed ${tierRow.annualTotal}` : undefined;
+            period === 'annual' && tierRow.annualTotal ? `Billed ${tierRow.annualTotal}` : undefined;
 
           return (
             <Card key={tierRow.id} style={[styles.card, tierRow.highlight && styles.cardHighlight]}>

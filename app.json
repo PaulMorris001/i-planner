@@ -59,7 +59,14 @@
       ],
       "expo-notifications",
       "expo-secure-store",
-      "expo-iap"
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "buildReactNativeFromSource": true
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

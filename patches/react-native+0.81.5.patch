@@ -1,0 +1,33 @@
+diff --git a/node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios/ReactCommon/RCTTurboModule.mm b/node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios/ReactCommon/RCTTurboModule.mm
+index 2a67797..545fbed 100644
+--- a/node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios/ReactCommon/RCTTurboModule.mm
++++ b/node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios/ReactCommon/RCTTurboModule.mm
+@@ -435,7 +435,27 @@ void ObjCTurboModule::performVoidMethodInvocation(
+     @try {
+       [inv invokeWithTarget:strongModule];
+     } @catch (NSException *exception) {
+-      throw convertNSExceptionToJSError(runtime, exception, std::string{moduleName}, methodNameStr);
++      if (shouldVoidMethodsExecuteSync_) {
++        // Sync void methods run on the JS thread with an active JSI scope —
++        // converting to a JSError and throwing is legal here.
++        throw convertNSExceptionToJSError(runtime, exception, std::string{moduleName}, methodNameStr);
++      }
++      // PATCHED (backport of the react-native 0.83 fix): async void methods run
++      // on the module's queue via invokeAsync — a background GCD thread. The
++      // original code called convertNSExceptionToJSError(runtime, ...) here,
++      // which allocates JSI objects on the Hermes runtime from a non-JS thread
++      // while the JS thread is concurrently interpreting. Hermes is strictly
++      // single-threaded, so that corrupts the JS heap and crashes the app with
++      // an unrelated-looking SIGSEGV shortly after (and the C++ throw through a
++      // dispatch block would std::terminate anyway — nothing up-stack catches
++      // it). Log the exception instead; nothing can meaningfully handle a void
++      // method's error on this thread.
++      NSLog(
++          @"[RCTTurboModule PATCH] NSException in async void method %s.%s — name: %@ reason: %@",
++          moduleName,
++          methodNameStr.c_str(),
++          exception.name,
++          exception.reason);
+     } @finally {
+       [retainedObjectsForInvocation removeAllObjects];
+     }
