@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { View, Text, Pressable, ActivityIndicator, Alert, StyleSheet } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { BackButton } from '@/components/ui/BackButton';
@@ -105,9 +106,11 @@ const PERIOD_OPTIONS: { key: 'monthly' | 'annual'; label: string }[] = [
 ];
 
 export default function Plans() {
-  const { ready, tier: currentTier, purchasing, purchase, restorePurchases } = usePurchases();
+  const { ready, tier: currentTier, subscriptions, purchasing, purchase, restorePurchases } = usePurchases();
   const [period, setPeriod] = useState<'monthly' | 'annual'>('monthly');
   const [restoring, setRestoring] = useState(false);
+
+  const fetchedProductIds = new Set(subscriptions.map((s) => s.id));
 
   const handleSubscribe = (tierRow: Tier) => {
     const productId = period === 'monthly' ? tierRow.monthlyProductId : tierRow.annualProductId;
@@ -156,7 +159,7 @@ export default function Plans() {
           const isFree = tierRow.id === 'free';
           const isCurrent = ready && currentTier === tierRow.id;
           const productId = period === 'monthly' ? tierRow.monthlyProductId : tierRow.annualProductId;
-          const purchasable = ready && !isFree && !!productId;
+          const purchasable = ready && !isFree && !!productId && fetchedProductIds.has(productId);
           const isPurchasingThis = !!productId && purchasing === productId;
 
           let ctaLabel: string;
@@ -175,10 +178,20 @@ export default function Plans() {
             ctaDisabled = false;
           }
 
-          const displayPrice = period === 'monthly' ? tierRow.monthlyPrice : tierRow.annualMonthlyEquivalent;
-          const priceUnit = '/mo';
+          // Once the store has actually returned this product, always show its
+          // real localized price instead of the static estimate below — the
+          // static strings are US-only guesses and go stale the moment a
+          // price changes in App Store Connect / Play Console without a
+          // matching code change. The annual live price is the true yearly
+          // total (not a derived per-month figure, which would need parsing
+          // a formatted currency string back into a number), so its unit
+          // label reads "/yr" instead of "/mo" and needs no separate caption.
+          const liveProduct = productId ? subscriptions.find((s) => s.id === productId) : undefined;
+          const displayPrice =
+            liveProduct?.displayPrice ?? (period === 'monthly' ? tierRow.monthlyPrice : tierRow.annualMonthlyEquivalent);
+          const priceUnit = liveProduct ? (period === 'monthly' ? '/mo' : '/yr') : '/mo';
           const displayCaption =
-            period === 'annual' && tierRow.annualTotal ? `Billed ${tierRow.annualTotal}` : undefined;
+            !liveProduct && period === 'annual' && tierRow.annualTotal ? `Billed ${tierRow.annualTotal}` : undefined;
 
           return (
             <Card key={tierRow.id} style={[styles.card, tierRow.highlight && styles.cardHighlight]}>
@@ -239,6 +252,22 @@ export default function Plans() {
           <Text style={styles.restoreText}>Restore purchases</Text>
         )}
       </Pressable>
+
+      {/* Apple Guideline 3.1.2: the purchase screen must show renewal terms
+          and carry functional links to the Terms of Use and Privacy Policy. */}
+      <Text style={styles.legalNote}>
+        Subscriptions renew automatically until canceled at least 24 hours before the end of the
+        current period. Manage or cancel anytime in your App Store or Google Play account settings.
+      </Text>
+      <View style={styles.legalLinks}>
+        <Pressable onPress={() => WebBrowser.openBrowserAsync('https://i-planner.onrender.com/terms.html')}>
+          <Text style={styles.legalLinkText}>Terms of Use</Text>
+        </Pressable>
+        <Text style={styles.legalLinkDivider}>·</Text>
+        <Pressable onPress={() => WebBrowser.openBrowserAsync('https://i-planner.onrender.com/privacy.html')}>
+          <Text style={styles.legalLinkText}>Privacy Policy</Text>
+        </Pressable>
+      </View>
     </ScreenWrapper>
   );
 }
@@ -384,5 +413,31 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
     fontWeight: '700',
     color: Colors.primaryLight,
+  },
+  legalNote: {
+    marginTop: 14,
+    marginHorizontal: Spacing.md,
+    fontSize: 11.5,
+    lineHeight: 16,
+    color: Colors.textMuted,
+    textAlign: 'center',
+  },
+  legalLinks: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+  },
+  legalLinkText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: Colors.primaryLight,
+    textDecorationLine: 'underline',
+    paddingVertical: 6,
+  },
+  legalLinkDivider: {
+    color: Colors.textMuted,
+    fontSize: 12.5,
   },
 });

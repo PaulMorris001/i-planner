@@ -62,8 +62,10 @@ export default function Profile() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
   const currentPath = toPathId(focusProfile);
-  const displayName = user?.fullName ?? 'Jordan';
-  const avatarInitial = user?.fullName?.trim().charAt(0).toUpperCase() ?? 'J';
+  // "||" not "??" — fullName is '' (not undefined) when Firebase's
+  // displayName is null, and "??" only catches null/undefined.
+  const displayName = user?.fullName || 'Jordan';
+  const avatarInitial = user?.fullName?.trim().charAt(0).toUpperCase() || 'J';
 
   const handleLogout = () => {
     Alert.alert('Log out?', "You'll need to sign back in to access your planner.", [

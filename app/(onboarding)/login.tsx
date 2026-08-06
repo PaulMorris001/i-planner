@@ -11,6 +11,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useOnboarding } from '@/hooks/useOnboarding';
 import { Colors, Spacing, Typography } from '@/constants/theme';
 import { Routes } from '@/constants/routes';
+import { getAuthDebugLog } from '@/utils/authDebugLog';
 
 export default function Login() {
   const { login, loading } = useAuth();
@@ -95,6 +96,18 @@ export default function Login() {
           </TouchableOpacity>
         </View>
 
+        {/* TEMPORARY — diagnosing the "must log in after every app restart"
+            bug (Aug 2026). Shows the session-restore timeline for THIS
+            launch, since there's no device console access. Delete this
+            block, the import above, and utils/authDebugLog.ts's call sites
+            once that bug is confirmed fixed. */}
+        <View style={styles.debugBox}>
+          <Text style={styles.debugTitle}>Session-restore debug log</Text>
+          {getAuthDebugLog().map((line, i) => (
+            <Text key={i} style={styles.debugLine}>{line}</Text>
+          ))}
+        </View>
+
       </View>
     </ScreenWrapper>
   );
@@ -136,5 +149,22 @@ const styles = StyleSheet.create({
     ...Typography.body,
     fontWeight: '600',
     color: Colors.primary,
+  },
+  debugBox: {
+    marginTop: Spacing.xl,
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: '#1a1a2e',
+  },
+  debugTitle: {
+    color: '#ffb84a',
+    fontSize: 11,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  debugLine: {
+    color: '#9a9ab0',
+    fontSize: 10,
+    fontFamily: 'Courier',
   },
 });

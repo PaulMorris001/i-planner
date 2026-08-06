@@ -31,8 +31,11 @@ export function GreetingHeader({ greeting, name, avatarInitial, onAvatarPress }:
   const initial = user?.fullName?.trim().charAt(0).toUpperCase();
 
   const displayGreeting = greeting ?? getTimeBasedGreeting();
-  const displayName = name ?? firstName ?? 'Jordan';
-  const displayInitial = avatarInitial ?? initial ?? 'J';
+  // "||" not "??" — firstName/initial come from an empty-string fallback
+  // (AuthContext stores fullName as '' when Firebase's displayName is null),
+  // and "??" only catches null/undefined, letting '' straight through.
+  const displayName = name || firstName || 'Jordan';
+  const displayInitial = avatarInitial || initial || 'J';
 
   const avatar = avatarLoading ? (
     <SkeletonBlock width={42} height={42} borderRadius={21} />

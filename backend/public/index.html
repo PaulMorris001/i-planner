@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>I-Planner — AI-powered planning for school, career, and life</title>
+<meta name="description" content="I-Planner is an AI-powered productivity app that helps you manage tasks, goals, study plans, and career planning in one place." />
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    margin: 0;
+    color: #0F0E2A;
+    background: #ffffff;
+    line-height: 1.6;
+  }
+  @media (prefers-color-scheme: dark) {
+    body { color: #e8e8e8; background: #121212; }
+    .features { background: #191919; }
+    .feature-card { background: #222; border-color: #2e2e2e; }
+    .badge { box-shadow: 0 6px 20px rgba(0,0,10,0.5); }
+    footer { border-top-color: #2e2e2e; }
+    .btn-secondary { border-color: #3a3a3a; color: #e8e8e8; }
+  }
+
+  .wrap { max-width: 760px; margin: 0 auto; padding: 0 20px; }
+
+  header.hero {
+    padding: 64px 0 48px;
+    text-align: center;
+  }
+  .badge {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 20px;
+    border-radius: 18px;
+    background: linear-gradient(160deg, #19235e, #3B82F6);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 30px;
+    font-weight: 700;
+    box-shadow: 0 8px 24px rgba(25, 35, 94, 0.25);
+  }
+  h1 { font-size: 30px; font-weight: 700; margin: 0 0 10px; }
+  .tagline { font-size: 17px; color: #6B6A80; max-width: 480px; margin: 0 auto; }
+  @media (prefers-color-scheme: dark) { .tagline { color: #a8a7be; } }
+
+  .actions {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 28px;
+    flex-wrap: wrap;
+  }
+  .btn {
+    display: inline-block;
+    padding: 12px 22px;
+    border-radius: 10px;
+    font-size: 14.5px;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .btn-primary { background: #19235e; color: #fff; }
+  .btn-secondary { background: transparent; color: #19235e; border: 1.5px solid #E4E3EF; }
+
+  .features {
+    background: #F7F7FB;
+    padding: 48px 0;
+    margin-top: 12px;
+  }
+  .features h2 {
+    text-align: center;
+    font-size: 20px;
+    margin: 0 0 28px;
+  }
+  .feature-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+  }
+  @media (max-width: 520px) {
+    .feature-grid { grid-template-columns: 1fr; }
+  }
+  .feature-card {
+    background: #fff;
+    border: 1px solid #E4E3EF;
+    border-radius: 14px;
+    padding: 18px 20px;
+  }
+  .feature-card h3 {
+    font-size: 15px;
+    margin: 0 0 4px;
+  }
+  .feature-card p {
+    font-size: 13.5px;
+    color: #6B6A80;
+    margin: 0;
+  }
+  @media (prefers-color-scheme: dark) { .feature-card p { color: #a8a7be; } }
+
+  .stores {
+    text-align: center;
+    padding: 48px 0;
+  }
+  .stores h2 { font-size: 20px; margin: 0 0 8px; }
+  .stores p { color: #6B6A80; font-size: 14.5px; margin: 0 0 20px; }
+  @media (prefers-color-scheme: dark) { .stores p { color: #a8a7be; } }
+  .store-pill {
+    display: inline-block;
+    padding: 10px 20px;
+    border-radius: 999px;
+    background: #E8EEFC;
+    color: #19235e;
+    font-size: 13.5px;
+    font-weight: 600;
+  }
+  @media (prefers-color-scheme: dark) {
+    .store-pill { background: #1c2440; color: #9db4ff; }
+  }
+
+  footer {
+    border-top: 1px solid #E4E3EF;
+    padding: 28px 0 48px;
+    text-align: center;
+    font-size: 13px;
+    color: #A8A7BE;
+  }
+  footer a { color: #3B82F6; text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+  .footer-links { margin-bottom: 10px; }
+  .footer-links a { margin: 0 8px; }
+</style>
+</head>
+<body>
+
+  <header class="hero wrap">
+    <div class="badge">I</div>
+    <h1>I-Planner</h1>
+    <p class="tagline">Your AI-powered planner for school, career, and everyday life — tasks, goals, and study plans, organized in one place.</p>
+    <div class="actions">
+      <a class="btn btn-primary" href="mailto:obitoventuresinc@gmail.com">Contact Us</a>
+      <a class="btn btn-secondary" href="/privacy.html">Privacy Policy</a>
+    </div>
+  </header>
+
+  <section class="features">
+    <div class="wrap">
+      <h2>What you can do with I-Planner</h2>
+      <div class="feature-grid">
+        <div class="feature-card">
+          <h3>AI Coach</h3>
+          <p>Get personalized guidance and plans built around your goals and schedule.</p>
+        </div>
+        <div class="feature-card">
+          <h3>Tasks &amp; Goals</h3>
+          <p>Track daily tasks and long-term goals with reminders that keep you on pace.</p>
+        </div>
+        <div class="feature-card">
+          <h3>Study &amp; Exam Planning</h3>
+          <p>Upload a syllabus and get a study plan with deadlines built in automatically.</p>
+        </div>
+        <div class="feature-card">
+          <h3>Calendar Sync</h3>
+          <p>Connect Google or Apple Calendar to keep everything in one view.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="stores wrap">
+    <h2>Get I-Planner</h2>
+    <p>Currently in testing — the public App Store listing is coming soon.</p>
+    <span class="store-pill">Coming soon to the App Store</span>
+  </section>
+
+  <footer>
+    <div class="wrap">
+      <div class="footer-links">
+        <a href="/privacy.html">Privacy Policy</a>
+        <a href="/terms.html">Terms of Use</a>
+        <a href="mailto:obitoventuresinc@gmail.com">Contact</a>
+      </div>
+      &copy; 2026 Obito Ventures Inc. All rights reserved.
+    </div>
+  </footer>
+
+</body>
+</html>

@@ -7,6 +7,7 @@ import {
   EmailAuthProvider,
 } from 'firebase/auth';
 import { auth } from '@/config/firebase';
+import { logAuthDebug } from '@/utils/authDebugLog';
 import { authService, mapFirebaseError } from '@/services/auth.service';
 import { accountService } from '@/services/account.service';
 import type { LoginPayload, RegisterPayload, AuthError } from '@/types/auth.types';
@@ -45,7 +46,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<AuthError | null>(null);
 
   useEffect(() => {
+    logAuthDebug('AuthContext: subscribing to onAuthStateChanged');
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      logAuthDebug(`onAuthStateChanged fired — user: ${firebaseUser ? firebaseUser.uid : 'null'}`);
       setUser(
         firebaseUser
           ? {
@@ -79,7 +82,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     setError(null);
     try {
-      return await authService.register(payload);
+      const result = await authService.register(payload);
+      // onAuthStateChanged already fired by the time updateProfile() (inside
+      // authService.register) sets the display name — Firebase doesn't
+      // re-fire that listener for profile updates, only for actual sign-in/
+      // sign-out. Without this, `user` is stuck with the pre-name snapshot
+      // (fullName: '') until the next full login. authService's returned
+      // user reflects the post-updateProfile state, so use it directly here
+      // instead of waiting on a listener callback that will never re-fire.
+      setUser(result.user);
+      return result;
     } catch (e) {
       const err = e as AuthError;
       setError(err);
