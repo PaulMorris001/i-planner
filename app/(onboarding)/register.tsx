@@ -1,15 +1,17 @@
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
-import { useState } from "react";
-import { router } from "expo-router";
 import { ScreenWrapper } from "@/components/layout/ScreenWrapper";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
-import { BackButton } from "@/components/ui/BackButton";
 import { AuthHeader } from "@/components/onboarding/AuthHeader";
 import { FormErrorBanner } from "@/components/onboarding/FormErrorBanner";
-import { useAuth } from "@/hooks/useAuth";
-import { Colors, Spacing, Typography, Radius } from "@/constants/theme";
+import { BackButton } from "@/components/ui/BackButton";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import { Routes } from "@/constants/routes";
+import { Colors, Radius, Spacing, Typography } from "@/constants/theme";
+import { useAuth } from "@/hooks/useAuth";
+import { router } from "expo-router";
+import { useState } from "react";
+import * as WebBrowser from 'expo-web-browser';
+import { TERMS_URL, PRIVACY_URL } from '@/constants/legal';
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 export default function Register() {
   const { register, loading } = useAuth();
@@ -37,6 +39,7 @@ export default function Register() {
 
   const handleRegister = async () => {
     if (!validate()) return;
+    setErrors({});
     try {
       await register({ fullName, email, password });
       router.replace(Routes.FOCUS);
@@ -50,7 +53,10 @@ export default function Register() {
       <View style={styles.root}>
         <BackButton variant="text" />
 
-        <AuthHeader title="Create your account" subtitle="Start planning in under two minutes.">
+        <AuthHeader
+          title="Create your account"
+          subtitle="Start planning in under two minutes."
+        >
           <View style={styles.logoMark}>
             <Text style={styles.logoText}>i</Text>
           </View>
@@ -101,9 +107,21 @@ export default function Register() {
 
         {/* Legal */}
         <Text style={styles.legal}>
-          By continuing, you agree to{" I-planner's"}{" "}
-          <Text style={styles.legalLink}>Terms of Service</Text> and{" "}
-          <Text style={styles.legalLink}>Privacy Policy</Text>.
+          By continuing, you agree to I-planner's{' '}
+          <Text
+            style={styles.legalLink}
+            onPress={() => WebBrowser.openBrowserAsync(TERMS_URL)}
+          >
+            Terms of Service
+          </Text>
+          {' '}and{' '}
+          <Text
+            style={styles.legalLink}
+            onPress={() => WebBrowser.openBrowserAsync(PRIVACY_URL)}
+          >
+            Privacy Policy
+          </Text>
+          .
         </Text>
 
         {/* Footer */}
@@ -156,7 +174,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: Colors.primary,
   },
-    logoMark: {
+  logoMark: {
     width: 52,
     height: 52,
     borderRadius: Radius.md,
@@ -165,7 +183,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: Spacing.lg,
   },
-   logoText: {
+  logoText: {
     fontSize: 28,
     fontWeight: "800",
     color: Colors.accent,

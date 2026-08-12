@@ -260,11 +260,11 @@ export default function Plans() {
         current period. Manage or cancel anytime in your App Store or Google Play account settings.
       </Text>
       <View style={styles.legalLinks}>
-        <Pressable onPress={() => WebBrowser.openBrowserAsync('https://i-planner.onrender.com/terms.html')}>
+        <Pressable onPress={() => WebBrowser.openBrowserAsync(TERMS_URL)}>
           <Text style={styles.legalLinkText}>Terms of Use</Text>
         </Pressable>
         <Text style={styles.legalLinkDivider}>·</Text>
-        <Pressable onPress={() => WebBrowser.openBrowserAsync('https://i-planner.onrender.com/privacy.html')}>
+        <Pressable onPress={() => WebBrowser.openBrowserAsync(PRIVACY_URL)}>
           <Text style={styles.legalLinkText}>Privacy Policy</Text>
         </Pressable>
       </View>

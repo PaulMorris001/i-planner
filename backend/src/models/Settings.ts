@@ -30,6 +30,13 @@ export interface SettingsDocument extends Document {
   aiAccessTasks?: boolean;
   aiAccessGoals?: boolean;
   aiAccessCalendar?: boolean;
+  // Set once the user has seen AiDisclosureGate (names OpenAI, explains what's
+  // sent) and tapped through it — coach.controller.ts refuses to call OpenAI
+  // until this is true, so no personal data reaches a third party before the
+  // user has explicitly agreed. Required by App Store guideline 5.1.2(i):
+  // permission must be obtained *before* sending data, not just revocable
+  // after the fact via the aiAccess* toggles above.
+  aiDisclosureAcknowledged?: boolean;
 }
 
 const settingsSchema = new Schema<SettingsDocument>({
@@ -46,6 +53,7 @@ const settingsSchema = new Schema<SettingsDocument>({
   aiAccessTasks: { type: Boolean, default: true },
   aiAccessGoals: { type: Boolean, default: true },
   aiAccessCalendar: { type: Boolean, default: true },
+  aiDisclosureAcknowledged: { type: Boolean, default: false },
 });
 
 export function toPublicSettings(doc: SettingsDocument | null) {
@@ -57,6 +65,7 @@ export function toPublicSettings(doc: SettingsDocument | null) {
     aiAccessTasks: doc?.aiAccessTasks ?? true,
     aiAccessGoals: doc?.aiAccessGoals ?? true,
     aiAccessCalendar: doc?.aiAccessCalendar ?? true,
+    aiDisclosureAcknowledged: doc?.aiDisclosureAcknowledged ?? false,
   };
 }
 

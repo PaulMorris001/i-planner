@@ -5,6 +5,9 @@ import { Habit } from '../models/Habit';
 import { Settings } from '../models/Settings';
 import { Plan } from '../models/Plan';
 import { CoachMessage } from '../models/CoachMessage';
+import { Subscription } from '../models/Subscription';
+import { Syllabus } from '../models/Syllabus';
+import { AiUsage } from '../models/AiUsage';
 import { AuthedRequest } from '../middleware/requireAuth';
 
 // Wipes every piece of app data owned by this user. The Firebase Auth account
@@ -21,6 +24,9 @@ export async function deleteAccount(req: AuthedRequest, res: Response) {
     Settings.deleteMany({ firebaseUid }),
     Plan.deleteMany({ firebaseUid }),
     CoachMessage.deleteMany({ firebaseUid }),
+    Subscription.deleteMany({ firebaseUid }),
+    Syllabus.deleteMany({ firebaseUid }),
+    AiUsage.deleteMany({ firebaseUid }),
   ]);
 
   res.status(204).send();

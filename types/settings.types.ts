@@ -6,4 +6,5 @@ export interface Settings {
   aiAccessTasks: boolean;
   aiAccessGoals: boolean;
   aiAccessCalendar: boolean;
+  aiDisclosureAcknowledged: boolean;
 }

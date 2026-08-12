@@ -9,8 +9,10 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { SegmentedToggle } from '@/components/ui/SegmentedToggle';
 import { CoachMessageText } from '@/components/coach/CoachMessageText';
 import { TypingMessageText } from '@/components/coach/TypingMessageText';
+import { AiDisclosureGate } from '@/components/coach/AiDisclosureGate';
 import { useOnboarding } from '@/hooks/useOnboarding';
 import { useTasks } from '@/hooks/useTasks';
+import { useSettings } from '@/hooks/useSettings';
 import { coachService } from '@/services/coach.service';
 import { Colors, Spacing } from '@/constants/theme';
 import type { CoachMessage, CoachModeId } from '@/types/coach.types';
@@ -59,6 +61,15 @@ function AnimatedMessageRow({ children }: { children: ReactNode }) {
 export default function Coach() {
   const { focusProfile } = useOnboarding();
   const { refetch: refetchTasks, syncExternallyCreatedTask } = useTasks();
+  const {
+    loading: settingsLoading,
+    aiAccessTasks,
+    aiAccessGoals,
+    aiAccessCalendar,
+    aiDisclosureAcknowledged,
+    setAiAccess,
+    acknowledgeAiDisclosure,
+  } = useSettings();
   const [modeOverride, setModeOverride] = useState<CoachModeId | null>(null);
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -167,6 +178,28 @@ export default function Coach() {
       setSending(false);
     }
   };
+
+  if (settingsLoading) {
+    return (
+      <ScreenWrapper backgroundColor={Colors.offWhite} edges={['top', 'right', 'left']}>
+        <View style={styles.emptyWrap}>
+          <ActivityIndicator color={Colors.primaryLight} />
+        </View>
+      </ScreenWrapper>
+    );
+  }
+
+  if (!aiDisclosureAcknowledged) {
+    return (
+      <ScreenWrapper backgroundColor={Colors.offWhite} edges={['top', 'right', 'left']}>
+        <AiDisclosureGate
+          consent={{ aiAccessTasks, aiAccessGoals, aiAccessCalendar }}
+          onToggle={setAiAccess}
+          onAgree={acknowledgeAiDisclosure}
+        />
+      </ScreenWrapper>
+    );
+  }
 
   return (
     <ScreenWrapper backgroundColor={Colors.offWhite} edges={['top', 'right', 'left']}>

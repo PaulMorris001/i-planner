@@ -41,6 +41,14 @@ export async function sendCoachMessage(req: AuthedRequest, res: Response) {
     Subscription.findOne({ firebaseUid: req.userId }),
   ]);
 
+  // Server-side backstop for the AiDisclosureGate shown in app/(app)/coach.tsx —
+  // App Store guideline 5.1.2(i) requires permission *before* any personal data
+  // reaches OpenAI, so this must be enforced here too, not just by the client
+  // hiding the chat UI until the gate is acknowledged.
+  if (!settings?.aiDisclosureAcknowledged) {
+    throw new ApiError(403, 'AI data-sharing disclosure has not been acknowledged yet.', 'general');
+  }
+
   const usage = await checkAndConsumeQuery(req.userId!, subscription?.tier ?? 'free');
   if (!usage.allowed) {
     const period = usage.period === 'week' ? 'week' : 'month';

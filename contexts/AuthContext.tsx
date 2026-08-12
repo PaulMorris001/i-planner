@@ -1,17 +1,30 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { auth } from "@/config/firebase";
+import { accountService } from "@/services/account.service";
 import {
-  onAuthStateChanged,
-  signOut,
+  authService,
+  mapFirebaseError,
+  mapFirebaseUser,
+} from "@/services/auth.service";
+import type {
+  AuthError,
+  LoginPayload,
+  RegisterPayload,
+} from "@/types/auth.types";
+import type { User } from "@/types/user.types";
+import {
   deleteUser,
-  reauthenticateWithCredential,
   EmailAuthProvider,
-} from 'firebase/auth';
-import { auth } from '@/config/firebase';
-import { logAuthDebug } from '@/utils/authDebugLog';
-import { authService, mapFirebaseError } from '@/services/auth.service';
-import { accountService } from '@/services/account.service';
-import type { LoginPayload, RegisterPayload, AuthError } from '@/types/auth.types';
-import type { User } from '@/types/user.types';
+  onAuthStateChanged,
+  reauthenticateWithCredential,
+  signOut,
+} from "firebase/auth";
+import {
+  createContext,
+  ReactNode,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 
 // Distinguishes "need a password to finish" from a real failure — thrown by
 // deleteAccount so the caller can prompt for a password and retry, rather
@@ -24,7 +37,9 @@ interface AuthContextValue {
   loading: boolean;
   error: AuthError | null;
   login: (payload: LoginPayload) => ReturnType<typeof authService.login>;
-  register: (payload: RegisterPayload) => ReturnType<typeof authService.register>;
+  register: (
+    payload: RegisterPayload,
+  ) => ReturnType<typeof authService.register>;
   logout: () => Promise<void>;
   deleteAccount: (reauthPassword?: string) => Promise<void>;
   clearError: () => void;
@@ -46,18 +61,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<AuthError | null>(null);
 
   useEffect(() => {
-    logAuthDebug('AuthContext: subscribing to onAuthStateChanged');
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      logAuthDebug(`onAuthStateChanged fired — user: ${firebaseUser ? firebaseUser.uid : 'null'}`);
       setUser(
         firebaseUser
           ? {
               id: firebaseUser.uid,
-              email: firebaseUser.email ?? '',
-              fullName: firebaseUser.displayName ?? '',
-              createdAt: firebaseUser.metadata.creationTime ?? new Date().toISOString(),
+              email: firebaseUser.email ?? "",
+              fullName: firebaseUser.displayName ?? "",
+              createdAt:
+                firebaseUser.metadata.creationTime ?? new Date().toISOString(),
             }
-          : null
+          : null,
       );
       setInitializing(false);
     });
@@ -68,7 +82,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     setError(null);
     try {
-      return await authService.login(payload);
+      const result = await authService.login(payload);
+      setUser(result.user);
+      return result;
     } catch (e) {
       const err = e as AuthError;
       setError(err);
@@ -83,14 +99,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setError(null);
     try {
       const result = await authService.register(payload);
-      // onAuthStateChanged already fired by the time updateProfile() (inside
-      // authService.register) sets the display name — Firebase doesn't
-      // re-fire that listener for profile updates, only for actual sign-in/
-      // sign-out. Without this, `user` is stuck with the pre-name snapshot
-      // (fullName: '') until the next full login. authService's returned
-      // user reflects the post-updateProfile state, so use it directly here
-      // instead of waiting on a listener callback that will never re-fire.
-      setUser(result.user);
+      if (auth.currentUser) {
+        await auth.currentUser.reload();
+        setUser(mapFirebaseUser(auth.currentUser));
+      } else {
+        setUser(result.user);
+      }
       return result;
     } catch (e) {
       const err = e as AuthError;
@@ -114,11 +128,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // password (via reauthPassword) finishes the job.
   const deleteAccount = async (reauthPassword?: string) => {
     const currentUser = auth.currentUser;
-    if (!currentUser) throw { message: 'Not signed in.', field: 'general' } as AuthError;
+    if (!currentUser)
+      throw { message: "Not signed in.", field: "general" } as AuthError;
 
     if (reauthPassword) {
       try {
-        const credential = EmailAuthProvider.credential(currentUser.email!, reauthPassword);
+        const credential = EmailAuthProvider.credential(
+          currentUser.email!,
+          reauthPassword,
+        );
         await reauthenticateWithCredential(currentUser, credential);
       } catch (e) {
         throw mapFirebaseError(e);
@@ -131,7 +149,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await deleteUser(currentUser);
     } catch (e) {
-      if ((e as { code?: string })?.code === 'auth/requires-recent-login') {
+      if ((e as { code?: string })?.code === "auth/requires-recent-login") {
         throw new ReauthRequiredError();
       }
       throw mapFirebaseError(e);
@@ -142,7 +160,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, initializing, loading, error, login, register, logout, deleteAccount, clearError }}
+      value={{
+        user,
+        initializing,
+        loading,
+        error,
+        login,
+        register,
+        logout,
+        deleteAccount,
+        clearError,
+      }}
     >
       {children}
     </AuthContext.Provider>
@@ -151,6 +179,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth() {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within an AuthProvider');
+  if (!ctx) throw new Error("useAuth must be used within an AuthProvider");
   return ctx;
 }

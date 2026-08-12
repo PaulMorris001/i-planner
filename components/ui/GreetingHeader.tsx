@@ -1,7 +1,7 @@
-import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { SkeletonBlock } from '@/components/ui/Skeleton';
-import { Colors, Spacing } from '@/constants/theme';
-import { useAuth } from '@/hooks/useAuth';
+import { SkeletonBlock } from "@/components/ui/Skeleton";
+import { Colors, Spacing } from "@/constants/theme";
+import { useAuth } from "@/hooks/useAuth";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
 interface GreetingHeaderProps {
   greeting?: string;
@@ -14,12 +14,17 @@ interface GreetingHeaderProps {
 
 function getTimeBasedGreeting(): string {
   const hour = new Date().getHours();
-  if (hour < 12) return 'Good morning,';
-  if (hour < 17) return 'Good afternoon,';
-  return 'Good evening,';
+  if (hour < 12) return "Good morning,";
+  if (hour < 17) return "Good afternoon,";
+  return "Good evening,";
 }
 
-export function GreetingHeader({ greeting, name, avatarInitial, onAvatarPress }: GreetingHeaderProps) {
+export function GreetingHeader({
+  greeting,
+  name,
+  avatarInitial,
+  onAvatarPress,
+}: GreetingHeaderProps) {
   const { user, initializing } = useAuth();
   // Only the real un-resolved case (waiting on user, with no explicit
   // override) should show a skeleton — an explicit name/avatarInitial prop
@@ -29,13 +34,16 @@ export function GreetingHeader({ greeting, name, avatarInitial, onAvatarPress }:
 
   const firstName = user?.fullName?.trim().split(/\s+/)[0];
   const initial = user?.fullName?.trim().charAt(0).toUpperCase();
+  const emailInitial = user?.email
+    ? user.email.trim().charAt(0).toUpperCase()
+    : undefined;
 
   const displayGreeting = greeting ?? getTimeBasedGreeting();
   // "||" not "??" — firstName/initial come from an empty-string fallback
   // (AuthContext stores fullName as '' when Firebase's displayName is null),
   // and "??" only catches null/undefined, letting '' straight through.
-  const displayName = name || firstName || 'Jordan';
-  const displayInitial = avatarInitial || initial || 'J';
+  const displayName = name || firstName || user?.email?.split("@")[0] || "";
+  const displayInitial = avatarInitial || initial || emailInitial || "J";
 
   const avatar = avatarLoading ? (
     <SkeletonBlock width={42} height={42} borderRadius={21} />
@@ -50,7 +58,12 @@ export function GreetingHeader({ greeting, name, avatarInitial, onAvatarPress }:
       <View style={{ flexShrink: 1 }}>
         <Text style={styles.greeting}>{displayGreeting}</Text>
         {nameLoading ? (
-          <SkeletonBlock width={130} height={23} borderRadius={6} style={{ marginTop: 3 }} />
+          <SkeletonBlock
+            width={130}
+            height={23}
+            borderRadius={6}
+            style={{ marginTop: 3 }}
+          />
         ) : (
           <Text style={styles.name}>{displayName}</Text>
         )}
@@ -68,21 +81,21 @@ export function GreetingHeader({ greeting, name, avatarInitial, onAvatarPress }:
 
 const styles = StyleSheet.create({
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     gap: Spacing.sm,
     paddingHorizontal: Spacing.md,
     paddingTop: Spacing.sm,
   },
   greeting: {
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: "600",
     color: Colors.textMuted,
   },
   name: {
     fontSize: 23,
-    fontWeight: '800',
+    fontWeight: "800",
     color: Colors.textPrimary,
     marginTop: 1,
   },
@@ -91,12 +104,12 @@ const styles = StyleSheet.create({
     height: 42,
     borderRadius: 21,
     backgroundColor: Colors.successSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   avatarText: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: "700",
     color: Colors.success,
   },
 });

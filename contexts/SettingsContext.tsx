@@ -121,6 +121,7 @@ const DEFAULT_SETTINGS: Settings = {
   aiAccessTasks: true,
   aiAccessGoals: true,
   aiAccessCalendar: true,
+  aiDisclosureAcknowledged: false,
 };
 
 type AiAccessKey = 'aiAccessTasks' | 'aiAccessGoals' | 'aiAccessCalendar';
@@ -135,6 +136,7 @@ interface SettingsContextValue extends Settings {
   enableReminders: () => Promise<boolean>;
   disableReminders: () => Promise<void>;
   setAiAccess: (key: AiAccessKey, value: boolean) => Promise<void>;
+  acknowledgeAiDisclosure: () => Promise<void>;
 }
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
@@ -283,6 +285,17 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const acknowledgeAiDisclosure = async () => {
+    const prevSettings = settings;
+    setSettings((s) => ({ ...s, aiDisclosureAcknowledged: true }));
+    try {
+      setSettings(await settingsService.patch({ aiDisclosureAcknowledged: true }));
+    } catch (err) {
+      setSettings(prevSettings);
+      console.error('[SettingsProvider] failed to acknowledge AI disclosure', err);
+    }
+  };
+
   return (
     <SettingsContext.Provider
       value={{
@@ -296,6 +309,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         enableReminders,
         disableReminders,
         setAiAccess,
+        acknowledgeAiDisclosure,
       }}
     >
       {children}

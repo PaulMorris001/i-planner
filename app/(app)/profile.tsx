@@ -1,41 +1,46 @@
-import { useState } from 'react';
-import { View, Text, Pressable, Switch, StyleSheet, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
-import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
-import { Button } from '@/components/ui/Button';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { DeleteAccountModal } from '@/components/profile/DeleteAccountModal';
-import { SkeletonBlock } from '@/components/ui/Skeleton';
-import { useAuth } from '@/hooks/useAuth';
-import { useOnboarding } from '@/hooks/useOnboarding';
-import { useSettings } from '@/hooks/useSettings';
-import { Colors, Spacing } from '@/constants/theme';
-import { Routes } from '@/constants/routes';
+import { ScreenWrapper } from "@/components/layout/ScreenWrapper";
+import { DeleteAccountModal } from "@/components/profile/DeleteAccountModal";
+import { Button } from "@/components/ui/Button";
+import { IconSymbol } from "@/components/ui/icon-symbol";
+import { SkeletonBlock } from "@/components/ui/Skeleton";
+import { Routes } from "@/constants/routes";
+import { Colors, Spacing } from "@/constants/theme";
+import { useAuth } from "@/hooks/useAuth";
+import { useOnboarding } from "@/hooks/useOnboarding";
+import { useSettings } from "@/hooks/useSettings";
+import { useRouter } from "expo-router";
+import { useState } from "react";
+import * as WebBrowser from 'expo-web-browser';
+import { TERMS_URL, PRIVACY_URL } from '@/constants/legal';
+import { CONSENT_ROWS } from '@/constants/aiConsent';
+import { Alert, Pressable, StyleSheet, Switch, Text, View } from "react-native";
 
-type PathId = 'student' | 'exam' | 'professional';
+type PathId = "student" | "exam" | "professional";
 
 const PATH_OPTIONS: { id: PathId; label: string; desc: string }[] = [
-  { id: 'student', label: 'Student', desc: 'Classes, coursework & campus life' },
-  { id: 'exam', label: 'Exam Candidate', desc: 'Certification & test prep' },
-  { id: 'professional', label: 'Professional', desc: 'Career, projects & goals' },
+  {
+    id: "student",
+    label: "Student",
+    desc: "Classes, coursework & campus life",
+  },
+  { id: "exam", label: "Exam Candidate", desc: "Certification & test prep" },
+  {
+    id: "professional",
+    label: "Professional",
+    desc: "Career, projects & goals",
+  },
 ];
 
 // focus.tsx stores 'exam_candidate'; this screen's PathId uses the shorter 'exam'.
 function toPathId(focusProfile: string | null): PathId {
-  if (focusProfile === 'student') return 'student';
-  if (focusProfile === 'exam_candidate') return 'exam';
-  return 'professional';
+  if (focusProfile === "student") return "student";
+  if (focusProfile === "exam_candidate") return "exam";
+  return "professional";
 }
 
 function fromPathId(id: PathId): string {
-  return id === 'exam' ? 'exam_candidate' : id;
+  return id === "exam" ? "exam_candidate" : id;
 }
-
-const CONSENT_ROWS = [
-  { key: 'aiAccessTasks', label: 'Tasks & deadlines', desc: 'Lets the AI plan around your to-dos' },
-  { key: 'aiAccessGoals', label: 'Goals & milestones', desc: 'Lets the AI connect tasks to your goals' },
-  { key: 'aiAccessCalendar', label: 'Calendar events', desc: 'Lets the AI schedule around your day' },
-] as const;
 
 export default function Profile() {
   const router = useRouter();
@@ -64,21 +69,27 @@ export default function Profile() {
   const currentPath = toPathId(focusProfile);
   // "||" not "??" — fullName is '' (not undefined) when Firebase's
   // displayName is null, and "??" only catches null/undefined.
-  const displayName = user?.fullName || 'Jordan';
-  const avatarInitial = user?.fullName?.trim().charAt(0).toUpperCase() || 'J';
+  const displayName = user?.fullName || user?.email || "";
+  const avatarInitial =
+    user?.fullName?.trim().charAt(0).toUpperCase() ||
+    (user?.email ? user.email.trim().charAt(0).toUpperCase() : "J");
 
   const handleLogout = () => {
-    Alert.alert('Log out?', "You'll need to sign back in to access your planner.", [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Log out',
-        style: 'destructive',
-        onPress: async () => {
-          await logout();
-          router.replace(Routes.WELCOME);
+    Alert.alert(
+      "Log out?",
+      "You'll need to sign back in to access your planner.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Log out",
+          style: "destructive",
+          onPress: async () => {
+            await logout();
+            router.replace(Routes.WELCOME);
+          },
         },
-      },
-    ]);
+      ],
+    );
   };
 
   const handleConnectApple = async () => {
@@ -86,7 +97,7 @@ export default function Profile() {
     if (!ok) {
       Alert.alert(
         "Couldn't connect calendar",
-        'Calendar permission was denied. You can allow it later from your device settings.'
+        "Calendar permission was denied. You can allow it later from your device settings.",
       );
     }
   };
@@ -94,7 +105,10 @@ export default function Profile() {
   const handleConnectGoogle = async () => {
     const ok = await connectGoogleCalendar();
     if (!ok) {
-      Alert.alert("Couldn't connect calendar", 'Something went wrong finishing the Google sign-in. Try again.');
+      Alert.alert(
+        "Couldn't connect calendar",
+        "Something went wrong finishing the Google sign-in. Try again.",
+      );
     }
   };
 
@@ -103,9 +117,9 @@ export default function Profile() {
       `Disconnect ${calendarName}?`,
       "New classes and tasks won't be added to your calendar anymore. Events already created will stay put.",
       [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Disconnect', style: 'destructive', onPress: onConfirm },
-      ]
+        { text: "Cancel", style: "cancel" },
+        { text: "Disconnect", style: "destructive", onPress: onConfirm },
+      ],
     );
   };
 
@@ -114,26 +128,32 @@ export default function Profile() {
     if (!ok) {
       Alert.alert(
         "Couldn't enable reminders",
-        'Notification permission was denied. You can allow it later from your device settings.'
+        "Notification permission was denied. You can allow it later from your device settings.",
       );
     }
   };
 
   const handleDisableReminders = () => {
     Alert.alert(
-      'Turn off reminders?',
-      'Scheduled reminders for your existing tasks and classes will be cancelled, and new ones won’t get one either.',
+      "Turn off reminders?",
+      "Scheduled reminders for your existing tasks and classes will be cancelled, and new ones won’t get one either.",
       [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Turn off', style: 'destructive', onPress: disableReminders },
-      ]
+        { text: "Cancel", style: "cancel" },
+        { text: "Turn off", style: "destructive", onPress: disableReminders },
+      ],
     );
   };
 
-  const currentPathLabel = PATH_OPTIONS.find((o) => o.id === currentPath)?.label ?? 'Professional';
+  const currentPathLabel =
+    PATH_OPTIONS.find((o) => o.id === currentPath)?.label ?? "Professional";
 
   return (
-    <ScreenWrapper backgroundColor={Colors.offWhite} scroll style={styles.scrollContent} edges={['top', 'right', 'left']}>
+    <ScreenWrapper
+      backgroundColor={Colors.offWhite}
+      scroll
+      style={styles.scrollContent}
+      edges={["top", "right", "left"]}
+    >
       <View style={styles.body}>
         <Text style={styles.pageTitle}>Profile & settings</Text>
 
@@ -157,17 +177,21 @@ export default function Profile() {
 
         <Text style={styles.eyebrow}>SWITCH PATH</Text>
         <Text style={styles.sectionDesc}>
-          Changing your path re-arranges your dashboard — your tasks, goals and habits stay put.
+          Changing your path re-arranges your dashboard — your tasks, goals and
+          habits stay put.
         </Text>
 
-        <View style={{ position: 'relative' }}>
-          <Pressable style={styles.pathButton} onPress={() => setPathMenuOpen((v) => !v)}>
+        <View style={{ position: "relative" }}>
+          <Pressable
+            style={styles.pathButton}
+            onPress={() => setPathMenuOpen((v) => !v)}
+          >
             <View style={{ flex: 1 }}>
               <Text style={styles.pathEyebrow}>CURRENT PATH</Text>
               <Text style={styles.pathLabel}>{currentPathLabel}</Text>
             </View>
             <IconSymbol
-              name={pathMenuOpen ? 'chevron.up' : 'chevron.down'}
+              name={pathMenuOpen ? "chevron.up" : "chevron.down"}
               color={Colors.textSecondary}
               size={20}
             />
@@ -198,7 +222,11 @@ export default function Profile() {
                     </View>
                     {isCurrent && (
                       <View style={styles.pathCheck}>
-                        <IconSymbol name="checkmark" color={Colors.white} size={13} />
+                        <IconSymbol
+                          name="checkmark"
+                          color={Colors.white}
+                          size={13}
+                        />
                       </View>
                     )}
                   </Pressable>
@@ -208,7 +236,10 @@ export default function Profile() {
           )}
         </View>
 
-        <Pressable style={styles.plansCard} onPress={() => router.push(Routes.PLANS)}>
+        <Pressable
+          style={styles.plansCard}
+          onPress={() => router.push(Routes.PLANS)}
+        >
           <View style={styles.plansIconBox}>
             <IconSymbol name="star.fill" color={Colors.white} size={20} />
           </View>
@@ -216,33 +247,54 @@ export default function Profile() {
             <Text style={styles.plansTitle}>Plans & pricing</Text>
             <Text style={styles.plansSub}>Compare tiers & upgrade</Text>
           </View>
-          <IconSymbol name="chevron.right" color={Colors.primaryLight} size={20} />
+          <IconSymbol
+            name="chevron.right"
+            color={Colors.primaryLight}
+            size={20}
+          />
         </Pressable>
 
-        <Text style={[styles.eyebrow, { marginTop: Spacing.lg }]}>CALENDAR SYNC</Text>
+        <Text style={[styles.eyebrow, { marginTop: Spacing.lg }]}>
+          CALENDAR SYNC
+        </Text>
         <Text style={styles.sectionDesc}>
-          Classes and tasks with a due date get written to whichever calendars you connect here.
+          Classes and tasks with a due date get written to whichever calendars
+          you connect here.
         </Text>
 
         <View style={styles.consentList}>
           <View style={styles.calendarRow}>
             <View style={styles.calendarIconBox}>
-              <IconSymbol name="calendar" color={Colors.textPrimary} size={17} />
+              <IconSymbol
+                name="calendar"
+                color={Colors.textPrimary}
+                size={17}
+              />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.consentLabel}>Apple Calendar</Text>
-              <Text style={styles.consentDesc}>{appleCalendarConnected ? 'Connected' : 'Not connected'}</Text>
+              <Text style={styles.consentDesc}>
+                {appleCalendarConnected ? "Connected" : "Not connected"}
+              </Text>
             </View>
             <Pressable
-              style={[styles.calendarActionBtn, appleCalendarConnected && styles.calendarActionBtnDanger]}
+              style={[
+                styles.calendarActionBtn,
+                appleCalendarConnected && styles.calendarActionBtnDanger,
+              ]}
               onPress={() =>
                 appleCalendarConnected
-                  ? confirmDisconnect('Apple Calendar', disconnectAppleCalendar)
+                  ? confirmDisconnect("Apple Calendar", disconnectAppleCalendar)
                   : handleConnectApple()
               }
             >
-              <Text style={[styles.calendarActionText, appleCalendarConnected && styles.calendarActionTextDanger]}>
-                {appleCalendarConnected ? 'Disconnect' : 'Connect'}
+              <Text
+                style={[
+                  styles.calendarActionText,
+                  appleCalendarConnected && styles.calendarActionTextDanger,
+                ]}
+              >
+                {appleCalendarConnected ? "Disconnect" : "Connect"}
               </Text>
             </Pressable>
           </View>
@@ -253,50 +305,85 @@ export default function Profile() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.consentLabel}>Google Calendar</Text>
-              <Text style={styles.consentDesc}>{googleCalendarConnected ? 'Connected' : 'Not connected'}</Text>
+              <Text style={styles.consentDesc}>
+                {googleCalendarConnected ? "Connected" : "Not connected"}
+              </Text>
             </View>
             <Pressable
-              style={[styles.calendarActionBtn, googleCalendarConnected && styles.calendarActionBtnDanger]}
+              style={[
+                styles.calendarActionBtn,
+                googleCalendarConnected && styles.calendarActionBtnDanger,
+              ]}
               onPress={() =>
                 googleCalendarConnected
-                  ? confirmDisconnect('Google Calendar', disconnectGoogleCalendar)
+                  ? confirmDisconnect(
+                      "Google Calendar",
+                      disconnectGoogleCalendar,
+                    )
                   : handleConnectGoogle()
               }
             >
-              <Text style={[styles.calendarActionText, googleCalendarConnected && styles.calendarActionTextDanger]}>
-                {googleCalendarConnected ? 'Disconnect' : 'Connect'}
+              <Text
+                style={[
+                  styles.calendarActionText,
+                  googleCalendarConnected && styles.calendarActionTextDanger,
+                ]}
+              >
+                {googleCalendarConnected ? "Disconnect" : "Connect"}
               </Text>
             </Pressable>
           </View>
         </View>
 
-        <Text style={[styles.eyebrow, { marginTop: Spacing.lg }]}>REMINDERS</Text>
+        <Text style={[styles.eyebrow, { marginTop: Spacing.lg }]}>
+          REMINDERS
+        </Text>
         <Text style={styles.sectionDesc}>
-          Get notified 15 minutes before and exactly when a task or class with a due/start date and
-          time is due — labeled so you know which is which.
+          Get notified 15 minutes before and exactly when a task or class with a
+          due/start date and time is due — labeled so you know which is which.
         </Text>
 
         <View style={styles.consentList}>
           <View style={styles.calendarRow}>
             <View style={styles.calendarIconBox}>
-              <IconSymbol name="bell.fill" color={Colors.textPrimary} size={17} />
+              <IconSymbol
+                name="bell.fill"
+                color={Colors.textPrimary}
+                size={17}
+              />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.consentLabel}>Task & class reminders</Text>
-              <Text style={styles.consentDesc}>{remindersEnabled ? 'Enabled' : 'Off'}</Text>
+              <Text style={styles.consentDesc}>
+                {remindersEnabled ? "Enabled" : "Off"}
+              </Text>
             </View>
             <Pressable
-              style={[styles.calendarActionBtn, remindersEnabled && styles.calendarActionBtnDanger]}
-              onPress={() => (remindersEnabled ? handleDisableReminders() : handleEnableReminders())}
+              style={[
+                styles.calendarActionBtn,
+                remindersEnabled && styles.calendarActionBtnDanger,
+              ]}
+              onPress={() =>
+                remindersEnabled
+                  ? handleDisableReminders()
+                  : handleEnableReminders()
+              }
             >
-              <Text style={[styles.calendarActionText, remindersEnabled && styles.calendarActionTextDanger]}>
-                {remindersEnabled ? 'Turn off' : 'Enable'}
+              <Text
+                style={[
+                  styles.calendarActionText,
+                  remindersEnabled && styles.calendarActionTextDanger,
+                ]}
+              >
+                {remindersEnabled ? "Turn off" : "Enable"}
               </Text>
             </Pressable>
           </View>
         </View>
 
-        <Text style={[styles.eyebrow, { marginTop: Spacing.lg }]}>AI DATA ACCESS</Text>
+        <Text style={[styles.eyebrow, { marginTop: Spacing.lg }]}>
+          AI DATA ACCESS
+        </Text>
         <Text style={styles.sectionDesc}>
           Control what the AI Coach can use. Revoke any category at any time.
         </Text>
@@ -320,31 +407,64 @@ export default function Profile() {
 
         <Text style={[styles.eyebrow, { marginTop: Spacing.lg }]}>LEGAL</Text>
         <View style={styles.legalCard}>
-          <Pressable style={[styles.legalRow, styles.legalRowBorder]}>
+          <Pressable
+            style={[styles.legalRow, styles.legalRowBorder]}
+            onPress={() => WebBrowser.openBrowserAsync(TERMS_URL)}
+          >
             <Text style={styles.legalLabel}>Terms of Service</Text>
-            <IconSymbol name="chevron.right" color={Colors.textMuted} size={18} />
+            <IconSymbol
+              name="chevron.right"
+              color={Colors.textMuted}
+              size={18}
+            />
           </Pressable>
-          <Pressable style={styles.legalRow}>
+          <Pressable
+            style={styles.legalRow}
+            onPress={() => WebBrowser.openBrowserAsync(PRIVACY_URL)}
+          >
             <Text style={styles.legalLabel}>Privacy Policy</Text>
-            <IconSymbol name="chevron.right" color={Colors.textMuted} size={18} />
+            <IconSymbol
+              name="chevron.right"
+              color={Colors.textMuted}
+              size={18}
+            />
           </Pressable>
         </View>
 
         <Text style={styles.disclaimer}>
-          I-Planner is a planning tool, not a licensed financial, legal, or career advisor. AI
-          suggestions are informational only — verify important decisions independently.
+          I-Planner is a planning tool, not a licensed financial, legal, or
+          career advisor. AI suggestions are informational only — verify
+          important decisions independently.
         </Text>
 
-        <Button label="Log out" onPress={handleLogout} variant="secondary" style={styles.logoutButton} />
+        <Button
+          label="Log out"
+          onPress={handleLogout}
+          variant="secondary"
+          style={styles.logoutButton}
+        />
 
-        <Text style={[styles.eyebrow, { marginTop: Spacing.lg, color: Colors.error }]}>DANGER ZONE</Text>
-        <Pressable style={styles.deleteAccountRow} onPress={() => setDeleteModalOpen(true)}>
+        <Text
+          style={[
+            styles.eyebrow,
+            { marginTop: Spacing.lg, color: Colors.error },
+          ]}
+        >
+          DANGER ZONE
+        </Text>
+        <Pressable
+          style={styles.deleteAccountRow}
+          onPress={() => setDeleteModalOpen(true)}
+        >
           <Text style={styles.deleteAccountText}>Delete account</Text>
           <IconSymbol name="chevron.right" color={Colors.error} size={18} />
         </Pressable>
       </View>
 
-      <DeleteAccountModal visible={deleteModalOpen} onClose={() => setDeleteModalOpen(false)} />
+      <DeleteAccountModal
+        visible={deleteModalOpen}
+        onClose={() => setDeleteModalOpen(false)}
+      />
     </ScreenWrapper>
   );
 }
@@ -359,14 +479,14 @@ const styles = StyleSheet.create({
   },
   pageTitle: {
     fontSize: 26,
-    fontWeight: '800',
+    fontWeight: "800",
     color: Colors.textPrimary,
     letterSpacing: -0.3,
     lineHeight: 30,
   },
   profileCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 13,
     backgroundColor: Colors.white,
     borderWidth: 1,
@@ -380,17 +500,17 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: 24,
     backgroundColor: Colors.successSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   avatarText: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: "700",
     color: Colors.success,
   },
   profileName: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: "700",
     color: Colors.textPrimary,
   },
   profilePlan: {
@@ -400,9 +520,9 @@ const styles = StyleSheet.create({
   },
   eyebrow: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: "700",
     color: Colors.textMuted,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
     letterSpacing: 0.5,
     marginTop: 24,
     marginBottom: 4,
@@ -414,8 +534,8 @@ const styles = StyleSheet.create({
     marginBottom: 11,
   },
   pathButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
     backgroundColor: Colors.white,
     borderWidth: 1.5,
@@ -426,20 +546,20 @@ const styles = StyleSheet.create({
   },
   pathEyebrow: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: "700",
     color: Colors.textMuted,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
     letterSpacing: 0.4,
   },
   pathLabel: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: "700",
     color: Colors.textPrimary,
     marginTop: 2,
   },
   pathMenu: {
-    position: 'absolute',
-    top: '100%',
+    position: "absolute",
+    top: "100%",
     marginTop: 6,
     left: 0,
     right: 0,
@@ -448,7 +568,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
     borderRadius: 15,
-    overflow: 'hidden',
+    overflow: "hidden",
     shadowColor: Colors.textPrimary,
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.15,
@@ -456,8 +576,8 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   pathOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
     padding: 14,
     paddingHorizontal: 16,
@@ -471,7 +591,7 @@ const styles = StyleSheet.create({
   },
   pathOptionLabel: {
     fontSize: 14.5,
-    fontWeight: '700',
+    fontWeight: "700",
     color: Colors.textPrimary,
   },
   pathOptionDesc: {
@@ -485,12 +605,12 @@ const styles = StyleSheet.create({
     height: 22,
     borderRadius: 11,
     backgroundColor: Colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   plansCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 13,
     backgroundColor: Colors.infoSoft,
     borderWidth: 1.5,
@@ -504,12 +624,12 @@ const styles = StyleSheet.create({
     height: 38,
     borderRadius: 11,
     backgroundColor: Colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   plansTitle: {
     fontSize: 14.5,
-    fontWeight: '700',
+    fontWeight: "700",
     color: Colors.textPrimary,
   },
   plansSub: {
@@ -521,8 +641,8 @@ const styles = StyleSheet.create({
     gap: 9,
   },
   consentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
     backgroundColor: Colors.white,
     borderWidth: 1,
@@ -533,7 +653,7 @@ const styles = StyleSheet.create({
   },
   consentLabel: {
     fontSize: 14.5,
-    fontWeight: '700',
+    fontWeight: "700",
     color: Colors.textPrimary,
   },
   consentDesc: {
@@ -543,8 +663,8 @@ const styles = StyleSheet.create({
     lineHeight: 17,
   },
   calendarRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
     backgroundColor: Colors.white,
     borderWidth: 1,
@@ -560,13 +680,13 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.offWhite,
     borderWidth: 1,
     borderColor: Colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   googleG: {
     fontSize: 15,
-    fontWeight: '800',
-    color: '#4285F4',
+    fontWeight: "800",
+    color: "#4285F4",
   },
   calendarActionBtn: {
     borderWidth: 1.5,
@@ -577,7 +697,7 @@ const styles = StyleSheet.create({
   },
   calendarActionText: {
     fontSize: 12.5,
-    fontWeight: '700',
+    fontWeight: "700",
     color: Colors.primaryLight,
   },
   calendarActionBtnDanger: {
@@ -592,12 +712,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
     borderRadius: 15,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   legalRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     padding: 14,
     paddingHorizontal: 16,
   },
@@ -607,7 +727,7 @@ const styles = StyleSheet.create({
   },
   legalLabel: {
     fontSize: 14.5,
-    fontWeight: '600',
+    fontWeight: "600",
     color: Colors.textPrimary,
   },
   disclaimer: {
@@ -620,9 +740,9 @@ const styles = StyleSheet.create({
     marginTop: Spacing.lg,
   },
   deleteAccountRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     backgroundColor: Colors.errorBg,
     borderWidth: 1,
     borderColor: Colors.error,
@@ -632,7 +752,7 @@ const styles = StyleSheet.create({
   },
   deleteAccountText: {
     fontSize: 14.5,
-    fontWeight: '700',
+    fontWeight: "700",
     color: Colors.error,
   },
 });

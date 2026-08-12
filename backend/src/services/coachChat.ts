@@ -52,11 +52,6 @@ export async function generateCoachReply(input: {
     "longer answer easier to scan — but don't force them into a short, simple reply.\n\n" +
     `--- User's current planner data ---\n${input.contextSummary}`;
 
-  // Only "Plan My Day" can create tasks — the one mode actually about
-  // scheduling, so a casual Study Buddy/Goal Coach chat never accidentally
-  // triggers task creation. Also respects the user's "Tasks & deadlines" AI
-  // Data Access toggle — if they've told the coach not to touch task data, it
-  // shouldn't be able to create tasks either, not just read them.
   const tools = input.mode === 'plan' && input.canCreateTasks ? [CREATE_TASK_TOOL] : undefined;
 
   try {

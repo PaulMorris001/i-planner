@@ -21,7 +21,7 @@ export async function updateSettings(req: AuthedRequest, res: Response) {
   // real token exchange first.
   const {
     appleCalendarConnected, calendarGateDismissed, remindersEnabled, timeZone,
-    aiAccessTasks, aiAccessGoals, aiAccessCalendar,
+    aiAccessTasks, aiAccessGoals, aiAccessCalendar, aiDisclosureAcknowledged,
   } = req.body ?? {};
 
   const update: Record<string, boolean | string> = {};
@@ -32,6 +32,7 @@ export async function updateSettings(req: AuthedRequest, res: Response) {
   if (aiAccessTasks !== undefined) update.aiAccessTasks = !!aiAccessTasks;
   if (aiAccessGoals !== undefined) update.aiAccessGoals = !!aiAccessGoals;
   if (aiAccessCalendar !== undefined) update.aiAccessCalendar = !!aiAccessCalendar;
+  if (aiDisclosureAcknowledged !== undefined) update.aiDisclosureAcknowledged = !!aiDisclosureAcknowledged;
 
   const settings = await Settings.findOneAndUpdate(
     { firebaseUid: req.userId },
