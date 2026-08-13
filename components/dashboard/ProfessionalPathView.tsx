@@ -11,7 +11,7 @@ import { Colors } from '@/constants/theme';
 import { useGoals } from '@/hooks/useGoals';
 import { useTasks } from '@/hooks/useTasks';
 import type { Goal } from '@/types/goal.types';
-import { taskOccursOnDay, weekdayIndexMonday, formatMonthYear } from '@/utils/date';
+import { taskOccursOnDay, weekdayIndexMonday, formatMonthYear, isTaskDoneOnDate } from '@/utils/date';
 import { dashboardStyles as styles } from './dashboardStyles';
 
 interface ProfessionalPathViewProps {
@@ -31,9 +31,10 @@ export function ProfessionalPathView({ quickLinks, onViewGoal }: ProfessionalPat
   const nextCareerMilestone = careerGoal?.milestones.find((m) => !m.done);
 
   // Today's task completion, for the "Today's tasks" stat.
-  const todayIdx = weekdayIndexMonday(new Date());
+  const today = new Date();
+  const todayIdx = weekdayIndexMonday(today);
   const todaysTasks = tasks.filter((t) => taskOccursOnDay(t, todayIdx));
-  const todaysTasksDone = todaysTasks.filter((t) => t.done).length;
+  const todaysTasksDone = todaysTasks.filter((t) => isTaskDoneOnDate(t, today)).length;
 
   return (
     <>

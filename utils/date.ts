@@ -26,6 +26,26 @@ export function localMidnight(date: Date): number {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 }
 
+// Local (not UTC) "YYYY-MM-DD" — matches weekdayIndexMonday/localMidnight's
+// local-time convention, so a date near midnight keys to the calendar day the
+// user actually sees rather than shifting under UTC.
+export function toDateKey(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+// Whether `task` is done for the occurrence on `date`. A one-time task has a
+// single completion state (`done`); a recurring task is one Task document
+// shared across every weekday it occurs on, so its completion has to be
+// tracked per calendar date (`completedDates`) instead — otherwise
+// completing today's occurrence would show every other occurrence as done.
+export function isTaskDoneOnDate(task: Task, date: Date): boolean {
+  if (!task.recurring) return task.done;
+  return (task.completedDates ?? []).includes(toDateKey(date));
+}
+
 // dueDate/startDate/targetDate carry two genuinely different shapes depending
 // on how they were created, and this has to handle both correctly:
 //  - Plain "YYYY-MM-DD" with no time-of-day (AI/syllabus-created tasks, some
@@ -78,7 +98,7 @@ export function computeTaskStreak(tasks: Task[]): number {
     const due = parseISODateLocal(task.dueDate);
     if (Number.isNaN(due.getTime())) continue;
     const dayMs = localMidnight(due);
-    completedByDay.set(dayMs, (completedByDay.get(dayMs) ?? false) || task.done);
+    completedByDay.set(dayMs, (completedByDay.get(dayMs) ?? false) || isTaskDoneOnDate(task, due));
   }
 
   const todayMs = localMidnight(new Date());

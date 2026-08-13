@@ -7,10 +7,17 @@ import { ApiError } from '../utils/ApiError';
 import { buildContextSummary } from '../services/coachContext';
 import { generateCoachReply } from '../services/coachChat';
 import { checkAndConsumeQuery } from '../services/aiUsageLimiter';
+import { FEATURE_MIN_TIER, hasTier } from '../constants/featureTiers';
 
 // How many past messages ride along as conversation history on each request —
 // caps token growth for a long-running chat rather than sending the full history.
 const HISTORY_LIMIT = 20;
+
+const MODE_LABEL: Record<CoachModeId, string> = {
+  study: 'Study Buddy',
+  plan: 'Plan My Day',
+  goal: 'Goal Coach',
+};
 
 function assertValidMode(mode: string): asserts mode is CoachModeId {
   if (!(COACH_MODES as readonly string[]).includes(mode)) {
@@ -41,6 +48,12 @@ export async function sendCoachMessage(req: AuthedRequest, res: Response) {
     Subscription.findOne({ firebaseUid: req.userId }),
   ]);
 
+  const tier = subscription?.tier ?? 'free';
+  const requiredTier = FEATURE_MIN_TIER[`coach_${mode}`];
+  if (!hasTier(tier, requiredTier)) {
+    throw new ApiError(403, `${MODE_LABEL[mode]} requires a ${requiredTier} subscription.`, 'tier');
+  }
+
   // Server-side backstop for the AiDisclosureGate shown in app/(app)/coach.tsx —
   // App Store guideline 5.1.2(i) requires permission *before* any personal data
   // reaches OpenAI, so this must be enforced here too, not just by the client
@@ -49,7 +62,7 @@ export async function sendCoachMessage(req: AuthedRequest, res: Response) {
     throw new ApiError(403, 'AI data-sharing disclosure has not been acknowledged yet.', 'general');
   }
 
-  const usage = await checkAndConsumeQuery(req.userId!, subscription?.tier ?? 'free');
+  const usage = await checkAndConsumeQuery(req.userId!, tier);
   if (!usage.allowed) {
     const period = usage.period === 'week' ? 'week' : 'month';
     const resetLabel = usage.resetsAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });

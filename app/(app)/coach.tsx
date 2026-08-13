@@ -10,11 +10,16 @@ import { SegmentedToggle } from '@/components/ui/SegmentedToggle';
 import { CoachMessageText } from '@/components/coach/CoachMessageText';
 import { TypingMessageText } from '@/components/coach/TypingMessageText';
 import { AiDisclosureGate } from '@/components/coach/AiDisclosureGate';
+import { UpgradeModal } from '@/components/ui/UpgradeModal';
 import { useOnboarding } from '@/hooks/useOnboarding';
 import { useTasks } from '@/hooks/useTasks';
 import { useSettings } from '@/hooks/useSettings';
+import { usePurchases } from '@/contexts/PurchasesContext';
 import { coachService } from '@/services/coach.service';
 import { Colors, Spacing } from '@/constants/theme';
+import { Routes } from '@/constants/routes';
+import { FEATURE_MIN_TIER, TIER_LABEL, hasTier } from '@/constants/featureTiers';
+import { useRouter } from 'expo-router';
 import type { CoachMessage, CoachModeId } from '@/types/coach.types';
 
 interface Attachment {
@@ -59,6 +64,7 @@ function AnimatedMessageRow({ children }: { children: ReactNode }) {
 }
 
 export default function Coach() {
+  const router = useRouter();
   const { focusProfile } = useOnboarding();
   const { refetch: refetchTasks, syncExternallyCreatedTask } = useTasks();
   const {
@@ -70,7 +76,14 @@ export default function Coach() {
     setAiAccess,
     acknowledgeAiDisclosure,
   } = useSettings();
+  const { tier } = usePurchases();
   const [modeOverride, setModeOverride] = useState<CoachModeId | null>(null);
+  // Set only when a tap is blocked by tier — the current mode itself can also
+  // be gated (a professional-focus free/student user defaults into "Plan My
+  // Day", which is Professional+), handled separately below via
+  // currentModeGated rather than this, since that case has no accessible
+  // mode to silently fall back to.
+  const [upgradeTarget, setUpgradeTarget] = useState<CoachModeId | null>(null);
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [messages, setMessages] = useState<CoachMessage[]>([]);
@@ -85,8 +98,17 @@ export default function Coach() {
 
   const visibleModes = MODES.filter((m) => m.id !== 'study' || focusProfile !== 'professional');
   const mode = modeOverride && visibleModes.some((m) => m.id === modeOverride) ? modeOverride : visibleModes[0].id;
+  const currentModeGated = !hasTier(tier, FEATURE_MIN_TIER[`coach_${mode}`]);
 
   const emptyState = EMPTY_STATE[mode];
+
+  const handleModeChange = (nextMode: CoachModeId) => {
+    if (!hasTier(tier, FEATURE_MIN_TIER[`coach_${nextMode}`])) {
+      setUpgradeTarget(nextMode);
+      return;
+    }
+    setModeOverride(nextMode);
+  };
 
   // Conversation history is per mode, stored server-side — reload whenever the
   // active mode changes.
@@ -166,8 +188,14 @@ export default function Coach() {
       // The AI-usage-cap error (429) has a specific, useful message from the
       // server — show it as-is rather than the generic connection message.
       const status = (err as { status?: number } | null)?.status;
+      const field = (err as { field?: string } | null)?.field;
       const serverMessage = (err as { message?: string } | null)?.message;
-      if (status === 429 && serverMessage) {
+      if (status === 403 && field === 'tier') {
+        // Defense-in-depth path — the mode picker already blocks switching to
+        // a gated mode client-side, so this only fires if that check was
+        // somehow stale (e.g. a subscription lapsed mid-session).
+        setUpgradeTarget(mode);
+      } else if (status === 429 && serverMessage) {
         Alert.alert("You've hit your AI Coach limit", serverMessage);
       } else {
         Alert.alert("Couldn't send message", 'Check your connection and try again.');
@@ -215,13 +243,24 @@ export default function Coach() {
           <SegmentedToggle
             options={visibleModes.map((m) => ({ key: m.id, label: m.label }))}
             value={mode}
-            onChange={setModeOverride}
+            onChange={handleModeChange}
             style={styles.segmented}
             textSize={12.5}
           />
         </View>
 
-        {loadingHistory ? (
+        {currentModeGated ? (
+          <View style={styles.emptyWrap}>
+            <IconSymbol name="sparkles" color={Colors.primaryLight} size={28} />
+            <Text style={styles.emptyTitle}>{emptyState.title} requires an upgrade</Text>
+            <Text style={styles.emptyDesc}>
+              {emptyState.title} is available on the {TIER_LABEL[FEATURE_MIN_TIER[`coach_${mode}`]]} plan and above.
+            </Text>
+            <Pressable style={styles.upgradeInlineBtn} onPress={() => router.push(Routes.PLANS)}>
+              <Text style={styles.upgradeInlineBtnText}>View Plans</Text>
+            </Pressable>
+          </View>
+        ) : loadingHistory ? (
           <View style={styles.emptyWrap}>
             <ActivityIndicator color={Colors.primaryLight} />
           </View>
@@ -279,6 +318,7 @@ export default function Coach() {
           </ScrollView>
         )}
 
+        {!currentModeGated && (
         <View style={styles.bottomBar}>
           <ScrollView
             horizontal
@@ -337,7 +377,15 @@ export default function Coach() {
             </Pressable>
           </View>
         </View>
+        )}
       </View>
+
+      <UpgradeModal
+        visible={!!upgradeTarget}
+        onClose={() => setUpgradeTarget(null)}
+        requiredTier={upgradeTarget ? FEATURE_MIN_TIER[`coach_${upgradeTarget}`] : 'student'}
+        featureLabel={upgradeTarget ? EMPTY_STATE[upgradeTarget].title : ''}
+      />
     </ScreenWrapper>
   );
 }
@@ -391,6 +439,18 @@ const styles = StyleSheet.create({
     marginTop: 7,
     lineHeight: 20,
     maxWidth: 280,
+  },
+  upgradeInlineBtn: {
+    marginTop: 18,
+    backgroundColor: Colors.textPrimary,
+    borderRadius: 13,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+  },
+  upgradeInlineBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.white,
   },
   messagesScroll: {
     flex: 1,

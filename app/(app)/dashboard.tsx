@@ -269,6 +269,7 @@ export default function Dashboard() {
         visible={examModalOpen}
         onClose={() => setExamModalOpen(false)}
         onAdd={handleAddExam}
+        hasExistingExams={examPlan.exams.length > 0}
       />
       <GoalSummaryModal
         visible={goalSummaryOpen}

@@ -15,7 +15,7 @@ import { usePlan } from '@/hooks/usePlan';
 import { useSettings } from '@/hooks/useSettings';
 import { useNewTaskModal } from '@/contexts/NewTaskModalContext';
 import { confirmDelete } from '@/utils/confirmDelete';
-import { weekdayIndexMonday, taskOccursOnDay } from '@/utils/date';
+import { weekdayIndexMonday, taskOccursOnDay, isTaskDoneOnDate } from '@/utils/date';
 import { parseTimeToMinutes } from '@/utils/time';
 import type { Task } from '@/types/task.types';
 import type { ClassItem } from '@/types/plan.types';
@@ -104,42 +104,54 @@ export default function Planner() {
     return [...classItems, ...taskItems].sort((a, b) => a.time - b.time);
   };
 
-  const dayItems = buildDayItems(todayIdx, tasks.filter((t) => taskOccursOnDay(t, todayIdx)));
-  const weekDays = DAY_FULL.map((label, i) => ({
-    label,
-    isToday: i === todayIdx,
-    items: buildDayItems(i, tasks.filter((t) => taskOccursOnDay(t, i))),
-  }));
+  // Monday of the current week, so each Week-view column has a real calendar
+  // date (not just an abstract weekday index) to key a recurring task's
+  // per-occurrence completion off of.
+  const mondayThisWeek = new Date(today);
+  mondayThisWeek.setDate(today.getDate() - todayIdx);
 
-  const renderTaskRow = (task: Task) => {
+  const dayItems = buildDayItems(todayIdx, tasks.filter((t) => taskOccursOnDay(t, todayIdx)));
+  const weekDays = DAY_FULL.map((label, i) => {
+    const date = new Date(mondayThisWeek);
+    date.setDate(mondayThisWeek.getDate() + i);
+    return {
+      label,
+      date,
+      isToday: i === todayIdx,
+      items: buildDayItems(i, tasks.filter((t) => taskOccursOnDay(t, i))),
+    };
+  });
+
+  const renderTaskRow = (task: Task, date: Date) => {
     const category = TaskCategories[task.category];
     const priority = TaskPriorities[task.priority];
+    const done = isTaskDoneOnDate(task, date);
     return (
       <Pressable
         key={`task-${task.id}`}
         style={styles.taskRow}
-        onPress={() => toggleDone(task.id)}
+        onPress={() => toggleDone(task.id, date)}
         onLongPress={() => setActionSheetTarget(task)}
       >
         <View
           style={[
             styles.checkbox,
-            task.done
+            done
               ? { backgroundColor: category.color }
               : { borderWidth: 1.5, borderColor: Colors.border },
           ]}
         >
-          {task.done && <IconSymbol name="checkmark" color={Colors.white} size={14} />}
+          {done && <IconSymbol name="checkmark" color={Colors.white} size={14} />}
         </View>
         <View style={{ flex: 1 }}>
           <View style={styles.titleRow}>
-            {task.priority === 'high' && !task.done && (
+            {task.priority === 'high' && !done && (
               <View style={[styles.priorityDot, { backgroundColor: priority.color }]} />
             )}
             <Text
               style={[
                 styles.taskTitle,
-                task.done && { color: Colors.textMuted, textDecorationLine: 'line-through' },
+                done && { color: Colors.textMuted, textDecorationLine: 'line-through' },
               ]}
             >
               {task.title}
@@ -269,7 +281,7 @@ export default function Planner() {
                 <Text style={styles.noTasks}>No tasks yet — tap the + button to add one.</Text>
               ) : (
                 dayItems.map((entry) =>
-                  entry.kind === 'class' ? renderClassRow(entry.item, entry.color, entry.soft) : renderTaskRow(entry.task)
+                  entry.kind === 'class' ? renderClassRow(entry.item, entry.color, entry.soft) : renderTaskRow(entry.task, today)
                 )
               )}
             </View>
@@ -294,11 +306,12 @@ export default function Planner() {
                       }
                       const task = entry.task;
                       const category = TaskCategories[task.category];
+                      const done = isTaskDoneOnDate(task, day.date);
                       return (
                         <Pressable
                           key={`wk-task-${task.id}`}
                           style={styles.weekTaskRow}
-                          onPress={() => toggleDone(task.id)}
+                          onPress={() => toggleDone(task.id, day.date)}
                           onLongPress={() => setActionSheetTarget(task)}
                         >
                           <View style={[styles.weekTaskBar, { backgroundColor: category.color }]} />
@@ -306,7 +319,7 @@ export default function Planner() {
                             <Text
                               style={[
                                 styles.weekTaskTitle,
-                                task.done && { color: Colors.textMuted, textDecorationLine: 'line-through' },
+                                done && { color: Colors.textMuted, textDecorationLine: 'line-through' },
                               ]}
                             >
                               {task.title}
@@ -318,7 +331,7 @@ export default function Planner() {
                               </Text>
                             )}
                           </View>
-                          {task.done && (
+                          {done && (
                             <View style={[styles.weekDoneCircle, { backgroundColor: category.color }]}>
                               <IconSymbol name="checkmark" color={Colors.white} size={12} />
                             </View>

@@ -5,7 +5,10 @@ import * as DocumentPicker from 'expo-document-picker';
 import { File } from 'expo-file-system';
 import { BottomSheetModal } from '@/components/ui/BottomSheetModal';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { UpgradeModal } from '@/components/ui/UpgradeModal';
 import { Colors, Spacing, Radius } from '@/constants/theme';
+import { FEATURE_MIN_TIER, hasTier } from '@/constants/featureTiers';
+import { usePurchases } from '@/contexts/PurchasesContext';
 import { syllabusService } from '@/services/syllabus.service';
 import { usePlan } from '@/hooks/usePlan';
 import { useTasks } from '@/hooks/useTasks';
@@ -43,9 +46,11 @@ function formatDate(date: Date): string {
 export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalProps) {
   const { plan, savePlan } = usePlan();
   const { createTask } = useTasks();
-  const { createSyllabus } = useSyllabi();
+  const { syllabi, createSyllabus } = useSyllabi();
+  const { tier } = usePurchases();
 
   const [step, setStep] = useState<Step>('pick');
+  const [upgradeVisible, setUpgradeVisible] = useState(false);
   const [fileName, setFileName] = useState('');
   const [courseName, setCourseName] = useState('');
   const [deadlines, setDeadlines] = useState<DraftDeadline[]>([]);
@@ -84,6 +89,11 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
     if (result.canceled) return;
     const asset = result.assets[0];
 
+    if (syllabi.length > 0 && !hasTier(tier, FEATURE_MIN_TIER.syllabus_extraction)) {
+      setUpgradeVisible(true);
+      return;
+    }
+
     setStep('extracting');
     try {
       const file = new File(asset.uri);
@@ -120,8 +130,17 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
       setStep('review');
     } catch (err) {
       console.error('[SyllabusUploadModal] extraction failed', err);
-      const message = (err as { message?: string })?.message ?? "Couldn't read that syllabus. Try again.";
-      Alert.alert("Couldn't read syllabus", message);
+      // Defense in depth — the client-side check above only fires if
+      // `syllabi` (from useSyllabi()) already shows a prior upload; this
+      // covers that being stale, since the backend's own exemption check
+      // (syllabus.controller.ts) is the real source of truth.
+      const field = (err as { field?: string } | null)?.field;
+      if (field === 'tier') {
+        setUpgradeVisible(true);
+      } else {
+        const message = (err as { message?: string })?.message ?? "Couldn't read that syllabus. Try again.";
+        Alert.alert("Couldn't read syllabus", message);
+      }
       setStep('pick');
     }
   };
@@ -196,6 +215,7 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
   };
 
   return (
+    <>
     <BottomSheetModal visible={visible} onClose={handleClose} maxHeightPct={85}>
       {step === 'pick' && (
         <>
@@ -314,6 +334,13 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
         </View>
       )}
     </BottomSheetModal>
+    <UpgradeModal
+      visible={upgradeVisible}
+      onClose={() => setUpgradeVisible(false)}
+      requiredTier={FEATURE_MIN_TIER.syllabus_extraction}
+      featureLabel="Syllabus AI extraction"
+    />
+    </>
   );
 }
 

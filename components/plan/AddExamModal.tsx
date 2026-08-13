@@ -2,7 +2,10 @@ import { useEffect, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Pressable, ActivityIndicator, Alert, ScrollView, StyleSheet } from 'react-native';
 import { BottomSheetModal } from '@/components/ui/BottomSheetModal';
 import { ModalCloseButton } from '@/components/ui/ModalCloseButton';
+import { UpgradeModal } from '@/components/ui/UpgradeModal';
 import { Colors, Spacing } from '@/constants/theme';
+import { FEATURE_MIN_TIER, hasTier } from '@/constants/featureTiers';
+import { usePurchases } from '@/contexts/PurchasesContext';
 import { planService } from '@/services/plan.service';
 import {
   ExamSetupForm,
@@ -25,15 +28,22 @@ interface AddExamModalProps {
   onClose: () => void;
   onAdd: (exam: Exam) => void;
   editingExam?: Exam | null;
+  // Whether the user already has at least one saved exam — the backend's
+  // first-exam-is-free exemption (see plan.controller.ts) keys off this same
+  // signal server-side; this lets the client skip an unnecessary upgrade
+  // prompt for someone who's genuinely still on their free first exam.
+  hasExistingExams: boolean;
 }
 
-export function AddExamModal({ visible, onClose, onAdd, editingExam }: AddExamModalProps) {
+export function AddExamModal({ visible, onClose, onAdd, editingExam, hasExistingExams }: AddExamModalProps) {
+  const { tier } = usePurchases();
   const [step, setStep] = useState<Step>('form');
   const [examName, setExamName] = useState('');
   const [weeks, setWeeks] = useState(DEFAULT_EXAM_WEEKS);
   const [hours, setHours] = useState(DEFAULT_EXAM_HOURS);
   const [topics, setTopics] = useState<DraftTopic[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [upgradeVisible, setUpgradeVisible] = useState(false);
 
   const reset = () => {
     setStep('form');
@@ -72,6 +82,11 @@ export function AddExamModal({ visible, onClose, onAdd, editingExam }: AddExamMo
   };
 
   const handleGenerate = async () => {
+    if (hasExistingExams && !hasTier(tier, FEATURE_MIN_TIER.exam_topics)) {
+      setUpgradeVisible(true);
+      return;
+    }
+
     const name = examName.trim() || EXAM_NAME_PLACEHOLDER;
     setStep('generating');
     try {
@@ -82,7 +97,15 @@ export function AddExamModal({ visible, onClose, onAdd, editingExam }: AddExamMo
       setStep('review');
     } catch (err) {
       console.error('[AddExamModal] failed to generate exam topics', err);
-      Alert.alert("Couldn't generate a study plan", 'Check your connection and try again.');
+      // Defense in depth — the client-side check above only runs if
+      // hasExistingExams is already true; this covers it being stale (e.g.
+      // the free first exam was just added from another device).
+      const field = (err as { field?: string } | null)?.field;
+      if (field === 'tier') {
+        setUpgradeVisible(true);
+      } else {
+        Alert.alert("Couldn't generate a study plan", 'Check your connection and try again.');
+      }
       setStep('form');
     }
   };
@@ -123,6 +146,7 @@ export function AddExamModal({ visible, onClose, onAdd, editingExam }: AddExamMo
   };
 
   return (
+    <>
     <BottomSheetModal visible={visible} onClose={handleClose} maxHeightPct={85}>
         {step === 'form' && (
           <>
@@ -205,6 +229,13 @@ export function AddExamModal({ visible, onClose, onAdd, editingExam }: AddExamMo
           </>
         )}
     </BottomSheetModal>
+    <UpgradeModal
+      visible={upgradeVisible}
+      onClose={() => setUpgradeVisible(false)}
+      requiredTier={FEATURE_MIN_TIER.exam_topics}
+      featureLabel="AI exam study plans"
+    />
+    </>
   );
 }
 

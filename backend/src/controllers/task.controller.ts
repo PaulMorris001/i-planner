@@ -49,7 +49,7 @@ export async function updateTask(req: AuthedRequest, res: Response) {
 
   const {
     title, category, priority, day, hour, time, dueDate, done, recurring, freq, dayIdxs, notes, appleEventIds,
-    notificationIds,
+    notificationIds, completedDates,
   } = req.body ?? {};
   // Google sync only cares about fields that actually affect the calendar event —
   // a bare { done } toggle or an { appleEventIds } id-persist patch shouldn't touch it.
@@ -70,6 +70,7 @@ export async function updateTask(req: AuthedRequest, res: Response) {
   if (notes !== undefined) task.notes = notes;
   if (appleEventIds !== undefined) task.appleEventIds = Array.isArray(appleEventIds) ? appleEventIds : undefined;
   if (notificationIds !== undefined) task.notificationIds = Array.isArray(notificationIds) ? notificationIds : undefined;
+  if (completedDates !== undefined) task.completedDates = Array.isArray(completedDates) ? completedDates : undefined;
 
   if (hasContentChange) {
     task.googleEventId = await syncTaskToGoogle(req.userId!, task);

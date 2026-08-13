@@ -9,10 +9,21 @@ export interface TaskDocument extends Document {
   hour: number;
   time: string;
   dueDate: string;
+  // Authoritative completion state only for a one-time task (recurring is
+  // false). A recurring task's per-occurrence completion lives in
+  // completedDates instead — this field isn't meaningful per-occurrence for
+  // it, since one Task document represents every occurrence.
   done: boolean;
   recurring: boolean;
   freq?: 'weekly' | 'weekdays' | 'daily';
   dayIdxs?: number[];
+  // Local "YYYY-MM-DD" dates this recurring task was marked done on — same
+  // pattern as Habit.completedDates, for the same reason: one Task document
+  // represents every weekday it recurs on, so completion has to be tracked
+  // per calendar date instead of a single shared boolean, or completing
+  // today's occurrence would show every other occurrence as done too. Only
+  // meaningful when recurring is true.
+  completedDates?: string[];
   notes: string;
   appleEventIds?: string[];
   googleEventId?: string;
@@ -39,6 +50,7 @@ const taskSchema = new Schema<TaskDocument>({
   // Only meaningful when recurring is true — see types/task.types.ts's TaskFrequency.
   freq: { type: String },
   dayIdxs: { type: [Number] },
+  completedDates: { type: [String] },
   notes: { type: String, default: '' },
   title: { type: String, required: true, trim: true },
   // Calendar-sync event ids — only ever set when dueDate is non-empty.
@@ -61,6 +73,7 @@ export function toPublicTask(doc: TaskDocument) {
     recurring: doc.recurring,
     freq: doc.freq,
     dayIdxs: doc.dayIdxs,
+    completedDates: doc.completedDates,
     notes: doc.notes,
     appleEventIds: doc.appleEventIds,
     googleEventId: doc.googleEventId,

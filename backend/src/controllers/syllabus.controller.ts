@@ -1,8 +1,11 @@
 import { Response } from 'express';
 import { Syllabus, toPublicSyllabus } from '../models/Syllabus';
+import { Subscription } from '../models/Subscription';
 import { AuthedRequest } from '../middleware/requireAuth';
 import { ApiError } from '../utils/ApiError';
 import { extractSyllabus } from '../services/syllabusExtraction';
+import { FEATURE_MIN_TIER, hasTier } from '../constants/featureTiers';
+import { checkAndConsumeQuery } from '../services/aiUsageLimiter';
 
 export async function listSyllabi(req: AuthedRequest, res: Response) {
   const syllabi = await Syllabus.find({ firebaseUid: req.userId }).sort({ createdAt: -1 });
@@ -17,6 +20,25 @@ export async function extractSyllabusHandler(req: AuthedRequest, res: Response) 
   const { fileBase64, filename } = req.body ?? {};
   if (!fileBase64 || typeof fileBase64 !== 'string') {
     throw new ApiError(400, 'A PDF file is required.', 'general');
+  }
+
+  // First-ever syllabus is free (covers onboarding's student-plan.tsx, which
+  // shares this same endpoint with the in-app SyllabusUploadModal) — gated
+  // from the second syllabus onward. Same reasoning as
+  // generateExamTopicsHandler's existingExamPlan check.
+  const existingSyllabus = await Syllabus.findOne({ firebaseUid: req.userId });
+  if (existingSyllabus) {
+    const subscription = await Subscription.findOne({ firebaseUid: req.userId });
+    const tier = subscription?.tier ?? 'free';
+    if (!hasTier(tier, FEATURE_MIN_TIER.syllabus_extraction)) {
+      throw new ApiError(403, `Syllabus AI extraction requires a ${FEATURE_MIN_TIER.syllabus_extraction} subscription.`, 'tier');
+    }
+    const usage = await checkAndConsumeQuery(req.userId!, tier);
+    if (!usage.allowed) {
+      const period = usage.period === 'week' ? 'week' : 'month';
+      const resetLabel = usage.resetsAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      throw new ApiError(429, `You've used all ${usage.cap} AI actions for this ${period}. It resets ${resetLabel}.`, 'general');
+    }
   }
 
   try {

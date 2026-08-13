@@ -24,6 +24,10 @@ export interface Task {
   // from dueDate the same way ClassItem's dayIdxs is derived from startDate.
   freq?: TaskFrequency;
   dayIdxs?: number[];
+  // Local "YYYY-MM-DD" dates this task was marked done on — only meaningful
+  // when recurring is true (see utils/date.ts's isTaskDoneOnDate). A one-time
+  // task uses `done` instead.
+  completedDates?: string[];
   notes: string;
   // Calendar-sync event ids — only ever set when dueDate is non-empty (a task
   // with no fixed date has nothing to sync to a calendar). appleEventIds is an

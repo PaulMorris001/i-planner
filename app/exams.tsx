@@ -90,6 +90,7 @@ export default function Exams() {
         }}
         onAdd={handleAddOrSaveExam}
         editingExam={editingExam}
+        hasExistingExams={examPlan.exams.length > 0}
       />
 
       <ItemActionSheet

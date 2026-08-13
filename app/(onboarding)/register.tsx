@@ -4,13 +4,13 @@ import { FormErrorBanner } from "@/components/onboarding/FormErrorBanner";
 import { BackButton } from "@/components/ui/BackButton";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { PRIVACY_URL, TERMS_URL } from "@/constants/legal";
 import { Routes } from "@/constants/routes";
 import { Colors, Radius, Spacing, Typography } from "@/constants/theme";
 import { useAuth } from "@/hooks/useAuth";
 import { router } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
 import { useState } from "react";
-import * as WebBrowser from 'expo-web-browser';
-import { TERMS_URL, PRIVACY_URL } from '@/constants/legal';
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 export default function Register() {
@@ -107,14 +107,14 @@ export default function Register() {
 
         {/* Legal */}
         <Text style={styles.legal}>
-          By continuing, you agree to I-planner's{' '}
+          By continuing, you agree to I-planner's{" "}
           <Text
             style={styles.legalLink}
             onPress={() => WebBrowser.openBrowserAsync(TERMS_URL)}
           >
             Terms of Service
-          </Text>
-          {' '}and{' '}
+          </Text>{" "}
+          and{" "}
           <Text
             style={styles.legalLink}
             onPress={() => WebBrowser.openBrowserAsync(PRIVACY_URL)}

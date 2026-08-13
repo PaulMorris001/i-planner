@@ -5,7 +5,7 @@ import { Colors } from '@/constants/theme';
 import { TaskCategories } from '@/constants/taskMeta';
 import { COURSE_COLORS } from '@/constants/classColors';
 import { useTasks } from '@/hooks/useTasks';
-import { weekdayIndexMonday, localMidnight, parseISODateLocal } from '@/utils/date';
+import { weekdayIndexMonday, localMidnight, parseISODateLocal, isTaskDoneOnDate } from '@/utils/date';
 import { parseTimeToMinutes } from '@/utils/time';
 import type { Task } from '@/types/task.types';
 import type { ClassItem } from '@/types/plan.types';
@@ -277,11 +277,12 @@ export function MonthCalendarView({ classes, courseFilter, onTaskLongPress }: Mo
                   <Text style={styles.detailGroupLabel}>Tasks</Text>
                   {panelData.tasks.map((task) => {
                     const category = TaskCategories[task.category];
+                    const done = isTaskDoneOnDate(task, selectedDate);
                     return (
                       <Pressable
                         key={task.id}
                         style={styles.detailRow}
-                        onPress={() => toggleDone(task.id)}
+                        onPress={() => toggleDone(task.id, selectedDate)}
                         onLongPress={() => onTaskLongPress(task)}
                       >
                         <View style={[styles.detailBar, { backgroundColor: category.color }]} />
@@ -289,7 +290,7 @@ export function MonthCalendarView({ classes, courseFilter, onTaskLongPress }: Mo
                           <Text
                             style={[
                               styles.detailTitle,
-                              task.done && { color: Colors.textMuted, textDecorationLine: 'line-through' },
+                              done && { color: Colors.textMuted, textDecorationLine: 'line-through' },
                             ]}
                           >
                             {task.title}

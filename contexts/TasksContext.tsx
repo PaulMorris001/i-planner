@@ -5,6 +5,7 @@ import { taskService } from '@/services/task.service';
 import { useSettings } from '@/hooks/useSettings';
 import { syncTaskToAppleCalendar, deleteAppleEvents } from '@/utils/appleCalendarSync';
 import { scheduleTaskNotifications, cancelNotifications } from '@/utils/notifications';
+import { toDateKey } from '@/utils/date';
 import type { Task, NewTaskInput } from '@/types/task.types';
 
 // Fields that affect what's scheduled — the same set for both the Apple Calendar
@@ -17,7 +18,7 @@ interface TasksContextValue {
   tasks: Task[];
   loading: boolean;
   createTask: (input: NewTaskInput) => Promise<void>;
-  toggleDone: (id: string) => Promise<void>;
+  toggleDone: (id: string, date: Date) => Promise<void>;
   updateTask: (id: string, patch: Partial<NewTaskInput>) => Promise<void>;
   removeTask: (id: string) => Promise<void>;
   refetch: () => Promise<Task[]>;
@@ -81,9 +82,36 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const toggleDone = async (id: string) => {
+  // A recurring task is one Task document shared across every weekday it
+  // occurs on — toggling `done` globally would mark every occurrence (past,
+  // future, and any other day visible in the same Week view) as done at
+  // once. So a recurring task's completion is tracked per calendar date in
+  // `completedDates` instead, keyed off the `date` this specific occurrence
+  // was rendered for; a one-time task keeps the original single-`done` path,
+  // including the reminder cancel/reschedule (which only makes sense for a
+  // single occurrence — a recurring task's reminder repeats weekly and isn't
+  // tied to any one date).
+  const toggleDone = async (id: string, date: Date) => {
     const target = tasks.find((t) => t.id === id);
     if (!target) return;
+
+    if (target.recurring) {
+      const dateKey = toDateKey(date);
+      const prevDates = target.completedDates ?? [];
+      const nextDates = prevDates.includes(dateKey)
+        ? prevDates.filter((d) => d !== dateKey)
+        : [...prevDates, dateKey];
+
+      setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, completedDates: nextDates } : t)));
+      try {
+        await taskService.update(id, { completedDates: nextDates });
+      } catch (err) {
+        setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, completedDates: prevDates } : t)));
+        console.error('[TasksProvider] failed to toggle recurring task occurrence', err);
+      }
+      return;
+    }
+
     const nextDone = !target.done;
 
     // A completed task doesn't need a reminder anymore; un-completing one that
