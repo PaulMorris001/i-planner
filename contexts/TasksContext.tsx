@@ -65,8 +65,17 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     setTasks((prev) => [...prev, { ...input, id: tempId, done: false }]);
     // Apple sync and reminder scheduling both run client-side — do both first so
-    // the resulting ids ride along on the create request.
-    const appleEventIds = appleCalendarConnected ? await syncTaskToAppleCalendar(input) : [];
+    // the resulting ids ride along on the create request. Apple sync is
+    // skipped when the input already points at an existing Apple event
+    // (converting an imported calendar event to a task — see
+    // NewTaskModal/NewTaskModalContext's TaskDraft) — that event already
+    // exists, so syncing here would create a second, duplicate one. Scoped
+    // to appleEventIds specifically, not googleEventId too — a Google-sourced
+    // conversion has no existing Apple event to speak of, and wrongly
+    // skipping Apple sync there would leave the task with no Apple entry at
+    // all despite Apple Calendar being connected.
+    const alreadyLinkedApple = !!input.appleEventIds?.length;
+    const appleEventIds = !alreadyLinkedApple && appleCalendarConnected ? await syncTaskToAppleCalendar(input) : (input.appleEventIds ?? []);
     const notificationIds = remindersEnabled ? await scheduleTaskNotifications(input) : [];
     const toCreate = {
       ...input,
@@ -162,7 +171,13 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     const syncRelevant = SYNC_RELEVANT_FIELDS.some((k) => k in patch);
     if (syncRelevant && current) {
       const merged = { ...current, ...patch };
-      if (appleCalendarConnected) {
+      // A task created by converting an imported calendar event points its
+      // appleEventIds at a real event the app doesn't own — deleting and
+      // recreating it here (the normal resync path) would delete the user's
+      // actual calendar entry. Only the app's own copy of the task changes;
+      // reminders are unaffected either way, since they're a separate local
+      // notification about the task, not the calendar event itself.
+      if (appleCalendarConnected && !current.calendarLinkExternal) {
         await deleteAppleEvents(current.appleEventIds);
         finalPatch = { ...finalPatch, appleEventIds: await syncTaskToAppleCalendar(merged) };
       }
@@ -218,7 +233,11 @@ export function TasksProvider({ children }: { children: ReactNode }) {
       console.error('[TasksProvider] failed to remove task', err);
       return;
     }
-    if (target?.appleEventIds && appleCalendarConnected) await deleteAppleEvents(target.appleEventIds);
+    // Same reasoning as updateTask above — deleting a converted task from
+    // the app must not delete the user's real external calendar event.
+    if (target?.appleEventIds && appleCalendarConnected && !target.calendarLinkExternal) {
+      await deleteAppleEvents(target.appleEventIds);
+    }
     if (target?.notificationIds && remindersEnabled) await cancelNotifications(target.notificationIds);
   };
 

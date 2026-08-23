@@ -9,6 +9,7 @@ import { accountRouter } from './account.routes';
 import { syllabusRouter } from './syllabus.routes';
 import { googleOAuthRouter } from './googleOAuth.routes';
 import { subscriptionRouter } from './subscription.routes';
+import { calendarImportRouter } from './calendarImport.routes';
 
 export const router = Router();
 
@@ -26,6 +27,7 @@ router.use('/coach', coachRouter);
 router.use('/account', accountRouter);
 router.use('/syllabi', syllabusRouter);
 router.use('/subscription', subscriptionRouter);
+router.use('/calendar', calendarImportRouter);
 
 // Google's OAuth redirect lands here directly (a browser navigation, not an
 // authenticated API call) — kept as a sibling to /settings rather than nested under

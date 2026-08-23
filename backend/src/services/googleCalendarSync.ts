@@ -281,3 +281,69 @@ export async function deleteTaskEvent(
   if (!ctx) return;
   await deleteEvent(ctx.accessToken, ctx.calendarId, task.googleEventId);
 }
+
+export interface RemoteGoogleEvent {
+  id: string;
+  title: string;
+  startAt: string;
+  endAt: string;
+  allDay: boolean;
+  location?: string;
+}
+
+// Reads from the user's own "primary" calendar — deliberately not the
+// dedicated "i-Planner" secondary calendar this file writes to (settings.
+// googleCalendarId, created by ensureSyncCalendar above). That separation is
+// what makes this import naturally exclude everything the app already wrote
+// out via upsertClassEvent/upsertTaskEvent, with no id-matching needed on
+// this side (unlike the Apple import path, where writes and the user's real
+// calendar share the same default calendar).
+export async function listPrimaryGoogleEvents(
+  settings: SettingsDocument,
+  timeMinIso: string,
+  timeMaxIso: string
+): Promise<RemoteGoogleEvent[]> {
+  if (!settings.googleCalendarConnected) return [];
+  const accessToken = await refreshAccessTokenIfNeeded(settings);
+  if (!accessToken) return [];
+
+  const params = new URLSearchParams({
+    timeMin: timeMinIso,
+    timeMax: timeMaxIso,
+    singleEvents: 'true', // expands recurring events into individual instances
+    orderBy: 'startTime',
+    maxResults: '250',
+  });
+  const res = await fetch(`${CALENDAR_API}/calendars/primary/events?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) {
+    console.error('[googleCalendarSync] failed to list primary events', res.status, await res.text());
+    return [];
+  }
+
+  const data = (await res.json()) as {
+    items?: {
+      id: string;
+      summary?: string;
+      start?: { date?: string; dateTime?: string };
+      end?: { date?: string; dateTime?: string };
+      location?: string;
+      status?: string;
+    }[];
+  };
+
+  return (data.items ?? [])
+    .filter((e) => e.status !== 'cancelled' && e.start && e.end)
+    .map((e) => {
+      const allDay = !!e.start!.date;
+      return {
+        id: e.id,
+        title: e.summary || 'Untitled event',
+        startAt: e.start!.dateTime ?? `${e.start!.date}T00:00:00`,
+        endAt: e.end!.dateTime ?? `${e.end!.date}T00:00:00`,
+        allDay,
+        location: e.location,
+      };
+    });
+}

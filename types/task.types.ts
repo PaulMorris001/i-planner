@@ -38,6 +38,13 @@ export interface Task {
   // Locally-scheduled expo-notifications reminder ids — one per weekday
   // occurrence for a 'weekdays' task, same reasoning as appleEventIds.
   notificationIds?: string[];
+  // Set once, at creation, when this task was created by converting an
+  // imported calendar event (see NewTaskModalContext's TaskDraft) — its
+  // appleEventIds/googleEventId point at a real pre-existing calendar event
+  // the app doesn't own. When true, TasksContext must never delete/recreate
+  // that event on edit or delete — only the app's own copy of the task
+  // details changes, the user's actual calendar entry is left alone.
+  calendarLinkExternal?: boolean;
 }
 
 export type NewTaskInput = Omit<Task, 'id' | 'done'>;

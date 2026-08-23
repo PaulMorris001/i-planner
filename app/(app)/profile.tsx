@@ -341,6 +341,20 @@ export default function Profile() {
               </Text>
             </Pressable>
           </View>
+
+          <Pressable
+            style={styles.calendarRow}
+            onPress={() => router.push(Routes.IMPORT_CALENDAR)}
+          >
+            <View style={styles.calendarIconBox}>
+              <IconSymbol name="calendar" color={Colors.textPrimary} size={17} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.consentLabel}>Import calendar events</Text>
+              <Text style={styles.consentDesc}>Review and add events as tasks</Text>
+            </View>
+            <IconSymbol name="chevron.right" color={Colors.textMuted} size={18} />
+          </Pressable>
         </View>
 
         <Text style={[styles.eyebrow, { marginTop: Spacing.lg }]}>

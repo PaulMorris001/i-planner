@@ -6,6 +6,7 @@ import { Chip } from '@/components/ui/Chip';
 import { InlineDateTimePicker } from '@/components/ui/InlineDateTimePicker';
 import { useNewTaskModal } from '@/contexts/NewTaskModalContext';
 import { useTasks } from '@/hooks/useTasks';
+import { calendarImportService } from '@/services/calendarImport.service';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors, Spacing } from '@/constants/theme';
 import { TaskCategories, TaskCategoryId, TaskPriorities, TaskPriorityId } from '@/constants/taskMeta';
@@ -32,7 +33,7 @@ const TASK_FREQ_OPTIONS: { key: TaskFrequency; label: string }[] = [
 const DEFAULT_DAY_INDEX = 1;
 
 export function NewTaskModal() {
-  const { isOpen, editingTask, close } = useNewTaskModal();
+  const { isOpen, editingTask, draft, close } = useNewTaskModal();
   const { createTask, updateTask } = useTasks();
 
   const [title, setTitle] = useState('');
@@ -71,11 +72,20 @@ export function NewTaskModal() {
       setRecurring(editingTask.recurring);
       setFreq(editingTask.freq ?? 'weekly');
       setNotes(editingTask.notes);
+    } else if (draft) {
+      // Category/priority have no source on a draft (a converted calendar
+      // event doesn't carry either) — left at their normal defaults for the
+      // user to actually pick, same as any other new task.
+      reset();
+      setTitle(draft.title);
+      setDueTime(draft.time ? parseTimeToDate(draft.time) : null);
+      setDueDate(draft.dueDate ? parseISODateLocal(draft.dueDate) : null);
+      setNotes(draft.notes ?? '');
     } else {
       reset();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, editingTask]);
+  }, [isOpen, editingTask, draft]);
 
   const handleClose = () => {
     close();
@@ -100,11 +110,27 @@ export function NewTaskModal() {
         freq: recurring ? freq : undefined,
         dayIdxs,
         notes: notes.trim(),
+        // Points this task at the same calendar event the draft came from,
+        // instead of TasksContext.createTask/the backend creating a new one
+        // — see their own "already linked" checks. calendarLinkExternal
+        // marks it permanently so future edits/deletes never touch that
+        // event either (see TasksContext.updateTask/removeTask).
+        ...(draft?.appleEventIds ? { appleEventIds: draft.appleEventIds } : {}),
+        ...(draft?.googleEventId ? { googleEventId: draft.googleEventId } : {}),
+        ...(draft?.draftSourceId ? { calendarLinkExternal: true } : {}),
       };
       if (editingTask) {
         await updateTask(editingTask.id, patch);
       } else {
         await createTask(patch);
+        if (draft?.draftSourceId) {
+          // Best-effort — if this fails, the import review screen just shows
+          // the event again next visit, harmless since converting twice is
+          // itself harmless (it'd point another task at the same event id).
+          calendarImportService.remove(draft.draftSourceId).catch((err) => {
+            console.error('[NewTaskModal] failed to clean up converted imported event', err);
+          });
+        }
       }
       handleClose();
     } catch (err) {

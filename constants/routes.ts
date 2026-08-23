@@ -20,6 +20,7 @@ export const Routes = {
   CLASSES:    '/classes',
   SYLLABI:    '/syllabi',
   EXAMS:      '/exams',
+  IMPORT_CALENDAR: '/import-calendar',
 } as const;
 
 export type AppRoute = (typeof Routes)[keyof typeof Routes];

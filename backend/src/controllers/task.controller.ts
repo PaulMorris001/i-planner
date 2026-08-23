@@ -12,7 +12,8 @@ export async function listTasks(req: AuthedRequest, res: Response) {
 
 export async function createTask(req: AuthedRequest, res: Response) {
   const {
-    title, category, priority, day, hour, time, dueDate, recurring, freq, dayIdxs, notes, appleEventIds, notificationIds,
+    title, category, priority, day, hour, time, dueDate, recurring, freq, dayIdxs, notes,
+    appleEventIds, notificationIds, googleEventId, calendarLinkExternal,
   } = req.body ?? {};
 
   if (!title || typeof title !== 'string' || !title.trim()) {
@@ -39,6 +40,10 @@ export async function createTask(req: AuthedRequest, res: Response) {
     // this request and just wants the ids persisted.
     appleEventIds: Array.isArray(appleEventIds) ? appleEventIds : undefined,
     notificationIds: Array.isArray(notificationIds) ? notificationIds : undefined,
+    // Only meaningful when converting an imported calendar event to a task —
+    // see createTaskDoc, which skips its own Google sync when this is set.
+    googleEventId: typeof googleEventId === 'string' && googleEventId ? googleEventId : undefined,
+    calendarLinkExternal: !!calendarLinkExternal,
   });
 
   res.status(201).json(toPublicTask(task));
@@ -72,7 +77,12 @@ export async function updateTask(req: AuthedRequest, res: Response) {
   if (notificationIds !== undefined) task.notificationIds = Array.isArray(notificationIds) ? notificationIds : undefined;
   if (completedDates !== undefined) task.completedDates = Array.isArray(completedDates) ? completedDates : undefined;
 
-  if (hasContentChange) {
+  // calendarLinkExternal is deliberately never read from the request body —
+  // it's a creation-time-only flag (see createTask) and must never be
+  // settable via an update. A task created by converting an imported
+  // calendar event points at a real event the app doesn't own, so editing
+  // it must never touch that event — only the app's own copy of the details.
+  if (hasContentChange && !task.calendarLinkExternal) {
     task.googleEventId = await syncTaskToGoogle(req.userId!, task);
   }
 
@@ -82,7 +92,11 @@ export async function updateTask(req: AuthedRequest, res: Response) {
 
 export async function deleteTask(req: AuthedRequest, res: Response) {
   const task = await findOwnedOrThrow(Task, req.params.id, req.userId!);
-  await unsyncTaskFromGoogle(req.userId!, task);
+  // Same reasoning as updateTask above — deleting a converted task from the
+  // app must not delete the user's real external calendar event.
+  if (!task.calendarLinkExternal) {
+    await unsyncTaskFromGoogle(req.userId!, task);
+  }
   await task.deleteOne();
   res.status(204).send();
 }

@@ -20,6 +20,11 @@ export interface CreateTaskInput {
   notes?: string;
   appleEventIds?: string[];
   notificationIds?: string[];
+  // Set when this task is being created from an already-existing calendar
+  // event (see calendarImport's "convert to task" flow) — the task should
+  // point at that event, not get a brand new one created for it.
+  googleEventId?: string;
+  calendarLinkExternal?: boolean;
 }
 
 export async function syncTaskToGoogle(
@@ -69,10 +74,16 @@ export async function createTaskDoc(firebaseUid: string, input: CreateTaskInput)
     notes: input.notes ?? '',
     appleEventIds: input.appleEventIds,
     notificationIds: input.notificationIds,
+    googleEventId: input.googleEventId,
+    calendarLinkExternal: input.calendarLinkExternal,
   });
 
-  task.googleEventId = await syncTaskToGoogle(firebaseUid, task);
-  if (task.isModified('googleEventId')) await task.save();
+  // Already pointing at an existing event (converted from an imported
+  // calendar event) — syncing now would create a second, duplicate event.
+  if (!input.googleEventId) {
+    task.googleEventId = await syncTaskToGoogle(firebaseUid, task);
+    if (task.isModified('googleEventId')) await task.save();
+  }
 
   return task;
 }

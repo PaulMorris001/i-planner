@@ -32,6 +32,14 @@ export interface TaskDocument extends Document {
   // can find and cancel/reschedule them later). One per weekday occurrence for a
   // 'weekdays' task, same array-per-occurrence reasoning as appleEventIds.
   notificationIds?: string[];
+  // Set once, at creation, when this task was created by converting an
+  // ImportedCalendarEvent — its appleEventIds/googleEventId point at a real
+  // pre-existing calendar event the app doesn't own, not one it created for
+  // itself. When true, editing this task's content must never delete/recreate
+  // that event (see task.controller.ts's updateTask and TasksContext's client
+  // equivalent) — the app only ever edits its OWN copy of the details from
+  // that point on, never the user's actual calendar.
+  calendarLinkExternal?: boolean;
 }
 
 const taskSchema = new Schema<TaskDocument>({
@@ -57,6 +65,7 @@ const taskSchema = new Schema<TaskDocument>({
   appleEventIds: { type: [String] },
   googleEventId: { type: String },
   notificationIds: { type: [String] },
+  calendarLinkExternal: { type: Boolean, default: false },
 });
 
 export function toPublicTask(doc: TaskDocument) {
@@ -78,6 +87,7 @@ export function toPublicTask(doc: TaskDocument) {
     appleEventIds: doc.appleEventIds,
     googleEventId: doc.googleEventId,
     notificationIds: doc.notificationIds,
+    calendarLinkExternal: doc.calendarLinkExternal,
   };
 }
 

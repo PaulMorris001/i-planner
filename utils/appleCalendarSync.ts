@@ -132,6 +132,41 @@ export async function deleteAppleEvents(eventIds: string[] | undefined): Promise
   }
 }
 
+export interface AppleCalendarEvent {
+  id: string;
+  title: string;
+  startAt: string;
+  endAt: string;
+  allDay: boolean;
+  location?: string;
+}
+
+// Reads across every calendar the user has (not just the one writes go to —
+// getWritableCalendarId's target) since "import my calendar" should surface
+// everything, work/personal/shared calendars included. Returned events still
+// need filtering against this app's own appleEventIds before being treated
+// as genuinely external — see calendarImport.controller.ts's importAppleEvents,
+// since Apple writes land in the same default calendar as the user's real
+// appointments (no separate sync calendar like the Google side has).
+export async function readAppleCalendarEvents(startDate: Date, endDate: Date): Promise<AppleCalendarEvent[]> {
+  if (!(await hasPermission())) return [];
+  try {
+    const calendars = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
+    const events = await Calendar.getEventsAsync(calendars.map((c) => c.id), startDate, endDate);
+    return events.map((e) => ({
+      id: e.id,
+      title: e.title || 'Untitled event',
+      startAt: new Date(e.startDate).toISOString(),
+      endAt: new Date(e.endDate).toISOString(),
+      allDay: !!e.allDay,
+      location: e.location ?? undefined,
+    }));
+  } catch (err) {
+    console.error('[appleCalendarSync] failed to read events', err);
+    return [];
+  }
+}
+
 export async function syncTaskToAppleCalendar(task: {
   title: string;
   dueDate: string;
