@@ -12,6 +12,7 @@ import { Chip } from '@/components/ui/Chip';
 import { Colors, Spacing } from '@/constants/theme';
 import { TaskCategories, TaskCategoryId } from '@/constants/taskMeta';
 import { useHabits } from '@/hooks/useHabits';
+import { useEditableSheet } from '@/hooks/useEditableSheet';
 import { confirmDelete } from '@/utils/confirmDelete';
 import type { Habit, HabitFrequency } from '@/types/habit.types';
 
@@ -51,9 +52,7 @@ function mondayOfCurrentWeek(): Date {
 export default function Habits() {
   const { habits, createHabit, toggleToday, updateHabit, deleteHabit } = useHabits();
 
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const [editingHabit, setEditingHabit] = useState<Habit | null>(null);
-  const [actionSheetTarget, setActionSheetTarget] = useState<Habit | null>(null);
+  const sheet = useEditableSheet<Habit>();
   const [habitName, setHabitName] = useState('');
   const [habitCategory, setHabitCategory] = useState<TaskCategoryId>('academic');
   const [habitFreq, setHabitFreq] = useState<HabitFrequency>('daily');
@@ -64,36 +63,29 @@ export default function Habits() {
   const monday = mondayOfCurrentWeek();
 
   const openSheet = () => {
-    setEditingHabit(null);
     setHabitName('');
     setHabitCategory('academic');
     setHabitFreq('daily');
-    setSheetOpen(true);
+    sheet.openNew();
   };
 
   const openSheetForEdit = (habit: Habit) => {
-    setEditingHabit(habit);
     setHabitName(habit.name);
     setHabitCategory(habit.category);
     setHabitFreq(habit.freq);
-    setSheetOpen(true);
-  };
-
-  const closeSheet = () => {
-    setSheetOpen(false);
-    setEditingHabit(null);
+    sheet.openEdit(habit);
   };
 
   const handleCreate = async () => {
     if (!canSave) return;
     setSubmitting(true);
     try {
-      if (editingHabit) {
-        await updateHabit(editingHabit.id, { name: habitName.trim(), category: habitCategory, freq: habitFreq });
+      if (sheet.editing) {
+        await updateHabit(sheet.editing.id, { name: habitName.trim(), category: habitCategory, freq: habitFreq });
       } else {
         await createHabit({ name: habitName.trim(), category: habitCategory, freq: habitFreq });
       }
-      closeSheet();
+      sheet.close();
     } catch (err) {
       console.error('[Habits] failed to save habit', err);
     } finally {
@@ -129,7 +121,7 @@ export default function Habits() {
             <Card
               key={habit.id}
               style={styles.card}
-              onLongPress={() => setActionSheetTarget(habit)}
+              onLongPress={() => sheet.setActionTarget(habit)}
             >
               <View style={styles.cardHeaderRow}>
                 <View style={{ flex: 1 }}>
@@ -156,7 +148,7 @@ export default function Habits() {
                 </Pressable>
                 <Pressable
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  onPress={() => setActionSheetTarget(habit)}
+                  onPress={() => sheet.setActionTarget(habit)}
                 >
                   <IconSymbol name="ellipsis" color={Colors.textMuted} size={18} />
                 </Pressable>
@@ -191,8 +183,8 @@ export default function Habits() {
         })}
       </View>
 
-      <BottomSheetModal visible={sheetOpen} onClose={closeSheet}>
-          <Text style={styles.sheetTitle}>{editingHabit ? 'Edit habit' : 'New habit'}</Text>
+      <BottomSheetModal visible={sheet.open} onClose={sheet.close}>
+          <Text style={styles.sheetTitle}>{sheet.editing ? 'Edit habit' : 'New habit'}</Text>
 
           <TextInput
             value={habitName}
@@ -237,16 +229,16 @@ export default function Habits() {
             onPress={handleCreate}
           >
             <Text style={[styles.createButtonText, !canSave && styles.createButtonTextDisabled]}>
-              {editingHabit ? 'Save changes' : 'Create habit'}
+              {sheet.editing ? 'Save changes' : 'Create habit'}
             </Text>
           </Pressable>
       </BottomSheetModal>
 
       <ItemActionSheet
-        visible={!!actionSheetTarget}
-        onClose={() => setActionSheetTarget(null)}
-        onEdit={() => actionSheetTarget && openSheetForEdit(actionSheetTarget)}
-        onDelete={() => actionSheetTarget && handleDeleteHabit(actionSheetTarget)}
+        visible={!!sheet.actionTarget}
+        onClose={() => sheet.setActionTarget(null)}
+        onEdit={() => sheet.actionTarget && openSheetForEdit(sheet.actionTarget)}
+        onDelete={() => sheet.actionTarget && handleDeleteHabit(sheet.actionTarget)}
       />
     </ScreenWrapper>
   );

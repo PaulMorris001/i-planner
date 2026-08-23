@@ -8,20 +8,15 @@ import {
   Alert,
   ScrollView,
   StyleSheet,
-  Platform,
 } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { BottomSheetModal } from '@/components/ui/BottomSheetModal';
 import { Chip } from '@/components/ui/Chip';
+import { InlineDateTimePicker } from '@/components/ui/InlineDateTimePicker';
 import { Colors, Spacing, Radius } from '@/constants/theme';
 import { TaskCategories } from '@/constants/taskMeta';
 import { goalService } from '@/services/goal.service';
-import { parseISODateLocal } from '@/utils/date';
+import { parseISODateLocal, formatDatePickerLabel } from '@/utils/date';
 import type { Goal, GoalTypeId, MilestonePatch, NewGoalInput } from '@/types/goal.types';
-
-function formatDate(date: Date): string {
-  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-}
 
 const GOAL_TYPES: { id: GoalTypeId; label: string; color: string }[] = [
   { id: 'study', label: 'Study', color: Colors.primaryLight },
@@ -239,21 +234,16 @@ export function NewGoalModal({ visible, onClose, onCreate, editingGoal, onSave }
             <Pressable style={styles.datePicker} onPress={() => setShowDatePicker(true)}>
               <Text style={styles.datePickerIcon}>📅</Text>
               <Text style={[styles.datePickerText, !targetDate && styles.datePickerPlaceholder]}>
-                {targetDate ? formatDate(targetDate) : 'Due date (optional)'}
+                {targetDate ? formatDatePickerLabel(targetDate) : 'Due date (optional)'}
               </Text>
             </Pressable>
-            {showDatePicker && (
-              <DateTimePicker
-                value={targetDate ?? new Date()}
-                mode="date"
-                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                themeVariant="light"
-                onChange={(_, date) => {
-                  if (Platform.OS === 'android') setShowDatePicker(false);
-                  if (date) setTargetDate(date);
-                }}
-              />
-            )}
+            <InlineDateTimePicker
+              visible={showDatePicker}
+              value={targetDate ?? new Date()}
+              mode="date"
+              onChange={setTargetDate}
+              onDismiss={() => setShowDatePicker(false)}
+            />
 
             {editingGoal && (
               <>

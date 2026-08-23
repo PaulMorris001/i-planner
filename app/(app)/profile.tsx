@@ -4,12 +4,15 @@ import { Button } from "@/components/ui/Button";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { SkeletonBlock } from "@/components/ui/Skeleton";
 import { CONSENT_ROWS } from "@/constants/aiConsent";
+import { TIER_LABEL } from "@/constants/featureTiers";
 import { PRIVACY_URL, TERMS_URL } from "@/constants/legal";
 import { Routes } from "@/constants/routes";
 import { Colors, Spacing } from "@/constants/theme";
+import { usePurchases } from "@/contexts/PurchasesContext";
 import { useAuth } from "@/hooks/useAuth";
 import { useOnboarding } from "@/hooks/useOnboarding";
 import { useSettings } from "@/hooks/useSettings";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useState } from "react";
@@ -44,8 +47,10 @@ function fromPathId(id: PathId): string {
 
 export default function Profile() {
   const router = useRouter();
+  const tabBarHeight = useBottomTabBarHeight();
   const { user, initializing, logout } = useAuth();
   const { focusProfile, setFocusProfile } = useOnboarding();
+  const { tier } = usePurchases();
   const {
     appleCalendarConnected,
     googleCalendarConnected,
@@ -151,7 +156,10 @@ export default function Profile() {
     <ScreenWrapper
       backgroundColor={Colors.offWhite}
       scroll
-      style={styles.scrollContent}
+      // See dashboard.tsx's identical fix — 40px alone doesn't clear the
+      // real tab bar height (60 + insets.bottom), so the bottom of the
+      // Legal/Account section can end up unreachable behind the tab bar.
+      style={{ ...styles.scrollContent, paddingBottom: styles.scrollContent.paddingBottom + tabBarHeight }}
       edges={["top", "right", "left"]}
     >
       <View style={styles.body}>
@@ -171,7 +179,7 @@ export default function Profile() {
             ) : (
               <Text style={styles.profileName}>{displayName}</Text>
             )}
-            <Text style={styles.profilePlan}>I-Planner · Free plan</Text>
+            <Text style={styles.profilePlan}>I-Planner · {TIER_LABEL[tier]} plan</Text>
           </View>
         </View>
 

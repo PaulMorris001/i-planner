@@ -7,6 +7,7 @@ import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
 import { Colors, Radius, Spacing } from "@/constants/theme";
 import { usePurchases } from "@/contexts/PurchasesContext";
 import { TIER_RANK } from "@/constants/featureTiers";
+import { TERMS_URL, PRIVACY_URL } from "@/constants/legal";
 import type { SubscriptionTier } from "@/types/subscription.types";
 import * as WebBrowser from "expo-web-browser";
 import { useState } from "react";
@@ -59,9 +60,9 @@ const TIERS: Tier[] = [
   {
     id: "student",
     name: "Student / Edu",
-    monthlyPrice: "$6.99",
-    annualMonthlyEquivalent: "$5.83",
-    annualTotal: "$69.90/yr",
+    monthlyPrice: "$7.99",
+    annualMonthlyEquivalent: "$6.67",
+    annualTotal: "$79.99/yr",
     desc: "Stay on top of classes, exams, and deadlines.",
     features: [
       "Everything in Free",
@@ -78,9 +79,9 @@ const TIERS: Tier[] = [
   {
     id: "professional",
     name: "Professional",
-    monthlyPrice: "$11.99",
-    annualMonthlyEquivalent: "$9.99",
-    annualTotal: "$119.90/yr",
+    monthlyPrice: "$13.99",
+    annualMonthlyEquivalent: "$11.67",
+    annualTotal: "$139.99/yr",
     desc: "Plan your work, career, and goals.",
     features: [
       "Everything in Student / Edu",
@@ -96,9 +97,9 @@ const TIERS: Tier[] = [
   {
     id: "premium",
     name: "Premium AI",
-    monthlyPrice: "$29",
-    annualMonthlyEquivalent: "$24.17",
-    annualTotal: "$290/yr",
+    monthlyPrice: "$24.99",
+    annualMonthlyEquivalent: "$20.83",
+    annualTotal: "$249.99/yr",
     desc: "Advanced AI planning for high-stakes goals.",
     features: ["Everything in Professional"],
     monthlyProductId: "premium_monthly",
@@ -187,7 +188,11 @@ export default function Plans() {
       <View style={styles.tierList}>
         {TIERS.map((tierRow) => {
           const isFree = tierRow.id === "free";
-          const isCurrent = ready && currentTier === tierRow.id;
+          // Not gated on `ready` (store-connection status for NEW purchases)
+          // — currentTier comes from our own backend (useKnownTier, verified
+          // against the store independently) and is meaningful even before
+          // the live store connection finishes, so this shouldn't wait on it.
+          const isCurrent = currentTier === tierRow.id;
           const productId =
             period === "monthly"
               ? tierRow.monthlyProductId
@@ -198,7 +203,7 @@ export default function Plans() {
 
           let ctaLabel: string;
           let ctaDisabled: boolean;
-          if (isFree || isCurrent) {
+          if (isCurrent) {
             ctaLabel = "Current plan";
             ctaDisabled = true;
           } else if (!purchasable) {

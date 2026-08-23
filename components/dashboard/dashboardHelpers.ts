@@ -1,9 +1,4 @@
 import type { Exam } from '@/types/plan.types';
-import { parseISODateLocal } from '@/utils/date';
-
-export function formatShortDate(iso: string): string {
-  return parseISODateLocal(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
 
 // Which of the exam's generated topics (1-based week numbers) is "this week",
 // counted backward from the exam date — the last topic lands in the exam's

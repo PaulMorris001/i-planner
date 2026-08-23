@@ -13,8 +13,8 @@ import { TaskCategories } from '@/constants/taskMeta';
 import { Colors } from '@/constants/theme';
 import { usePlan } from '@/hooks/usePlan';
 import { useTasks } from '@/hooks/useTasks';
-import { isDueTodayOrLater, localMidnight, computeTaskStreak, parseISODateLocal } from '@/utils/date';
-import { formatShortDate, currentExamWeek } from './dashboardHelpers';
+import { isDueTodayOrLater, localMidnight, computeTaskStreak, parseISODateLocal, isTaskDoneOnDate, formatShortDate } from '@/utils/date';
+import { currentExamWeek } from './dashboardHelpers';
 import { dashboardStyles as styles } from './dashboardStyles';
 
 interface ExamPathViewProps {
@@ -36,7 +36,7 @@ export function ExamPathView({ quickLinks, onAddExam }: ExamPathViewProps) {
   // isDueTodayOrLater), then by the task's real hour within that day so
   // same-day tasks still land in the right order.
   const nextTask = tasks
-    .filter((t) => !!t.dueDate && !t.done && isDueTodayOrLater(t.dueDate))
+    .filter((t) => !!t.dueDate && !isTaskDoneOnDate(t, parseISODateLocal(t.dueDate)) && isDueTodayOrLater(t.dueDate))
     .sort((a, b) => {
       const dayDiff = localMidnight(parseISODateLocal(a.dueDate)) - localMidnight(parseISODateLocal(b.dueDate));
       return dayDiff !== 0 ? dayDiff : a.hour - b.hour;
@@ -64,10 +64,19 @@ export function ExamPathView({ quickLinks, onAddExam }: ExamPathViewProps) {
 
   return (
     <>
-      {/* Countdown carousel — one big card per exam, auto-rotating */}
+      {/* Countdown carousel — one big card per exam, auto-rotating. Capped
+          to the nearest 8 (already soonest-first) — ExamCarousel renders
+          every exam it's given as a LinearGradient hero card inside a plain
+          ScrollView with no virtualization, unlike the "My Exams" list
+          below, which was already capped. A user who's accumulated a lot of
+          exams over months of real use (each cert/retake, not always
+          cleaned up) would otherwise mount all of them at once on every
+          dashboard load, plus the auto-rotate timer running against the
+          whole set — a real freeze risk that gets worse the more pile up.
+          The rest are still reachable via "Manage exams"/exams.tsx below. */}
       {sortedExams.length > 0 ? (
         <ExamCarousel
-          exams={sortedExams}
+          exams={sortedExams.slice(0, 8)}
           onTrackPress={(examId) => router.push({ pathname: Routes.CERT_TRACKER, params: { examId } })}
         />
       ) : (
@@ -103,12 +112,22 @@ export function ExamPathView({ quickLinks, onAddExam }: ExamPathViewProps) {
                 <Text style={styles.classRowTime}>{formatShortDate(exam.examDate)}</Text>
               </View>
             ))}
-            {sortedExams.length > 3 && (
-              <ViewAllRow
-                label={`View all ${sortedExams.length} exams`}
-                onPress={() => router.push(Routes.EXAMS)}
-              />
-            )}
+            {/* Shown even with just 1-3 exams (all already listed above) —
+                this is the only path from Dashboard to the Exams screen,
+                where edit/delete live (ItemActionSheet, via long-press or
+                the menu button), so it can't be gated behind "more exist
+                than fit here" or a lone exam would have no way to be
+                edited/removed short of the Coach or a fresh add. */}
+            <ViewAllRow
+              label={
+                sortedExams.length > 3
+                  ? `View all ${sortedExams.length} exams`
+                  : sortedExams.length === 1
+                  ? 'Manage exam'
+                  : 'Manage exams'
+              }
+              onPress={() => router.push(Routes.EXAMS)}
+            />
           </View>
         ) : (
           <Text style={[styles.noClassText, { marginTop: 10 }]}>No exams added yet.</Text>

@@ -28,9 +28,14 @@ interface PlanContextValue {
   professionalPlan: ProfessionalPlan;
   loading: boolean;
   savePlan: (newPlan: StudentPlan) => Promise<void>;
+  updatePlan: (updater: (plan: StudentPlan) => StudentPlan) => Promise<void>;
   saveExamPlan: (newExamPlan: ExamPlan) => Promise<void>;
   saveProfessionalPlan: (newProfessionalPlan: ProfessionalPlan) => Promise<void>;
   toggleExamTopic: (examId: string, topicId: string) => Promise<void>;
+  logExamPractice: (examId: string, count: number) => Promise<void>;
+  logExamMockScore: (examId: string, score: number) => Promise<void>;
+  setExamConfidence: (examId: string, confidence: number) => Promise<void>;
+  updateExamPlan: (updater: (exams: ExamPlan['exams']) => ExamPlan['exams']) => Promise<void>;
   refetch: () => Promise<void>;
   clearPlan: () => void;
 }
@@ -82,6 +87,28 @@ export function PlanProvider({ children }: { children: ReactNode }) {
     await planService.save('student', newPlan);
   };
 
+  // Same reasoning/pattern as updateExamPlan below — callers used to build
+  // `{ ...plan, classes: ... }` from their own render-closure copy of `plan`,
+  // so e.g. AddClassModal's "add a class, close, immediately add another"
+  // flow (it doesn't await the save before closing) could have the second
+  // add computed from a `plan` that doesn't yet include the first one,
+  // silently dropping it once both saves resolve.
+  const updatePlan = async (updater: (plan: StudentPlan) => StudentPlan) => {
+    let prevPlan: StudentPlan = EMPTY_PLAN;
+    let nextPlan: StudentPlan = EMPTY_PLAN;
+    setPlan((prev) => {
+      prevPlan = prev;
+      nextPlan = updater(prev);
+      return nextPlan;
+    });
+    try {
+      await planService.save('student', nextPlan);
+    } catch (err) {
+      setPlan(prevPlan);
+      throw err;
+    }
+  };
+
   const saveExamPlan = async (newExamPlan: ExamPlan) => {
     setExamPlan(newExamPlan);
     await planService.save('exam', newExamPlan);
@@ -92,16 +119,58 @@ export function PlanProvider({ children }: { children: ReactNode }) {
     await planService.save('professional', newProfessionalPlan);
   };
 
+  // Computes the next exams array inside the setExamPlan updater — against
+  // React's latest pending state, not whatever `examPlan` this closure was
+  // created with — so two of these fired back-to-back (e.g. checking off
+  // several exam topics in quick succession, or deleting two exams one
+  // right after the other, before the first request lands) don't have the
+  // second call compute its patch from a snapshot that predates the first
+  // call's change, silently reverting it once both network requests
+  // resolve. Also rolls the optimistic update back on save failure — rather
+  // than leaving the UI showing a change that was never actually persisted —
+  // and rethrows so callers can still show their own error message.
+  const updateExamPlan = async (updater: (exams: ExamPlan['exams']) => ExamPlan['exams']) => {
+    let prevExams: ExamPlan['exams'] = [];
+    let nextExams: ExamPlan['exams'] = [];
+    setExamPlan((prev) => {
+      prevExams = prev.exams;
+      nextExams = updater(prev.exams);
+      return { exams: nextExams };
+    });
+    try {
+      await planService.save('exam', { exams: nextExams });
+    } catch (err) {
+      setExamPlan((prev) => ({ ...prev, exams: prevExams }));
+      throw err;
+    }
+  };
+
   // Shared by Dashboard's "This week" card and the exam progress-tracker screen,
   // which both need to flip a single topic's done state.
-  const toggleExamTopic = async (examId: string, topicId: string) => {
-    const updatedExams = examPlan.exams.map((e) =>
-      e.id === examId
-        ? { ...e, topics: e.topics?.map((t) => (t.id === topicId ? { ...t, done: !t.done } : t)) }
-        : e
+  const toggleExamTopic = (examId: string, topicId: string) =>
+    updateExamPlan((exams) =>
+      exams.map((e) =>
+        e.id === examId
+          ? { ...e, topics: e.topics?.map((t) => (t.id === topicId ? { ...t, done: !t.done } : t)) }
+          : e
+      )
     );
-    await saveExamPlan({ exams: updatedExams });
-  };
+
+  // Real persisted counterparts to what cert-tracker.tsx used to fake with
+  // local-only useState (a hardcoded +10 per tap, and a formulaic increasing
+  // "mock score" nobody actually entered) — see plan file for that fix.
+  const logExamPractice = (examId: string, count: number) =>
+    updateExamPlan((exams) =>
+      exams.map((e) => (e.id === examId ? { ...e, practiceQuestionsLogged: (e.practiceQuestionsLogged ?? 0) + count } : e))
+    );
+
+  const logExamMockScore = (examId: string, score: number) =>
+    updateExamPlan((exams) =>
+      exams.map((e) => (e.id === examId ? { ...e, mockScores: [...(e.mockScores ?? []), score] } : e))
+    );
+
+  const setExamConfidence = (examId: string, confidence: number) =>
+    updateExamPlan((exams) => exams.map((e) => (e.id === examId ? { ...e, confidence } : e)));
 
   const clearPlan = () => {
     setPlan(EMPTY_PLAN);
@@ -113,7 +182,9 @@ export function PlanProvider({ children }: { children: ReactNode }) {
     <PlanContext.Provider
       value={{
         plan, examPlan, professionalPlan, loading,
-        savePlan, saveExamPlan, saveProfessionalPlan, toggleExamTopic, refetch: fetchPlans, clearPlan,
+        savePlan, updatePlan, saveExamPlan, saveProfessionalPlan, toggleExamTopic,
+        logExamPractice, logExamMockScore, setExamConfidence, updateExamPlan,
+        refetch: fetchPlans, clearPlan,
       }}
     >
       {children}

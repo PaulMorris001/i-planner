@@ -1,15 +1,16 @@
 import {
   View, Text, StyleSheet, TouchableOpacity, Pressable,
-  TextInput, ScrollView, Alert, Platform,
+  TextInput, ScrollView, Alert,
 } from 'react-native';
 import { useState } from 'react';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/Button';
 import { AddClassModal } from '@/components/plan/AddClassModal';
 import { SyllabusUploadModal } from '@/components/plan/SyllabusUploadModal';
 import { BottomSheetModal } from '@/components/ui/BottomSheetModal';
+import { ModalCloseButton } from '@/components/ui/ModalCloseButton';
+import { InlineDateTimePicker } from '@/components/ui/InlineDateTimePicker';
 import { OnboardingStepHeader } from '@/components/onboarding/OnboardingStepHeader';
 import { Colors, Spacing, Typography, Radius } from '@/constants/theme';
 import { Routes } from '@/constants/routes';
@@ -18,7 +19,7 @@ import { useOnboarding } from '@/hooks/useOnboarding';
 import { useSettings } from '@/hooks/useSettings';
 import { syncClassToAppleCalendar } from '@/utils/appleCalendarSync';
 import { scheduleClassNotifications } from '@/utils/notifications';
-import { parseISODateLocal } from '@/utils/date';
+import { parseISODateLocal, DAY_FULL, formatDatePickerLabel } from '@/utils/date';
 import type {
   StudentPlan as StudentPlanType,
   ClassItem,
@@ -30,7 +31,6 @@ import type {
 } from '@/types/plan.types';
 
 // ── Constants ──────────────────────────────────────────────────────────────
-const DAY_FULL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const TASK_TYPES: RecruitmentItem['taskType'][] = ['Apply', 'Interview', 'Network', 'Update CV', 'Other'];
 const FREQUENCIES: SocialItem['frequency'][]    = ['One-off', 'Weekly', 'Monthly'];
 const TIME_OF_DAY: RoutineItem['timeOfDay'][]   = ['Morning', 'Afternoon', 'Evening', 'Night'];
@@ -58,21 +58,9 @@ const SECTIONS: {
   { key: 'other',         label: 'Other',         sub: 'anything else you plan',     bg: '#FDF4FF', accent: '#9333EA' },
 ];
 
-function formatDate(date: Date): string {
-  return date.toLocaleDateString('en-GB', {
-    day: 'numeric', month: 'short', year: 'numeric',
-  });
-}
-
-function formatTime(date: Date): string {
-  return date.toLocaleTimeString('en-US', {
-    hour: 'numeric', minute: '2-digit',
-  });
-}
-
 function classLabel(item: ClassItem): string {
   if (!item.recurring) {
-    return `One time · ${formatDate(parseISODateLocal(item.startDate))}`;
+    return `One time · ${formatDatePickerLabel(parseISODateLocal(item.startDate))}`;
   }
   const map: Record<ClassFrequency, string> = {
     weekly:   `Weekly on ${DAY_FULL[item.dayIdxs?.[0] ?? 0]}`,
@@ -340,7 +328,7 @@ export default function StudentPlan() {
                         </View>
                         <View style={styles.itemTextBlock}>
                           <Text style={styles.itemTitle} numberOfLines={1}>{item.company}</Text>
-                          <Text style={styles.itemMeta}>{item.taskType} · {formatDate(parseISODateLocal(item.date))}</Text>
+                          <Text style={styles.itemMeta}>{item.taskType} · {formatDatePickerLabel(parseISODateLocal(item.date))}</Text>
                         </View>
                         <View style={styles.itemCheck}>
                           <Text style={styles.itemCheckMark}>✓</Text>
@@ -498,9 +486,7 @@ export default function StudentPlan() {
       <BottomSheetModal visible={recSheetOpen} onClose={() => setRecSheetOpen(false)} maxHeightPct={88}>
           <View style={styles.sheetHeaderRow}>
             <Text style={styles.sheetTitle}>Add a coffee chat or interview</Text>
-            <TouchableOpacity style={styles.closeBtn} onPress={() => setRecSheetOpen(false)}>
-              <Text style={styles.closeBtnText}>✕</Text>
-            </TouchableOpacity>
+            <ModalCloseButton onPress={() => setRecSheetOpen(false)} />
           </View>
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             <Text style={styles.sheetEyebrow}>Task type</Text>
@@ -529,21 +515,16 @@ export default function StudentPlan() {
             <Text style={styles.sheetEyebrow}>Date</Text>
             <TouchableOpacity style={styles.datePicker} onPress={() => setShowRecPicker(true)} activeOpacity={0.8}>
               <Text style={styles.datePickerIcon}>📅</Text>
-              <Text style={styles.datePickerText}>{formatDate(recDate)}</Text>
+              <Text style={styles.datePickerText}>{formatDatePickerLabel(recDate)}</Text>
             </TouchableOpacity>
-            {showRecPicker && (
-              <DateTimePicker
-                value={recDate}
-                mode="date"
-                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                minimumDate={new Date()}
-                themeVariant="light"
-                onChange={(_, date) => {
-                  if (Platform.OS === 'android') setShowRecPicker(false);
-                  if (date) setRecDate(date);
-                }}
-              />
-            )}
+            <InlineDateTimePicker
+              visible={showRecPicker}
+              value={recDate}
+              mode="date"
+              minimumDate={new Date()}
+              onChange={setRecDate}
+              onDismiss={() => setShowRecPicker(false)}
+            />
 
             <TouchableOpacity style={styles.sheetSaveBtn} onPress={addRecruitment} activeOpacity={0.85}>
               <Text style={styles.sheetSaveBtnText}>Add task</Text>
@@ -555,9 +536,7 @@ export default function StudentPlan() {
       <BottomSheetModal visible={socialSheetOpen} onClose={() => setSocialSheetOpen(false)} maxHeightPct={88}>
           <View style={styles.sheetHeaderRow}>
             <Text style={styles.sheetTitle}>Add a party or event</Text>
-            <TouchableOpacity style={styles.closeBtn} onPress={() => setSocialSheetOpen(false)}>
-              <Text style={styles.closeBtnText}>✕</Text>
-            </TouchableOpacity>
+            <ModalCloseButton onPress={() => setSocialSheetOpen(false)} />
           </View>
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             <Text style={styles.sheetEyebrow}>Activity</Text>
@@ -593,9 +572,7 @@ export default function StudentPlan() {
       <BottomSheetModal visible={routineSheetOpen} onClose={() => setRoutineSheetOpen(false)} maxHeightPct={88}>
           <View style={styles.sheetHeaderRow}>
             <Text style={styles.sheetTitle}>Add a routine block</Text>
-            <TouchableOpacity style={styles.closeBtn} onPress={() => setRoutineSheetOpen(false)}>
-              <Text style={styles.closeBtnText}>✕</Text>
-            </TouchableOpacity>
+            <ModalCloseButton onPress={() => setRoutineSheetOpen(false)} />
           </View>
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             <Text style={styles.sheetEyebrow}>Routine name</Text>
@@ -733,11 +710,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14,
   },
   sheetTitle: { fontSize: 19, fontWeight: '800', color: Colors.textPrimary, letterSpacing: -0.3, flex: 1, marginRight: 10 },
-  closeBtn: {
-    width: 32, height: 32, borderRadius: 16, backgroundColor: Colors.border,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  closeBtnText: { fontSize: 13, color: Colors.textSecondary },
   sheetEyebrow: {
     fontSize: 12, fontWeight: '700', color: Colors.textMuted,
     textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 16, marginBottom: 9,
@@ -765,18 +737,6 @@ const styles = StyleSheet.create({
   datePickerIcon: { fontSize: 16 },
   datePickerText: { flex: 1, fontSize: 15, color: '#000000', fontWeight: '600' },
   datePickerPlaceholder: { color: Colors.textMuted, fontWeight: '400' },
-
-  recurringRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: Colors.white, borderWidth: 1, borderColor: Colors.border,
-    borderRadius: 13, padding: 13, paddingHorizontal: 15, marginTop: 16,
-  },
-  recurringTitle: { fontSize: 14.5, fontWeight: '700', color: Colors.textPrimary },
-  recurringSub:   { fontSize: 12, color: Colors.textMuted, marginTop: 1 },
-  toggle:            { width: 40, height: 22, borderRadius: 11, backgroundColor: Colors.border, justifyContent: 'center', paddingHorizontal: 2 },
-  toggleActive:      { backgroundColor: Colors.primary },
-  toggleThumb:       { width: 18, height: 18, borderRadius: 9, backgroundColor: Colors.white },
-  toggleThumbActive: { transform: [{ translateX: 18 }] },
 
   sheetSaveBtn: {
     marginTop: 20, backgroundColor: Colors.primary, borderRadius: 14,

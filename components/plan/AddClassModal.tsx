@@ -1,12 +1,18 @@
 import { useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Platform } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { BottomSheetModal } from '@/components/ui/BottomSheetModal';
 import { ModalCloseButton } from '@/components/ui/ModalCloseButton';
 import { Chip } from '@/components/ui/Chip';
+import { InlineDateTimePicker } from '@/components/ui/InlineDateTimePicker';
 import { Colors, Spacing, Radius } from '@/constants/theme';
-import { weekdayIndexMonday, parseISODateLocal } from '@/utils/date';
-import { parseTimeToMinutes } from '@/utils/time';
+import {
+  weekdayIndexMonday,
+  parseISODateLocal,
+  formatDatePickerLabel,
+  formatTimeLabel,
+  parseTimeToDate,
+  dayIdxsForFrequency,
+} from '@/utils/date';
 import type { ClassItem, ClassFrequency } from '@/types/plan.types';
 
 const CLASS_FREQ_OPTIONS: { key: ClassFrequency; label: string }[] = [
@@ -15,21 +21,6 @@ const CLASS_FREQ_OPTIONS: { key: ClassFrequency; label: string }[] = [
   { key: 'daily',    label: 'Every day' },
   { key: 'monthly',  label: 'Monthly' },
 ];
-
-function formatDate(date: Date): string {
-  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-}
-
-function formatTime(date: Date): string {
-  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-}
-
-function parseTimeToDate(time: string): Date {
-  const minutes = parseTimeToMinutes(time);
-  const d = new Date();
-  d.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
-  return d;
-}
 
 interface AddClassModalProps {
   visible: boolean;
@@ -77,15 +68,8 @@ export function AddClassModal({ visible, onClose, onAdd, editingClass }: AddClas
   const handleAdd = () => {
     if (!className.trim()) return;
     const startWd = weekdayIndexMonday(startDate);
-    let dayIdxs: number[] = [];
-    if (recurring) {
-      if (freq === 'weekly') dayIdxs = [startWd];
-      else if (freq === 'weekdays') dayIdxs = [0, 1, 2, 3, 4];
-      else if (freq === 'daily') dayIdxs = [0, 1, 2, 3, 4, 5, 6];
-      // monthly: no weekly grid slot — shows in the class list only
-    } else {
-      dayIdxs = [startWd];
-    }
+    // monthly: no weekly grid slot — shows in the class list only, dayIdxs stays empty
+    const dayIdxs = !recurring ? [startWd] : freq === 'monthly' ? [] : dayIdxsForFrequency(freq, startWd);
     const item: ClassItem = {
       id:         editingClass?.id ?? Date.now().toString(),
       courseName: className.trim(),
@@ -93,7 +77,7 @@ export function AddClassModal({ visible, onClose, onAdd, editingClass }: AddClas
       recurring,
       freq,
       dayIdxs,
-      time: time ? formatTime(time) : '9:00 AM',
+      time: time ? formatTimeLabel(time) : '9:00 AM',
     };
     onAdd(item);
     handleClose();
@@ -117,20 +101,15 @@ export function AddClassModal({ visible, onClose, onAdd, editingClass }: AddClas
           <Text style={styles.sheetEyebrow}>Starts on</Text>
           <TouchableOpacity style={styles.datePicker} onPress={() => setShowDatePicker(true)} activeOpacity={0.8}>
             <Text style={styles.datePickerIcon}>📅</Text>
-            <Text style={styles.datePickerText}>{formatDate(startDate)}</Text>
+            <Text style={styles.datePickerText}>{formatDatePickerLabel(startDate)}</Text>
           </TouchableOpacity>
-          {showDatePicker && (
-            <DateTimePicker
-              value={startDate}
-              mode="date"
-              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              themeVariant="light"
-              onChange={(_, date) => {
-                if (Platform.OS === 'android') setShowDatePicker(false);
-                if (date) setStartDate(date);
-              }}
-            />
-          )}
+          <InlineDateTimePicker
+            visible={showDatePicker}
+            value={startDate}
+            mode="date"
+            onChange={setStartDate}
+            onDismiss={() => setShowDatePicker(false)}
+          />
 
           <View style={styles.recurringRow}>
             <View>
@@ -163,21 +142,16 @@ export function AddClassModal({ visible, onClose, onAdd, editingClass }: AddClas
           <TouchableOpacity style={styles.datePicker} onPress={() => setShowTimePicker(true)} activeOpacity={0.8}>
             <Text style={styles.datePickerIcon}>🕐</Text>
             <Text style={[styles.datePickerText, !time && styles.datePickerPlaceholder]}>
-              {time ? formatTime(time) : 'Select a time'}
+              {time ? formatTimeLabel(time) : 'Select a time'}
             </Text>
           </TouchableOpacity>
-          {showTimePicker && (
-            <DateTimePicker
-              value={time ?? new Date()}
-              mode="time"
-              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              themeVariant="light"
-              onChange={(_, date) => {
-                if (Platform.OS === 'android') setShowTimePicker(false);
-                if (date) setTime(date);
-              }}
-            />
-          )}
+          <InlineDateTimePicker
+            visible={showTimePicker}
+            value={time ?? new Date()}
+            mode="time"
+            onChange={setTime}
+            onDismiss={() => setShowTimePicker(false)}
+          />
 
           <TouchableOpacity style={styles.sheetSaveBtn} onPress={handleAdd} activeOpacity={0.85}>
             <Text style={styles.sheetSaveBtnText}>{editingClass ? 'Save changes' : 'Add class'}</Text>

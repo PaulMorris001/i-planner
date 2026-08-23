@@ -16,20 +16,19 @@ import { usePlan } from '@/hooks/usePlan';
 import { useTasks } from '@/hooks/useTasks';
 import { useGoals } from '@/hooks/useGoals';
 import { useSyllabi } from '@/hooks/useSyllabi';
-import type { ClassItem } from '@/types/plan.types';
 import type { Goal } from '@/types/goal.types';
-import { computeTaskStreak, weekdayIndexMonday, isDueTodayOrLater, localMidnight, parseISODateLocal } from '@/utils/date';
+import {
+  computeTaskStreak,
+  weekdayIndexMonday,
+  isDueTodayOrLater,
+  isTaskDoneOnDate,
+  localMidnight,
+  parseISODateLocal,
+  formatShortDate,
+  formatClassDays,
+} from '@/utils/date';
 import { parseTimeToMinutes } from '@/utils/time';
-import { formatShortDate } from './dashboardHelpers';
 import { dashboardStyles as styles } from './dashboardStyles';
-
-const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
-function classDaysLabel(item: ClassItem): string {
-  if (!item.recurring) return 'One time';
-  if (item.freq === 'monthly') return 'Monthly';
-  return (item.dayIdxs ?? []).map((i) => DAY_SHORT[i]).join(' · ');
-}
 
 // True when dateIso falls within the current Monday-Sunday week.
 function isThisWeek(dateIso: string): boolean {
@@ -96,7 +95,7 @@ export function StudentPathView({ quickLinks, onAddClass, onAddSyllabus, onViewG
       .filter((o) => !!o.date)
       .map((o) => ({ title: o.title, date: o.date, dotColor: Colors.warning })),
     ...tasks
-      .filter((t) => !!t.dueDate && !t.done)
+      .filter((t) => !!t.dueDate && !isTaskDoneOnDate(t, parseISODateLocal(t.dueDate)))
       .map((t) => ({
         title: t.title,
         date: t.dueDate,
@@ -178,7 +177,7 @@ export function StudentPathView({ quickLinks, onAddClass, onAddSyllabus, onViewG
                       {c.courseName}
                     </Text>
                     <Text style={styles.classRowMeta}>
-                      {classDaysLabel(c)}
+                      {formatClassDays(c)}
                       {c.time ? ` · ${c.time}` : ''}
                     </Text>
                   </View>

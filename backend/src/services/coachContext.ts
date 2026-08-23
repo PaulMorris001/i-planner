@@ -1,4 +1,4 @@
-import { Task } from '../models/Task';
+import { Task, TaskDocument } from '../models/Task';
 import { Goal } from '../models/Goal';
 import { Habit, toPublicHabit } from '../models/Habit';
 import { Plan } from '../models/Plan';
@@ -40,6 +40,21 @@ function formatDueForCoach(dueDateIso: string): string {
   return new Date(dueDateIso).toDateString();
 }
 
+// A recurring task is one Task document shared across every weekday it
+// occurs on — its `done` field is frozen false forever once toggleDone starts
+// writing to `completedDates` instead (see contexts/TasksContext.tsx on the
+// frontend), so reading `done` directly here would make every recurring task
+// look permanently incomplete and the Coach would nag about it forever
+// regardless of how many times it's actually been completed. Approximates
+// "today" as UTC (same tradeoff formatDueForCoach documents above — the
+// server has no reliable way to know the user's own timezone), so this can
+// be off by one day for a user far from UTC right around midnight.
+function isTaskDoneToday(task: TaskDocument): boolean {
+  if (!task.recurring) return task.done;
+  const todayKey = new Date().toISOString().slice(0, 10);
+  return (task.completedDates ?? []).includes(todayKey);
+}
+
 function currentExamWeek(exam: ExamRecord): number {
   const totalWeeks = exam.topics?.length || exam.weeksRemaining;
   const msPerWeek = 7 * 24 * 60 * 60 * 1000;
@@ -76,7 +91,7 @@ export async function buildContextSummary(firebaseUid: string, consent: CoachDat
   const todayIdx = weekdayIndexMonday(new Date());
 
   const upcomingTasks = tasks
-    .filter((t) => !t.done)
+    .filter((t) => !isTaskDoneToday(t))
     .sort((a, b) => (a.dueDate || '9999').localeCompare(b.dueDate || '9999'))
     .slice(0, 15);
   if (upcomingTasks.length) {

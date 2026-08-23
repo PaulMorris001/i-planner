@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, Alert } from 'react-native';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { GreetingHeader } from '@/components/ui/GreetingHeader';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -15,7 +16,7 @@ import { usePlan } from '@/hooks/usePlan';
 import { useSettings } from '@/hooks/useSettings';
 import { useNewTaskModal } from '@/contexts/NewTaskModalContext';
 import { confirmDelete } from '@/utils/confirmDelete';
-import { weekdayIndexMonday, taskOccursOnDay, isTaskDoneOnDate } from '@/utils/date';
+import { weekdayIndexMonday, taskOccursOnDay, isTaskDoneOnDate, DAY_FULL, formatClassDays } from '@/utils/date';
 import { parseTimeToMinutes } from '@/utils/time';
 import type { Task } from '@/types/task.types';
 import type { ClassItem } from '@/types/plan.types';
@@ -26,8 +27,6 @@ const VIEW_OPTIONS: { key: 'day' | 'week' | 'month'; label: string }[] = [
   { key: 'month', label: 'Month' },
 ];
 
-const DAY_FULL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const PRIORITY_RANK: Record<TaskPriorityId, number> = { high: 0, medium: 1, low: 2 };
 
 function sortTasks(tasks: Task[]) {
@@ -36,12 +35,6 @@ function sortTasks(tasks: Task[]) {
 
 function formatTodayDate(date: Date): string {
   return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-}
-
-function classDaysShortLabel(item: ClassItem): string {
-  if (!item.recurring) return 'One time';
-  if (item.freq === 'monthly') return 'Monthly';
-  return (item.dayIdxs ?? []).map((i) => DAY_SHORT[i]).join('/');
 }
 
 const TASK_FREQ_LABEL: Record<NonNullable<Task['freq']>, string> = {
@@ -55,6 +48,7 @@ type DayItem =
   | { kind: 'class'; time: number; item: ClassItem; color: string; soft: string };
 
 export default function Planner() {
+  const tabBarHeight = useBottomTabBarHeight();
   const [view, setView] = useState<'day' | 'week' | 'month'>('day');
   const [courseFilter, setCourseFilter] = useState<string | null>(null);
   const [actionSheetTarget, setActionSheetTarget] = useState<Task | null>(null);
@@ -191,7 +185,7 @@ export default function Planner() {
           <Text style={[styles.chip, { color, backgroundColor: Colors.white }]}>Class</Text>
           {!!item.time && <Text style={styles.time}>{item.time}</Text>}
         </View>
-        <Text style={styles.classRecur}>↻ {classDaysShortLabel(item)}</Text>
+        <Text style={styles.classRecur}>↻ {formatClassDays(item, '/')}</Text>
       </View>
     </View>
   );
@@ -224,7 +218,16 @@ export default function Planner() {
   }
 
   return (
-    <ScreenWrapper backgroundColor={Colors.offWhite} scroll style={styles.scrollContent} edges={['top', 'right', 'left']}>
+    <ScreenWrapper
+      backgroundColor={Colors.offWhite}
+      scroll
+      // See dashboard.tsx's identical fix — 40px alone doesn't clear the
+      // real tab bar height (60 + insets.bottom), so Month view's detail
+      // panel / Week view's last day column can end up unreachable behind
+      // the tab bar without this.
+      style={{ ...styles.scrollContent, paddingBottom: styles.scrollContent.paddingBottom + tabBarHeight }}
+      edges={['top', 'right', 'left']}
+    >
       <GreetingHeader />
 
       <View style={styles.body}>

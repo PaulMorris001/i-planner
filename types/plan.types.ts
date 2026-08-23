@@ -83,6 +83,16 @@ export interface Exam {
   // AI-generated week-by-week study topics — undefined/empty until generated
   // (e.g. an exam saved before this feature existed, or generation failed).
   topics?: ExamTopic[];
+  // Cumulative count the user has explicitly logged via cert-tracker.tsx's
+  // "+ Log questions" entry — undefined means never logged, treat as 0.
+  practiceQuestionsLogged?: number;
+  // Chronological list of real scores (0-100) the user entered via
+  // "+ Add score" — the most recent entry is what cert-tracker.tsx displays
+  // as "Last mock exam".
+  mockScores?: number[];
+  // Self-reported readiness, 1-5 — set by tapping a confidence bar in
+  // cert-tracker.tsx.
+  confidence?: number;
 }
 
 export interface ExamPlan {

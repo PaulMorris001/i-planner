@@ -97,12 +97,24 @@ export function TasksProvider({ children }: { children: ReactNode }) {
 
     if (target.recurring) {
       const dateKey = toDateKey(date);
-      const prevDates = target.completedDates ?? [];
-      const nextDates = prevDates.includes(dateKey)
-        ? prevDates.filter((d) => d !== dateKey)
-        : [...prevDates, dateKey];
-
-      setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, completedDates: nextDates } : t)));
+      // Computed inside the updater (against React's latest pending state,
+      // not the `tasks` closure above) so two toggles fired back-to-back —
+      // e.g. the same recurring task shown on two Week-view day columns,
+      // both tapped before the first request lands — don't have the second
+      // one compute its patch from a snapshot that predates the first one's
+      // change, silently dropping it.
+      let prevDates: string[] = [];
+      let nextDates: string[] = [];
+      setTasks((prev) =>
+        prev.map((t) => {
+          if (t.id !== id) return t;
+          prevDates = t.completedDates ?? [];
+          nextDates = prevDates.includes(dateKey)
+            ? prevDates.filter((d) => d !== dateKey)
+            : [...prevDates, dateKey];
+          return { ...t, completedDates: nextDates };
+        })
+      );
       try {
         await taskService.update(id, { completedDates: nextDates });
       } catch (err) {
@@ -113,9 +125,14 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     }
 
     const nextDone = !target.done;
+    const prevNotificationIds = target.notificationIds;
 
     // A completed task doesn't need a reminder anymore; un-completing one that
-    // still has a future due date/time should get its reminder back.
+    // still has a future due date/time should get its reminder back. Reads
+    // `target` (not the freshest state) since scheduling is an async device
+    // call that has to happen before the state update either way — a rapid
+    // double-tap racing this is an accepted edge case here, unlike the
+    // recurring branch above where a lost update silently drops data.
     let notificationIds = target.notificationIds;
     if (remindersEnabled) {
       if (nextDone) {
@@ -130,7 +147,7 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     try {
       await taskService.update(id, { done: nextDone, notificationIds });
     } catch (err) {
-      setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, done: !nextDone, notificationIds: target.notificationIds } : t)));
+      setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, done: !nextDone, notificationIds: prevNotificationIds } : t)));
       console.error('[TasksProvider] failed to toggle task', err);
     }
   };

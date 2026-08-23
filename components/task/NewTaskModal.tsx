@@ -1,16 +1,22 @@
 import { useEffect, useState } from 'react';
-import { View, Text, TextInput, Pressable, Switch, ScrollView, StyleSheet, Platform } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import { View, Text, TextInput, Pressable, Switch, ScrollView, StyleSheet } from 'react-native';
 import { BottomSheetModal } from '@/components/ui/BottomSheetModal';
 import { ModalCloseButton } from '@/components/ui/ModalCloseButton';
 import { Chip } from '@/components/ui/Chip';
+import { InlineDateTimePicker } from '@/components/ui/InlineDateTimePicker';
 import { useNewTaskModal } from '@/contexts/NewTaskModalContext';
 import { useTasks } from '@/hooks/useTasks';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors, Spacing } from '@/constants/theme';
 import { TaskCategories, TaskCategoryId, TaskPriorities, TaskPriorityId } from '@/constants/taskMeta';
-import { weekdayIndexMonday, parseISODateLocal } from '@/utils/date';
-import { parseTimeToMinutes } from '@/utils/time';
+import {
+  weekdayIndexMonday,
+  parseISODateLocal,
+  formatDatePickerLabel,
+  formatTimeLabel,
+  parseTimeToDate,
+  dayIdxsForFrequency,
+} from '@/utils/date';
 import type { TaskFrequency } from '@/types/task.types';
 
 const CATEGORY_ORDER: TaskCategoryId[] = ['academic', 'career', 'personal', 'financial', 'exam', 'habit', 'other'];
@@ -24,21 +30,6 @@ const TASK_FREQ_OPTIONS: { key: TaskFrequency; label: string }[] = [
 // rather than asked for separately (Monday-start, matching Planner's grid).
 // Falls back to Planner's fixed "today" column when no due date is picked.
 const DEFAULT_DAY_INDEX = 1;
-
-function formatTime(date: Date): string {
-  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-}
-
-function formatDate(date: Date): string {
-  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-}
-
-function parseTimeToDate(time: string): Date {
-  const minutes = parseTimeToMinutes(time);
-  const d = new Date();
-  d.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
-  return d;
-}
 
 export function NewTaskModal() {
   const { isOpen, editingTask, close } = useNewTaskModal();
@@ -96,21 +87,14 @@ export function NewTaskModal() {
     setSubmitting(true);
     try {
       const dueWd = dueDate ? weekdayIndexMonday(dueDate) : DEFAULT_DAY_INDEX;
-      // Mirrors AddClassModal's dayIdxs derivation — weekly recurs on the due
-      // date's own weekday, weekdays/daily span the grid the same way classes do.
-      let dayIdxs: number[] | undefined;
-      if (recurring) {
-        if (freq === 'weekly') dayIdxs = [dueWd];
-        else if (freq === 'weekdays') dayIdxs = [0, 1, 2, 3, 4];
-        else if (freq === 'daily') dayIdxs = [0, 1, 2, 3, 4, 5, 6];
-      }
+      const dayIdxs = recurring ? dayIdxsForFrequency(freq, dueWd) : undefined;
       const patch = {
         title: title.trim(),
         category,
         priority,
         day: dueWd,
         hour: dueTime ? dueTime.getHours() : 23,
-        time: dueTime ? formatTime(dueTime) : '',
+        time: dueTime ? formatTimeLabel(dueTime) : '',
         dueDate: dueDate ? dueDate.toISOString() : '',
         recurring,
         freq: recurring ? freq : undefined,
@@ -195,21 +179,16 @@ export function NewTaskModal() {
           <Pressable style={styles.datePickerButton} onPress={() => setShowDatePicker(true)}>
             <IconSymbol name="calendar" color={Colors.textSecondary} size={17} />
             <Text style={[styles.datePickerText, !dueDate && styles.datePickerPlaceholder]}>
-              {dueDate ? formatDate(dueDate) : 'Select date (optional)'}
+              {dueDate ? formatDatePickerLabel(dueDate) : 'Select date (optional)'}
             </Text>
           </Pressable>
-          {showDatePicker && (
-            <DateTimePicker
-              value={dueDate ?? new Date()}
-              mode="date"
-              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              themeVariant="light"
-              onChange={(_, date) => {
-                if (Platform.OS === 'android') setShowDatePicker(false);
-                if (date) setDueDate(date);
-              }}
-            />
-          )}
+          <InlineDateTimePicker
+            visible={showDatePicker}
+            value={dueDate ?? new Date()}
+            mode="date"
+            onChange={setDueDate}
+            onDismiss={() => setShowDatePicker(false)}
+          />
 
           <View style={styles.fieldLabelRow}>
             <Text style={styles.eyebrow}>Due time</Text>
@@ -222,21 +201,16 @@ export function NewTaskModal() {
           <Pressable style={styles.datePickerButton} onPress={() => setShowTimePicker(true)}>
             <IconSymbol name="clock" color={Colors.textSecondary} size={17} />
             <Text style={[styles.datePickerText, !dueTime && styles.datePickerPlaceholder]}>
-              {dueTime ? formatTime(dueTime) : 'Select time (optional)'}
+              {dueTime ? formatTimeLabel(dueTime) : 'Select time (optional)'}
             </Text>
           </Pressable>
-          {showTimePicker && (
-            <DateTimePicker
-              value={dueTime ?? new Date()}
-              mode="time"
-              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              themeVariant="light"
-              onChange={(_, date) => {
-                if (Platform.OS === 'android') setShowTimePicker(false);
-                if (date) setDueTime(date);
-              }}
-            />
-          )}
+          <InlineDateTimePicker
+            visible={showTimePicker}
+            value={dueTime ?? new Date()}
+            mode="time"
+            onChange={setDueTime}
+            onDismiss={() => setShowTimePicker(false)}
+          />
 
           <View style={styles.repeatRow}>
             <View>

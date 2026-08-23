@@ -1,6 +1,7 @@
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { Text, Pressable, StyleSheet } from 'react-native';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors, Spacing, Radius } from '@/constants/theme';
+import { GateCard } from '@/components/ui/GateCard';
+import { Colors } from '@/constants/theme';
 
 interface CalendarConnectGateProps {
   onConnectApple: () => void;
@@ -10,75 +11,29 @@ interface CalendarConnectGateProps {
 
 export function CalendarConnectGate({ onConnectApple, onConnectGoogle, onSkip }: CalendarConnectGateProps) {
   return (
-    <View style={styles.wrap}>
-      <View style={styles.card}>
-        <View style={styles.iconBadge}>
-          <IconSymbol name="calendar" color={Colors.primaryLight} size={26} />
-        </View>
+    <GateCard
+      icon="calendar"
+      title="Connect your calendar"
+      subtitle="Sync events so your AI Coach plans around what's already on your schedule."
+    >
+      <Pressable style={styles.googleBtn} onPress={onConnectGoogle}>
+        <Text style={styles.googleIcon}>G</Text>
+        <Text style={styles.googleBtnText}>Connect Google Calendar</Text>
+      </Pressable>
 
-        <Text style={styles.title}>Connect your calendar</Text>
-        <Text style={styles.subtitle}>
-          Sync events so your AI Coach plans around what's already on your schedule.
-        </Text>
+      <Pressable style={styles.appleBtn} onPress={onConnectApple}>
+        <IconSymbol name="calendar" color={Colors.textPrimary} size={16} />
+        <Text style={styles.appleBtnText}>Connect Apple Calendar</Text>
+      </Pressable>
 
-        <Pressable style={styles.googleBtn} onPress={onConnectGoogle}>
-          <Text style={styles.googleIcon}>G</Text>
-          <Text style={styles.googleBtnText}>Connect Google Calendar</Text>
-        </Pressable>
-
-        <Pressable style={styles.appleBtn} onPress={onConnectApple}>
-          <IconSymbol name="calendar" color={Colors.textPrimary} size={16} />
-          <Text style={styles.appleBtnText}>Connect Apple Calendar</Text>
-        </Pressable>
-
-        <Pressable onPress={onSkip} hitSlop={8}>
-          <Text style={styles.skipText}>Skip for now</Text>
-        </Pressable>
-      </View>
-    </View>
+      <Pressable onPress={onSkip} hitSlop={8}>
+        <Text style={styles.skipText}>Skip for now</Text>
+      </Pressable>
+    </GateCard>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: Spacing.lg,
-  },
-  card: {
-    width: '100%',
-    backgroundColor: Colors.white,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Radius.xl,
-    padding: Spacing.lg,
-    alignItems: 'center',
-  },
-  iconBadge: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
-    backgroundColor: Colors.infoSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.md,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: Colors.textPrimary,
-    letterSpacing: -0.2,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: 13.5,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 19,
-    marginTop: 7,
-    marginBottom: Spacing.lg,
-  },
   googleBtn: {
     width: '100%',
     flexDirection: 'row',

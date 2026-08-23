@@ -20,11 +20,12 @@ import { usePlan } from "@/hooks/usePlan";
 import { useSettings } from "@/hooks/useSettings";
 import { useTasks } from "@/hooks/useTasks";
 import { useSyllabi } from "@/hooks/useSyllabi";
-import type { ClassItem, Exam, ExamPlan as ExamPlanType } from "@/types/plan.types";
+import type { ClassItem, Exam } from "@/types/plan.types";
 import type { Goal } from "@/types/goal.types";
 import { syncClassToAppleCalendar } from "@/utils/appleCalendarSync";
 import { scheduleClassNotifications } from "@/utils/notifications";
-import { isDueTodayOrLater, localMidnight, parseISODateLocal } from "@/utils/date";
+import { isDueTodayOrLater, localMidnight, parseISODateLocal, isTaskDoneOnDate } from "@/utils/date";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Alert, Pressable, Text, View } from "react-native";
@@ -68,11 +69,11 @@ function relativeDueLabel(dueDateIso: string): string {
 // unrelated screens that just happen to share a route.
 export default function Dashboard() {
   const router = useRouter();
+  const tabBarHeight = useBottomTabBarHeight();
   const {
-    plan,
     examPlan,
-    savePlan,
-    saveExamPlan,
+    updatePlan,
+    updateExamPlan,
     refetch: refetchPlan,
     loading: planLoading,
   } = usePlan();
@@ -112,7 +113,7 @@ export default function Dashboard() {
   // Coach card below so its tip reflects what's actually on the user's plate
   // instead of a fixed placeholder.
   const nextTask = [...tasks]
-    .filter((t) => !t.done && !!t.dueDate && isDueTodayOrLater(t.dueDate))
+    .filter((t) => !!t.dueDate && !isTaskDoneOnDate(t, parseISODateLocal(t.dueDate)) && isDueTodayOrLater(t.dueDate))
     .sort((a, b) => localMidnight(parseISODateLocal(a.dueDate)) - localMidnight(parseISODateLocal(b.dueDate)))[0];
   const coachTip = nextTask
     ? AI_TIP_TEMPLATE[pathKey](nextTask.title, relativeDueLabel(nextTask.dueDate))
@@ -122,7 +123,12 @@ export default function Dashboard() {
     const appleEventIds = appleCalendarConnected ? await syncClassToAppleCalendar(item) : [];
     const notificationIds = remindersEnabled ? await scheduleClassNotifications(item) : [];
     try {
-      await savePlan({ ...plan, classes: [...plan.classes, { ...item, appleEventIds, notificationIds }] });
+      // Computed against React's latest state inside updatePlan's updater —
+      // Dashboard's "Add class" and Classes tab's "Add class" both call
+      // through here/classes.tsx respectively, so adding one from each
+      // screen in quick succession no longer risks one silently dropping
+      // the other.
+      await updatePlan((p) => ({ ...p, classes: [...p.classes, { ...item, appleEventIds, notificationIds }] }));
     } catch (err) {
       console.error("[Dashboard] failed to add class", err);
       Alert.alert("Couldn't add class", "Check your connection and try again.");
@@ -131,8 +137,7 @@ export default function Dashboard() {
 
   const handleAddExam = async (exam: Exam) => {
     try {
-      const updated: ExamPlanType = { exams: [...examPlan.exams, exam] };
-      await saveExamPlan(updated);
+      await updateExamPlan((exams) => [...exams, exam]);
     } catch (err) {
       console.error("[Dashboard] failed to add exam", err);
       Alert.alert(
@@ -189,7 +194,11 @@ export default function Dashboard() {
       <ScreenWrapper
         backgroundColor={Colors.offWhite}
         scroll
-        style={styles.scrollContent}
+        // The tab bar (app/(app)/_layout.tsx) is 60 + insets.bottom tall —
+        // real height, not the flat 40px styles.scrollContent reserves on
+        // its own — so without adding it, the bottom of the scroll content
+        // sits behind the tab bar and is unreachable even at max scroll.
+        style={{ ...styles.scrollContent, paddingBottom: styles.scrollContent.paddingBottom + tabBarHeight }}
         edges={["top", "right", "left"]}
         onRefresh={handleRefresh}
         refreshing={refreshing}

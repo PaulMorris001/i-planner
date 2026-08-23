@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, Pressable, TextInput, Alert, StyleSheet } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
@@ -15,10 +15,18 @@ const CONFIDENCE_WORDS = ['', 'Shaky', 'Building', 'Steady', 'Strong', 'Exam-rea
 
 export default function CertTracker() {
   const { examId } = useLocalSearchParams<{ examId?: string }>();
-  const { examPlan, toggleExamTopic } = usePlan();
-  const [practiceLogged, setPracticeLogged] = useState(0);
-  const [mockScores, setMockScores] = useState<number[]>([]);
-  const [confidence, setConfidence] = useState(0);
+  const { examPlan, toggleExamTopic, logExamPractice, logExamMockScore, setExamConfidence } = usePlan();
+  // UI-only — whether an entry row is expanded and what's currently typed
+  // into it. The actual logged numbers (practiceQuestionsLogged, mockScores,
+  // confidence) live on the Exam record itself via PlanContext, not here —
+  // this used to be exactly backwards (the totals were local state that reset
+  // on navigation, and "logging" just added a fixed/fabricated number).
+  const [practiceInputOpen, setPracticeInputOpen] = useState(false);
+  const [practiceInputValue, setPracticeInputValue] = useState('');
+  const [savingPractice, setSavingPractice] = useState(false);
+  const [mockInputOpen, setMockInputOpen] = useState(false);
+  const [mockInputValue, setMockInputValue] = useState('');
+  const [savingMock, setSavingMock] = useState(false);
 
   // Falls back to the first exam if no id was passed (e.g. a stale deep link).
   const exam = examPlan.exams.find((e) => e.id === examId) ?? examPlan.exams[0];
@@ -27,6 +35,9 @@ export default function CertTracker() {
   const certTotal = topics.length;
   const certPct = certTotal > 0 ? Math.round((certDone / certTotal) * 100) : 0;
 
+  const practiceLogged = exam?.practiceQuestionsLogged ?? 0;
+  const mockScores = exam?.mockScores ?? [];
+  const confidence = exam?.confidence ?? 0;
   const lastMock = mockScores.length ? mockScores[mockScores.length - 1] : null;
   const mockLabel = lastMock != null ? `${lastMock}%` : '—';
   const confWord = CONFIDENCE_WORDS[confidence] || 'Steady';
@@ -38,11 +49,43 @@ export default function CertTracker() {
     });
   };
 
-  const logPractice = () => setPracticeLogged((n) => n + 10);
+  const handleLogPractice = async () => {
+    const count = parseInt(practiceInputValue, 10);
+    if (!exam || !Number.isFinite(count) || count <= 0) return;
+    setSavingPractice(true);
+    try {
+      await logExamPractice(exam.id, count);
+      setPracticeInputValue('');
+      setPracticeInputOpen(false);
+    } catch (err) {
+      console.error('[CertTracker] failed to log practice questions', err);
+      Alert.alert("Couldn't save", 'Check your connection and try again.');
+    } finally {
+      setSavingPractice(false);
+    }
+  };
 
-  const logMock = () => {
-    const next = Math.min(62 + mockScores.length * 7, 95);
-    setMockScores((prev) => [...prev, next]);
+  const handleAddMockScore = async () => {
+    const score = parseInt(mockInputValue, 10);
+    if (!exam || !Number.isFinite(score) || score < 0 || score > 100) return;
+    setSavingMock(true);
+    try {
+      await logExamMockScore(exam.id, score);
+      setMockInputValue('');
+      setMockInputOpen(false);
+    } catch (err) {
+      console.error('[CertTracker] failed to log mock score', err);
+      Alert.alert("Couldn't save", 'Check your connection and try again.');
+    } finally {
+      setSavingMock(false);
+    }
+  };
+
+  const handleSetConfidence = (n: number) => {
+    if (!exam || n === confidence) return;
+    setExamConfidence(exam.id, n).catch((err) => {
+      console.error('[CertTracker] failed to set confidence', err);
+    });
   };
 
   if (!exam) {
@@ -112,15 +155,66 @@ export default function CertTracker() {
       <View style={styles.statsRow}>
         <StatCard label="Practice questions" style={styles.statCard}>
           <Text style={styles.statValue}>{practiceLogged}</Text>
-          <Pressable style={styles.statButton} onPress={logPractice}>
-            <Text style={styles.statButtonText}>+ Log 10</Text>
-          </Pressable>
+          {practiceInputOpen ? (
+            <View style={styles.inlineInputRow}>
+              <TextInput
+                value={practiceInputValue}
+                onChangeText={setPracticeInputValue}
+                placeholder="Count"
+                placeholderTextColor={Colors.textMuted}
+                keyboardType="number-pad"
+                style={styles.inlineInput}
+                autoFocus
+                onSubmitEditing={handleLogPractice}
+              />
+              <Pressable
+                style={[
+                  styles.inlineConfirmBtn,
+                  (!practiceInputValue || savingPractice) && styles.inlineConfirmBtnDisabled,
+                ]}
+                onPress={handleLogPractice}
+                disabled={!practiceInputValue || savingPractice}
+              >
+                <Text style={styles.inlineConfirmText}>{savingPractice ? '…' : 'Add'}</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <Pressable style={styles.statButton} onPress={() => setPracticeInputOpen(true)}>
+              <Text style={styles.statButtonText}>+ Log questions</Text>
+            </Pressable>
+          )}
         </StatCard>
         <StatCard label="Last mock exam" style={styles.statCard}>
           <Text style={styles.statValue}>{mockLabel}</Text>
-          <Pressable style={styles.statButton} onPress={logMock}>
-            <Text style={styles.statButtonText}>+ Add score</Text>
-          </Pressable>
+          {mockInputOpen ? (
+            <View style={styles.inlineInputRow}>
+              <TextInput
+                value={mockInputValue}
+                onChangeText={setMockInputValue}
+                placeholder="0-100"
+                placeholderTextColor={Colors.textMuted}
+                keyboardType="number-pad"
+                maxLength={3}
+                style={styles.inlineInput}
+                autoFocus
+                onSubmitEditing={handleAddMockScore}
+              />
+              <Pressable
+                style={[
+                  styles.inlineConfirmBtn,
+                  (!mockInputValue || savingMock) && styles.inlineConfirmBtnDisabled,
+                ]}
+                onPress={handleAddMockScore}
+                disabled={!mockInputValue || savingMock}
+              >
+                <Text style={styles.inlineConfirmText}>{savingMock ? '…' : 'Save'}</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <Pressable style={styles.statButton} onPress={() => setMockInputOpen(true)}>
+              <Text style={styles.statButtonText}>+ Add score</Text>
+            </Pressable>
+          )}
         </StatCard>
       </View>
 
@@ -137,7 +231,7 @@ export default function CertTracker() {
                 styles.confidenceBar,
                 { backgroundColor: confidence >= n ? '#8B3FD1' : Colors.border },
               ]}
-              onPress={() => setConfidence(n)}
+              onPress={() => handleSetConfidence(n)}
             />
           ))}
         </View>
@@ -267,6 +361,41 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     fontWeight: '700',
     color: Colors.primaryLight,
+  },
+  inlineInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    marginTop: 10,
+  },
+  inlineInput: {
+    flex: 1,
+    minWidth: 0,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    borderRadius: 11,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    fontSize: 13.5,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+    backgroundColor: Colors.offWhite,
+  },
+  inlineConfirmBtn: {
+    backgroundColor: '#8B3FD1',
+    borderRadius: 11,
+    paddingVertical: 9,
+    paddingHorizontal: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inlineConfirmBtnDisabled: {
+    opacity: 0.5,
+  },
+  inlineConfirmText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: Colors.white,
   },
   confidenceCard: {
     marginTop: 11,

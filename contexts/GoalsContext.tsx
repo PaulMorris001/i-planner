@@ -20,6 +20,7 @@ interface GoalsContextValue {
   loading: boolean;
   createGoal: (input: NewGoalInput) => Promise<void>;
   updateGoal: (id: string, patch: GoalUpdatePatch) => Promise<void>;
+  toggleMilestone: (goalId: string, milestoneId: string) => Promise<void>;
   deleteGoal: (id: string) => Promise<void>;
   refetch: () => Promise<void>;
 }
@@ -90,6 +91,34 @@ export function GoalsProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Callers used to build the toggled milestones array themselves from their
+  // own render-closure copy of `goal.milestones`, then hand the whole array
+  // to updateGoal — so two toggles fired back-to-back (e.g. checking off two
+  // milestones on the same goal quickly) each computed their array from the
+  // same pre-toggle snapshot, and whichever save landed last silently
+  // reverted the other. Computing inside the setGoals updater instead reads
+  // React's latest pending state, the same pattern used by
+  // PlanContext.updateExamPlan for the equivalent bug there.
+  const toggleMilestone = async (goalId: string, milestoneId: string) => {
+    const prevGoals = goals;
+    let nextMilestones: Milestone[] | undefined;
+    setGoals((prev) =>
+      prev.map((g) => {
+        if (g.id !== goalId) return g;
+        nextMilestones = g.milestones.map((m) => (m.id === milestoneId ? { ...m, done: !m.done } : m));
+        return { ...g, milestones: nextMilestones, pct: pctFromMilestones(nextMilestones) };
+      })
+    );
+    if (!nextMilestones) return;
+    try {
+      const updated = await goalService.update(goalId, { milestones: nextMilestones });
+      setGoals((prev) => prev.map((g) => (g.id === goalId ? updated : g)));
+    } catch (err) {
+      setGoals(prevGoals);
+      throw err;
+    }
+  };
+
   const deleteGoal = async (id: string) => {
     const prevGoals = goals;
     setGoals((prev) => prev.filter((g) => g.id !== id));
@@ -102,7 +131,7 @@ export function GoalsProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <GoalsContext.Provider value={{ goals, loading, createGoal, updateGoal, deleteGoal, refetch: fetchGoals }}>
+    <GoalsContext.Provider value={{ goals, loading, createGoal, updateGoal, toggleMilestone, deleteGoal, refetch: fetchGoals }}>
       {children}
     </GoalsContext.Provider>
   );

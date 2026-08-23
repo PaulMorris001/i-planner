@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { View, Text, TextInput, Pressable, ActivityIndicator, Alert, ScrollView, StyleSheet, Platform } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import { View, Text, TextInput, Pressable, ActivityIndicator, Alert, ScrollView, StyleSheet } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { File } from 'expo-file-system';
 import { BottomSheetModal } from '@/components/ui/BottomSheetModal';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { UpgradeModal } from '@/components/ui/UpgradeModal';
+import { InlineDateTimePicker } from '@/components/ui/InlineDateTimePicker';
 import { Colors, Spacing, Radius } from '@/constants/theme';
 import { FEATURE_MIN_TIER, hasTier } from '@/constants/featureTiers';
 import { usePurchases } from '@/contexts/PurchasesContext';
@@ -13,7 +13,7 @@ import { syllabusService } from '@/services/syllabus.service';
 import { usePlan } from '@/hooks/usePlan';
 import { useTasks } from '@/hooks/useTasks';
 import { useSyllabi } from '@/hooks/useSyllabi';
-import { weekdayIndexMonday, parseISODateLocal } from '@/utils/date';
+import { weekdayIndexMonday, parseISODateLocal, formatDatePickerLabel } from '@/utils/date';
 import type { ClassItem } from '@/types/plan.types';
 
 interface DraftDeadline {
@@ -36,15 +36,11 @@ interface SuccessSummary {
   failedCount: number;
 }
 
-function formatDate(date: Date): string {
-  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-}
-
 // Shared between onboarding's student-plan.tsx and the post-signin Syllabi
 // screens (syllabi.tsx, Dashboard's My Syllabi card) — works in both since
 // TasksProvider now lives at the root layout rather than just the (app) group.
 export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalProps) {
-  const { plan, savePlan } = usePlan();
+  const { updatePlan } = usePlan();
   const { createTask } = useTasks();
   const { syllabi, createSyllabus } = useSyllabi();
   const { tier } = usePurchases();
@@ -173,7 +169,7 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
         dayIdxs: [weekdayIndexMonday(new Date())],
         time: '',
       };
-      await savePlan({ ...plan, classes: [...plan.classes, newClass] });
+      await updatePlan((p) => ({ ...p, classes: [...p.classes, newClass] }));
 
       const validDeadlines = deadlines.filter((d) => d.title.trim().length > 0);
       const results = await Promise.allSettled(
@@ -271,7 +267,7 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
                     style={styles.deadlineTitleInput}
                   />
                   <Pressable onPress={() => setDatePickerKey(d.key)}>
-                    <Text style={styles.deadlineDateText}>{formatDate(d.date)}</Text>
+                    <Text style={styles.deadlineDateText}>{formatDatePickerLabel(d.date)}</Text>
                   </Pressable>
                 </View>
                 <Pressable onPress={() => removeDeadline(d.key)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -289,18 +285,13 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
             </Pressable>
           </ScrollView>
 
-          {datePickerKey && (
-            <DateTimePicker
-              value={deadlines.find((d) => d.key === datePickerKey)?.date ?? new Date()}
-              mode="date"
-              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              themeVariant="light"
-              onChange={(_, date) => {
-                if (Platform.OS === 'android') setDatePickerKey(null);
-                if (date && datePickerKey) updateDeadline(datePickerKey, { date });
-              }}
-            />
-          )}
+          <InlineDateTimePicker
+            visible={!!datePickerKey}
+            value={deadlines.find((d) => d.key === datePickerKey)?.date ?? new Date()}
+            mode="date"
+            onChange={(date) => datePickerKey && updateDeadline(datePickerKey, { date })}
+            onDismiss={() => setDatePickerKey(null)}
+          />
 
           <View style={styles.footerRow}>
             <Pressable style={styles.backButton} onPress={handleClose} disabled={step === 'creating'}>

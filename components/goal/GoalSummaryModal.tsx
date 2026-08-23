@@ -16,7 +16,7 @@ interface GoalSummaryModalProps {
 // check progress and tick off milestones without leaving the home page. Full
 // editing (title, type, target fields) still only happens on the Goals page.
 export function GoalSummaryModal({ visible, onClose, goal: goalProp }: GoalSummaryModalProps) {
-  const { goals, updateGoal } = useGoals();
+  const { goals, toggleMilestone: toggleMilestoneInContext } = useGoals();
   // `goalProp` is a snapshot handed in once when "View" was tapped — it never
   // changes again even though checking a milestone updates the real goal in
   // GoalsContext right away. Re-reading the live copy by id means a toggle
@@ -31,8 +31,7 @@ export function GoalSummaryModal({ visible, onClose, goal: goalProp }: GoalSumma
   const milestonesDone = goal.milestones.filter((m) => m.done).length;
 
   const toggleMilestone = (milestoneId: string) => {
-    const updated = goal.milestones.map((m) => (m.id === milestoneId ? { ...m, done: !m.done } : m));
-    updateGoal(goal.id, { milestones: updated }).catch((err) => {
+    toggleMilestoneInContext(goal.id, milestoneId).catch((err) => {
       console.error('[GoalSummaryModal] failed to update milestone', err);
     });
   };

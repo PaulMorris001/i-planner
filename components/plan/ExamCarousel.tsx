@@ -3,7 +3,7 @@ import { View, Text, Pressable, ScrollView, StyleSheet, Dimensions, NativeSynthe
 import { LinearGradient } from 'expo-linear-gradient';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors, Spacing } from '@/constants/theme';
-import { parseISODateLocal } from '@/utils/date';
+import { formatShortDate } from '@/utils/date';
 import type { Exam } from '@/types/plan.types';
 
 const CARD_WIDTH = Dimensions.get('window').width - Spacing.md * 2;
@@ -27,10 +27,6 @@ function topicProgress(exam: Exam): { done: number; total: number; pct: number }
   const total = exam.topics?.length ?? 0;
   const done = exam.topics?.filter((t) => t.done).length ?? 0;
   return { done, total, pct: total > 0 ? (done / total) * 100 : 0 };
-}
-
-function formatShortDate(iso: string): string {
-  return parseISODateLocal(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
 interface ExamCarouselProps {

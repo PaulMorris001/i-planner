@@ -14,7 +14,26 @@ import {
   cancelNotifications,
 } from '@/utils/notifications';
 import type { Settings } from '@/types/settings.types';
-import type { StudentPlan } from '@/types/plan.types';
+import type { StudentPlan, ClassItem } from '@/types/plan.types';
+
+// Applies per-class field patches (appleEventIds/notificationIds) computed by
+// the backfill functions below. Re-fetches the plan immediately before saving
+// instead of reusing the snapshot the calling function fetched at its own
+// start — that loop can take several seconds for a full class list (one
+// Calendar-API/notification call per class), and planService.save replaces
+// the whole document, so writing back a stale snapshot would silently
+// clobber any class the user added/edited/removed via classes.tsx or
+// dashboard.tsx (both go through PlanContext.updatePlan) during that window.
+// Doesn't fully close the race — the fetch-then-save here still isn't atomic
+// — but narrows it from "the whole backfill loop's duration" to one request
+// round trip.
+async function saveClassPatches(patches: Map<string, Partial<ClassItem>>) {
+  if (!patches.size) return;
+  const freshPlan = await planService.get<StudentPlan>('student');
+  if (!freshPlan) return;
+  const classes = freshPlan.classes.map((c) => (patches.has(c.id) ? { ...c, ...patches.get(c.id) } : c));
+  await planService.save('student', { ...freshPlan, classes });
+}
 
 // Classes/tasks created before the user connected Apple Calendar still need to end
 // up on the device calendar — fetched directly via services (not usePlan()/
@@ -29,16 +48,15 @@ async function backfillAppleCalendar() {
     ]);
 
     if (plan?.classes?.length) {
-      let changed = false;
-      const classes = await Promise.all(
+      const patches = new Map<string, Partial<ClassItem>>();
+      await Promise.all(
         plan.classes.map(async (item) => {
-          if (item.appleEventIds?.length) return item;
+          if (item.appleEventIds?.length) return;
           const appleEventIds = await syncClassToAppleCalendar(item);
-          if (appleEventIds.length) changed = true;
-          return { ...item, appleEventIds };
+          if (appleEventIds.length) patches.set(item.id, { appleEventIds });
         })
       );
-      if (changed) await planService.save('student', { ...plan, classes });
+      await saveClassPatches(patches);
     }
 
     for (const task of tasks) {
@@ -61,16 +79,15 @@ async function backfillReminders() {
     ]);
 
     if (plan?.classes?.length) {
-      let changed = false;
-      const classes = await Promise.all(
+      const patches = new Map<string, Partial<ClassItem>>();
+      await Promise.all(
         plan.classes.map(async (item) => {
-          if (item.notificationIds?.length || !item.time) return item;
+          if (item.notificationIds?.length || !item.time) return;
           const notificationIds = await scheduleClassNotifications(item);
-          if (notificationIds.length) changed = true;
-          return { ...item, notificationIds };
+          if (notificationIds.length) patches.set(item.id, { notificationIds });
         })
       );
-      if (changed) await planService.save('student', { ...plan, classes });
+      await saveClassPatches(patches);
     }
 
     for (const task of tasks) {
@@ -91,16 +108,15 @@ async function cancelAllReminders() {
     ]);
 
     if (plan?.classes?.length) {
-      let changed = false;
-      const classes = await Promise.all(
+      const patches = new Map<string, Partial<ClassItem>>();
+      await Promise.all(
         plan.classes.map(async (item) => {
-          if (!item.notificationIds?.length) return item;
+          if (!item.notificationIds?.length) return;
           await cancelNotifications(item.notificationIds);
-          changed = true;
-          return { ...item, notificationIds: [] };
+          patches.set(item.id, { notificationIds: [] });
         })
       );
-      if (changed) await planService.save('student', { ...plan, classes });
+      await saveClassPatches(patches);
     }
 
     for (const task of tasks) {
@@ -136,7 +152,7 @@ interface SettingsContextValue extends Settings {
   enableReminders: () => Promise<boolean>;
   disableReminders: () => Promise<void>;
   setAiAccess: (key: AiAccessKey, value: boolean) => Promise<void>;
-  acknowledgeAiDisclosure: () => Promise<void>;
+  acknowledgeAiDisclosure: () => Promise<boolean>;
 }
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
@@ -285,14 +301,16 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const acknowledgeAiDisclosure = async () => {
+  const acknowledgeAiDisclosure = async (): Promise<boolean> => {
     const prevSettings = settings;
     setSettings((s) => ({ ...s, aiDisclosureAcknowledged: true }));
     try {
       setSettings(await settingsService.patch({ aiDisclosureAcknowledged: true }));
+      return true;
     } catch (err) {
       setSettings(prevSettings);
       console.error('[SettingsProvider] failed to acknowledge AI disclosure', err);
+      return false;
     }
   };
 

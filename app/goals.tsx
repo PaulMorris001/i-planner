@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -11,17 +10,15 @@ import { Card } from '@/components/ui/Card';
 import { confirmDelete } from '@/utils/confirmDelete';
 import { Colors, Spacing } from '@/constants/theme';
 import { useGoals } from '@/hooks/useGoals';
-import type { Goal, Milestone, MilestonePatch } from '@/types/goal.types';
+import { useEditableSheet } from '@/hooks/useEditableSheet';
+import type { Goal, MilestonePatch } from '@/types/goal.types';
 
 export default function Goals() {
-  const { goals, loading, createGoal, updateGoal, deleteGoal } = useGoals();
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const [actionSheetTarget, setActionSheetTarget] = useState<Goal | null>(null);
-  const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
+  const { goals, loading, createGoal, updateGoal, toggleMilestone, deleteGoal } = useGoals();
+  const sheet = useEditableSheet<Goal>();
 
-  const toggleMilestone = (goalId: string, milestones: Milestone[], milestoneId: string) => {
-    const updated = milestones.map((m) => (m.id === milestoneId ? { ...m, done: !m.done } : m));
-    updateGoal(goalId, { milestones: updated }).catch((err) => {
+  const handleToggleMilestone = (goalId: string, milestoneId: string) => {
+    toggleMilestone(goalId, milestoneId).catch((err) => {
       console.error('[Goals] failed to update milestone', err);
     });
   };
@@ -57,7 +54,7 @@ export default function Goals() {
       <View style={styles.body}>
         <View style={styles.headerRow}>
           <Text style={styles.eyebrow}>ACTIVE GOALS</Text>
-          <Pressable style={styles.newGoalButton} onPress={() => setSheetOpen(true)}>
+          <Pressable style={styles.newGoalButton} onPress={sheet.openNew}>
             <IconSymbol name="plus" color={Colors.primaryLight} size={15} />
             <Text style={styles.newGoalText}>New goal</Text>
           </Pressable>
@@ -75,7 +72,7 @@ export default function Goals() {
             {goals.map((goal) => (
               <Card
                 key={goal.id}
-                onLongPress={() => setActionSheetTarget(goal)}
+                onLongPress={() => sheet.setActionTarget(goal)}
               >
                 <View style={styles.cardHeaderRow}>
                   <Text style={[styles.tag, { color: goal.color }]}>{goal.tag.toUpperCase()}</Text>
@@ -83,7 +80,7 @@ export default function Goals() {
                     <Text style={styles.pct}>{goal.pct}%</Text>
                     <Pressable
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      onPress={() => setActionSheetTarget(goal)}
+                      onPress={() => sheet.setActionTarget(goal)}
                     >
                       <IconSymbol name="ellipsis" color={Colors.textMuted} size={18} />
                     </Pressable>
@@ -100,7 +97,7 @@ export default function Goals() {
                       <Pressable
                         key={milestone.id}
                         style={styles.milestoneRow}
-                        onPress={() => toggleMilestone(goal.id, goal.milestones, milestone.id)}
+                        onPress={() => handleToggleMilestone(goal.id, milestone.id)}
                       >
                         <View style={[styles.checkbox, milestone.done && { backgroundColor: goal.color, borderColor: goal.color }]}>
                           {milestone.done && <Text style={styles.checkmark}>✓</Text>}
@@ -122,21 +119,18 @@ export default function Goals() {
       </View>
 
       <NewGoalModal
-        visible={sheetOpen || !!editingGoal}
-        onClose={() => {
-          setSheetOpen(false);
-          setEditingGoal(null);
-        }}
+        visible={sheet.open}
+        onClose={sheet.close}
         onCreate={createGoal}
-        editingGoal={editingGoal}
+        editingGoal={sheet.editing}
         onSave={handleSaveGoal}
       />
 
       <ItemActionSheet
-        visible={!!actionSheetTarget}
-        onClose={() => setActionSheetTarget(null)}
-        onEdit={() => actionSheetTarget && setEditingGoal(actionSheetTarget)}
-        onDelete={() => actionSheetTarget && handleDeleteGoal(actionSheetTarget)}
+        visible={!!sheet.actionTarget}
+        onClose={() => sheet.setActionTarget(null)}
+        onEdit={() => sheet.actionTarget && sheet.openEdit(sheet.actionTarget)}
+        onDelete={() => sheet.actionTarget && handleDeleteGoal(sheet.actionTarget)}
       />
     </ScreenWrapper>
   );

@@ -1,4 +1,12 @@
 import type { Task } from '@/types/task.types';
+import type { ClassItem } from '@/types/plan.types';
+import { parseTimeToMinutes } from '@/utils/time';
+
+// Monday-start day names, matching weekdayIndexMonday's index convention
+// (0=Mon..6=Sun) — was independently redefined in planner.tsx, classes.tsx,
+// StudentPathView.tsx, and student-plan.tsx before being consolidated here.
+export const DAY_FULL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+export const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 // Monday-start weekday index (0=Mon .. 6=Sun), matching the app's day-grid
 // convention used across Planner, Habits, and Student Plan classes.
@@ -9,6 +17,63 @@ export function weekdayIndexMonday(date: Date): number {
 // "Jun 2027"-style formatting for goal target dates.
 export function formatMonthYear(iso: string): string {
   return parseISODateLocal(iso).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+}
+
+// "Jun 12"-style short date, used anywhere a due/created/exam date needs a
+// compact label — was independently redefined in exams.tsx, syllabi.tsx,
+// ExamCarousel.tsx, and dashboardHelpers.ts before being consolidated here.
+export function formatShortDate(iso: string): string {
+  return parseISODateLocal(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+// "Mon · Wed · Fri"-style recurrence summary for a class — was independently
+// redefined (with only the join separator differing) in classes.tsx,
+// StudentPathView.tsx, and planner.tsx before being consolidated here.
+// `separator` defaults to the more common ' · '; planner.tsx's tighter
+// layout passes '/' instead.
+export function formatClassDays(item: ClassItem, separator = ' · '): string {
+  if (!item.recurring) return 'One time';
+  if (item.freq === 'monthly') return 'Monthly';
+  return (item.dayIdxs ?? []).map((i) => DAY_SHORT[i]).join(separator);
+}
+
+// "12 Jun 2027"-style label for a date-picker button's display value — was
+// independently redefined in AddClassModal.tsx, NewTaskModal.tsx,
+// NewGoalModal.tsx, SyllabusUploadModal.tsx, and student-plan.tsx before
+// being consolidated here. Distinct from formatShortDate above (different
+// locale/fields, and takes a real Date rather than an ISO string) so it
+// wasn't caught by that earlier consolidation.
+export function formatDatePickerLabel(date: Date): string {
+  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+// "9:30 AM"-style label for a time-picker button's display value — was
+// independently redefined in AddClassModal.tsx, NewTaskModal.tsx, and
+// student-plan.tsx before being consolidated here.
+export function formatTimeLabel(date: Date): string {
+  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
+
+// Inverse of formatTimeLabel/parseTimeToMinutes — turns a stored "9:30 AM"
+// string back into a Date (today's date, that time-of-day) for handing to a
+// <DateTimePicker>. Was independently redefined in AddClassModal.tsx and
+// NewTaskModal.tsx before being consolidated here.
+export function parseTimeToDate(time: string): Date {
+  const minutes = parseTimeToMinutes(time);
+  const d = new Date();
+  d.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
+  return d;
+}
+
+// Which weekdays a recurring item occurs on, Monday-start — was
+// independently redefined (NewTaskModal.tsx's own comment even flagged it as
+// mirroring AddClassModal.tsx's copy) before being consolidated here. Only
+// covers the 3 frequencies that map to a weekly day-grid; a class's
+// 'monthly' option has no grid slot and is handled by its caller instead.
+export function dayIdxsForFrequency(freq: 'weekly' | 'weekdays' | 'daily', referenceWeekday: number): number[] {
+  if (freq === 'weekly') return [referenceWeekday];
+  if (freq === 'weekdays') return [0, 1, 2, 3, 4];
+  return [0, 1, 2, 3, 4, 5, 6];
 }
 
 // True when a task should appear in dayIdx's Planner column — either it's the

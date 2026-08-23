@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { View, Text, StyleSheet, Alert } from 'react-native';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { AddExamModal } from '@/components/plan/AddExamModal';
@@ -9,19 +8,14 @@ import { ListRow } from '@/components/ui/ListRow';
 import { DashedAddButton } from '@/components/ui/DashedAddButton';
 import { Colors, Spacing } from '@/constants/theme';
 import { usePlan } from '@/hooks/usePlan';
+import { useEditableSheet } from '@/hooks/useEditableSheet';
 import { confirmDelete } from '@/utils/confirmDelete';
-import { parseISODateLocal } from '@/utils/date';
+import { formatShortDate } from '@/utils/date';
 import type { Exam } from '@/types/plan.types';
 
-function formatShortDate(iso: string): string {
-  return parseISODateLocal(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
-
 export default function Exams() {
-  const { examPlan, saveExamPlan } = usePlan();
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editingExam, setEditingExam] = useState<Exam | null>(null);
-  const [actionSheetTarget, setActionSheetTarget] = useState<Exam | null>(null);
+  const { examPlan, updateExamPlan } = usePlan();
+  const sheet = useEditableSheet<Exam>();
 
   // Soonest-upcoming first — matches the Dashboard's "My Exams" ordering.
   const exams = [...examPlan.exams].sort(
@@ -29,13 +23,12 @@ export default function Exams() {
   );
 
   const handleAddOrSaveExam = async (exam: Exam) => {
-    const isEdit = examPlan.exams.some((e) => e.id === exam.id);
     try {
-      await saveExamPlan({
-        exams: isEdit
-          ? examPlan.exams.map((e) => (e.id === exam.id ? exam : e))
-          : [...examPlan.exams, exam],
-      });
+      await updateExamPlan((exams) =>
+        exams.some((e) => e.id === exam.id)
+          ? exams.map((e) => (e.id === exam.id ? exam : e))
+          : [...exams, exam]
+      );
     } catch (err) {
       console.error('[Exams] failed to save exam', err);
       Alert.alert("Couldn't save exam", 'Check your connection and try again.');
@@ -43,11 +36,9 @@ export default function Exams() {
   };
 
   const handleRemove = async (id: string) => {
-    const prevExams = examPlan.exams;
     try {
-      await saveExamPlan({ exams: examPlan.exams.filter((e) => e.id !== id) });
+      await updateExamPlan((exams) => exams.filter((e) => e.id !== id));
     } catch (err) {
-      await saveExamPlan({ exams: prevExams });
       console.error('[Exams] failed to remove exam', err);
       Alert.alert("Couldn't remove exam", 'Check your connection and try again.');
     }
@@ -73,31 +64,28 @@ export default function Exams() {
               leading={{ type: 'bar', color: '#8B3FD1' }}
               title={exam.name}
               meta={`${exam.weeksRemaining} week${exam.weeksRemaining > 1 ? 's' : ''} · ${exam.hoursPerWeek}h/week · ${formatShortDate(exam.examDate)}`}
-              onLongPress={() => setActionSheetTarget(exam)}
-              onMenuPress={() => setActionSheetTarget(exam)}
+              onLongPress={() => sheet.setActionTarget(exam)}
+              onMenuPress={() => sheet.setActionTarget(exam)}
             />
           ))
         )}
 
-        <DashedAddButton label="Add exam" onPress={() => setModalOpen(true)} />
+        <DashedAddButton label="Add exam" onPress={sheet.openNew} />
       </View>
 
       <AddExamModal
-        visible={modalOpen || !!editingExam}
-        onClose={() => {
-          setModalOpen(false);
-          setEditingExam(null);
-        }}
+        visible={sheet.open}
+        onClose={sheet.close}
         onAdd={handleAddOrSaveExam}
-        editingExam={editingExam}
+        editingExam={sheet.editing}
         hasExistingExams={examPlan.exams.length > 0}
       />
 
       <ItemActionSheet
-        visible={!!actionSheetTarget}
-        onClose={() => setActionSheetTarget(null)}
-        onEdit={() => actionSheetTarget && setEditingExam(actionSheetTarget)}
-        onDelete={() => actionSheetTarget && handleDeleteExam(actionSheetTarget)}
+        visible={!!sheet.actionTarget}
+        onClose={() => sheet.setActionTarget(null)}
+        onEdit={() => sheet.actionTarget && sheet.openEdit(sheet.actionTarget)}
+        onDelete={() => sheet.actionTarget && handleDeleteExam(sheet.actionTarget)}
       />
     </ScreenWrapper>
   );
