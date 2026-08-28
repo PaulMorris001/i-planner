@@ -138,20 +138,40 @@ export function ProfileInfoModal({
             </View>
           </View>
 
-          <Pressable
-            style={styles.manageRow}
-            onPress={() => {
-              onClose();
-              router.push(Routes.PROFILE);
-            }}
-          >
-            <Text style={styles.manageText}>Manage in Profile & settings</Text>
-            <IconSymbol
-              name="chevron.right"
-              color={Colors.primaryLight}
-              size={18}
-            />
-          </Pressable>
+          <View style={styles.actionsGroup}>
+            <Pressable
+              style={styles.manageRow}
+              onPress={() => {
+                onClose();
+                router.push(Routes.NOTES);
+              }}
+            >
+              <View style={styles.manageLabelRow}>
+                <IconSymbol name="note.text" color={Colors.primaryLight} size={18} />
+                <Text style={styles.manageText}>Notes</Text>
+              </View>
+              <IconSymbol
+                name="chevron.right"
+                color={Colors.primaryLight}
+                size={18}
+              />
+            </Pressable>
+
+            <Pressable
+              style={styles.manageRow}
+              onPress={() => {
+                onClose();
+                router.push(Routes.PROFILE);
+              }}
+            >
+              <Text style={styles.manageText}>Manage in Profile & settings</Text>
+              <IconSymbol
+                name="chevron.right"
+                color={Colors.primaryLight}
+                size={18}
+              />
+            </Pressable>
+          </View>
         </Animated.View>
       </View>
     </Modal>
@@ -258,12 +278,20 @@ const styles = StyleSheet.create({
     marginTop: 1,
     lineHeight: 17,
   },
+  actionsGroup: {
+    marginTop: Spacing.lg,
+    gap: Spacing.sm,
+  },
   manageRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginTop: Spacing.lg,
     paddingVertical: 6,
+  },
+  manageLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   manageText: {
     fontSize: 14,

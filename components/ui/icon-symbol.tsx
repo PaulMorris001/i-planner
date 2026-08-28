@@ -45,6 +45,7 @@ const MAPPING = {
   'bell.fill': 'notifications',
   'info.circle': 'info',
   'doc.on.doc': 'content-copy',
+  'note.text': 'notes',
 } as IconMapping;
 
 /**
