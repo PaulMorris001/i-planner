@@ -125,6 +125,23 @@ export function isDueTodayOrLater(dateIso: string): boolean {
   return localMidnight(date) >= localMidnight(new Date());
 }
 
+// The next upcoming date a recurring task occurs on (today included, if not
+// already done today) — a recurring task's stored `dueDate` is fixed at whatever
+// date it was first set to and never advances, so it's wrong to use directly for
+// "when is this next due" (see StudentPathView.tsx's "Up next" card). Returns
+// null for a non-recurring task or one with no recurrence days.
+export function nextTaskOccurrence(task: Task): Date | null {
+  if (!task.recurring || !task.dayIdxs?.length) return null;
+  const today = new Date();
+  for (let offset = 0; offset < 7; offset++) {
+    const candidate = new Date(today.getFullYear(), today.getMonth(), today.getDate() + offset);
+    if (!task.dayIdxs.includes(weekdayIndexMonday(candidate))) continue;
+    if (offset === 0 && isTaskDoneOnDate(task, candidate)) continue;
+    return candidate;
+  }
+  return null;
+}
+
 // Current task-completion streak: counts consecutive "active" days (a calendar day
 // with at least one task due, by dueDate, not recurring occurrences) working
 // backward from today, where at least one due task was completed. A day with no

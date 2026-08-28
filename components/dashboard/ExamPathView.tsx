@@ -13,9 +13,10 @@ import { TaskCategories } from '@/constants/taskMeta';
 import { Colors } from '@/constants/theme';
 import { usePlan } from '@/hooks/usePlan';
 import { useTasks } from '@/hooks/useTasks';
-import { isDueTodayOrLater, localMidnight, computeTaskStreak, parseISODateLocal, isTaskDoneOnDate, formatShortDate } from '@/utils/date';
+import { localMidnight, computeTaskStreak, parseISODateLocal, isTaskDoneOnDate, nextTaskOccurrence, toDateKey, formatShortDate } from '@/utils/date';
 import { currentExamWeek } from './dashboardHelpers';
 import { dashboardStyles as styles } from './dashboardStyles';
+import type { Task } from '@/types/task.types';
 
 interface ExamPathViewProps {
   // Passed in rather than rebuilt here so it doesn't remount on re-render.
@@ -30,13 +31,20 @@ export function ExamPathView({ quickLinks, onAddExam }: ExamPathViewProps) {
 
   const taskStreak = computeTaskStreak(tasks);
 
-  // Soonest not-yet-done task with a due date, for the "Next session" stat.
-  // Sorts by calendar day (see isDueTodayOrLater), then by hour within the day.
+  // Soonest not-yet-done task with a due date, for the "Next session" stat. A
+  // recurring task's `dueDate` is fixed at whenever it was first set and never
+  // advances, so its actual next occurrence is computed instead — otherwise an
+  // ongoing recurring task would vanish here the moment that original date passes.
+  // Sorts by calendar day, then by hour within the day.
   const nextTask = tasks
-    .filter((t) => !!t.dueDate && !isTaskDoneOnDate(t, parseISODateLocal(t.dueDate)) && isDueTodayOrLater(t.dueDate))
+    .map((t) => ({ task: t, date: t.recurring ? nextTaskOccurrence(t) : parseISODateLocal(t.dueDate) }))
+    .filter(
+      (x): x is { task: Task; date: Date } =>
+        !!x.date && !Number.isNaN(x.date.getTime()) && !isTaskDoneOnDate(x.task, x.date)
+    )
     .sort((a, b) => {
-      const dayDiff = localMidnight(parseISODateLocal(a.dueDate)) - localMidnight(parseISODateLocal(b.dueDate));
-      return dayDiff !== 0 ? dayDiff : a.hour - b.hour;
+      const dayDiff = localMidnight(a.date) - localMidnight(b.date);
+      return dayDiff !== 0 ? dayDiff : a.task.hour - b.task.hour;
     })[0];
 
   // Soonest-upcoming first — feeds both the countdown carousel and the "My
@@ -183,11 +191,11 @@ export function ExamPathView({ quickLinks, onAddExam }: ExamPathViewProps) {
           {nextTask ? (
             <>
               <Text style={styles.statNextTitle} numberOfLines={1}>
-                {nextTask.title}
+                {nextTask.task.title}
               </Text>
               <Text style={styles.statNextDateMuted}>
-                {formatShortDate(nextTask.dueDate)}
-                {nextTask.time ? ` · ${nextTask.time}` : ''}
+                {formatShortDate(toDateKey(nextTask.date))}
+                {nextTask.task.time ? ` · ${nextTask.task.time}` : ''}
               </Text>
             </>
           ) : (

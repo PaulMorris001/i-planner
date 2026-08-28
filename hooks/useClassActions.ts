@@ -16,22 +16,25 @@ export function useClassActions() {
     const isEdit = plan.classes.some((c) => c.id === item.id);
     const prev = isEdit ? plan.classes.find((c) => c.id === item.id) : undefined;
     let synced = item;
-    if (appleCalendarConnected) {
-      try {
-        // Best-effort — a calendar-write failure logs but never blocks the save.
-        if (isEdit) await deleteAppleEvents(prev?.appleEventIds);
+    // The old event/notifications are cancelled unconditionally on edit — they're real
+    // already-scheduled state regardless of the current toggle; only creating new ones
+    // is gated by whether that toggle is currently on. Best-effort throughout — a
+    // calendar-write failure logs but never blocks the save.
+    try {
+      if (isEdit) await deleteAppleEvents(prev?.appleEventIds);
+      if (appleCalendarConnected) {
         synced = { ...synced, appleEventIds: await syncClassToAppleCalendar(item) };
-      } catch (err) {
-        console.error('[useClassActions] failed to sync class to Apple Calendar', err);
       }
+    } catch (err) {
+      console.error('[useClassActions] failed to sync class to Apple Calendar', err);
     }
-    if (remindersEnabled) {
-      try {
-        if (isEdit) await cancelNotifications(prev?.notificationIds);
+    try {
+      if (isEdit) await cancelNotifications(prev?.notificationIds);
+      if (remindersEnabled) {
         synced = { ...synced, notificationIds: await scheduleClassNotifications(item) };
-      } catch (err) {
-        console.error('[useClassActions] failed to schedule class notifications', err);
       }
+    } catch (err) {
+      console.error('[useClassActions] failed to schedule class notifications', err);
     }
     try {
       // Use updatePlan's updater (latest state), not the closure's `plan` — AddClassModal
@@ -52,8 +55,10 @@ export function useClassActions() {
     const removed = plan.classes.find((c) => c.id === id);
     try {
       await updatePlan((p) => ({ ...p, classes: p.classes.filter((c) => c.id !== id) }));
-      if (appleCalendarConnected) await deleteAppleEvents(removed?.appleEventIds);
-      if (remindersEnabled) await cancelNotifications(removed?.notificationIds);
+      // Unconditional — real already-scheduled state that would otherwise orphan: the
+      // class is gone, so nothing would ever catch and cancel them later.
+      await deleteAppleEvents(removed?.appleEventIds);
+      await cancelNotifications(removed?.notificationIds);
     } catch (err) {
       console.error('[useClassActions] failed to remove class', err);
       Alert.alert("Couldn't remove class", 'Check your connection and try again.');

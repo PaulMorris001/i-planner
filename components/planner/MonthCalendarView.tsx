@@ -254,9 +254,12 @@ export function MonthCalendarView({ classes, courseFilter, onTaskLongPress, onCl
                       <View style={[styles.detailBar, { backgroundColor: classColorById.get(item.id) }]} />
                       <View style={{ flex: 1 }}>
                         <Text style={styles.detailTitle}>{item.courseName}</Text>
-                        {(!!item.time || !!item.venue) && (
-                          <Text style={styles.detailTime}>
-                            {[item.time, item.venue].filter(Boolean).join(' · ')}
+                        {!!item.time && <Text style={styles.detailTime}>{item.time}</Text>}
+                        {(!!item.professor || !!item.venue) && (
+                          <Text style={styles.detailTime} numberOfLines={1}>
+                            {[item.professor && `👤 ${item.professor}`, item.venue && `📍 ${item.venue}`]
+                              .filter(Boolean)
+                              .join('   ')}
                           </Text>
                         )}
                       </View>
@@ -292,6 +295,11 @@ export function MonthCalendarView({ classes, courseFilter, onTaskLongPress, onCl
                             {task.title}
                           </Text>
                           {!!task.time && <Text style={styles.detailTime}>{task.time}</Text>}
+                          {!!task.notes?.trim() && (
+                            <Text style={styles.detailNotes} numberOfLines={1}>
+                              {task.notes.trim()}
+                            </Text>
+                          )}
                         </View>
                         <Pressable hitSlop={8} onPress={() => onTaskLongPress(task)}>
                           <IconSymbol name="ellipsis" color={Colors.textMuted} size={16} />
@@ -443,6 +451,12 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     color: Colors.textMuted,
     marginTop: 1,
+  },
+  detailNotes: {
+    fontSize: 11.5,
+    color: Colors.textMuted,
+    marginTop: 2,
+    fontStyle: 'italic',
   },
   skeletonBlock: {
     backgroundColor: Colors.border,

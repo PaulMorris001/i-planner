@@ -125,13 +125,13 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     // that has to happen before the state update either way — a rapid double-tap race
     // here is accepted, unlike the recurring branch above.
     let notificationIds = target.notificationIds;
-    if (remindersEnabled) {
-      if (nextDone) {
-        await cancelNotifications(target.notificationIds);
-        notificationIds = [];
-      } else {
-        notificationIds = await scheduleTaskNotifications(target);
-      }
+    if (nextDone) {
+      // Cancel unconditionally — these are real on-device notifications regardless of
+      // whether reminders are currently enabled; only scheduling new ones is gated.
+      await cancelNotifications(target.notificationIds);
+      notificationIds = [];
+    } else if (remindersEnabled) {
+      notificationIds = await scheduleTaskNotifications(target);
     }
 
     setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, done: nextDone, notificationIds } : t)));
@@ -156,14 +156,21 @@ export function TasksProvider({ children }: { children: ReactNode }) {
       // A task converted from an imported calendar event points appleEventIds at an
       // event the app doesn't own — deleting/recreating it (the normal resync path)
       // would delete the user's real calendar entry, so only the app's copy changes.
-      if (appleCalendarConnected && !current.calendarLinkExternal) {
+      // The old event/notifications are cancelled unconditionally — they're real
+      // already-scheduled state regardless of the current toggle; only creating new
+      // ones is gated by whether that toggle is currently on.
+      if (!current.calendarLinkExternal) {
         await deleteAppleEvents(current.appleEventIds);
-        finalPatch = { ...finalPatch, appleEventIds: await syncTaskToAppleCalendar(merged) };
+        finalPatch = {
+          ...finalPatch,
+          appleEventIds: appleCalendarConnected ? await syncTaskToAppleCalendar(merged) : [],
+        };
       }
-      if (remindersEnabled) {
-        await cancelNotifications(current.notificationIds);
-        finalPatch = { ...finalPatch, notificationIds: await scheduleTaskNotifications(merged) };
-      }
+      await cancelNotifications(current.notificationIds);
+      finalPatch = {
+        ...finalPatch,
+        notificationIds: remindersEnabled ? await scheduleTaskNotifications(merged) : [],
+      };
     }
 
     setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...finalPatch } : t)));
@@ -207,12 +214,15 @@ export function TasksProvider({ children }: { children: ReactNode }) {
       console.error('[TasksProvider] failed to remove task', err);
       return;
     }
-    // Same reasoning as updateTask above — deleting a converted task from
-    // the app must not delete the user's real external calendar event.
-    if (target?.appleEventIds && appleCalendarConnected && !target.calendarLinkExternal) {
+    // Same reasoning as updateTask above — deleting a converted task from the app must
+    // not delete the user's real external calendar event. Both cancellations run
+    // unconditionally (regardless of the current appleCalendarConnected/remindersEnabled
+    // toggles) — these ids are real already-scheduled state that would otherwise orphan:
+    // the task is gone, so nothing would ever catch and cancel them later.
+    if (target?.appleEventIds && !target.calendarLinkExternal) {
       await deleteAppleEvents(target.appleEventIds);
     }
-    if (target?.notificationIds && remindersEnabled) await cancelNotifications(target.notificationIds);
+    if (target?.notificationIds) await cancelNotifications(target.notificationIds);
   };
 
   return (

@@ -17,13 +17,16 @@ import { useTasks } from '@/hooks/useTasks';
 import { useGoals } from '@/hooks/useGoals';
 import { useSyllabi } from '@/hooks/useSyllabi';
 import type { Goal } from '@/types/goal.types';
+import type { Task } from '@/types/task.types';
 import {
   computeTaskStreak,
   weekdayIndexMonday,
   isDueTodayOrLater,
   isTaskDoneOnDate,
+  nextTaskOccurrence,
   localMidnight,
   parseISODateLocal,
+  toDateKey,
   formatShortDate,
   formatClassDays,
 } from '@/utils/date';
@@ -92,10 +95,15 @@ export function StudentPathView({ quickLinks, onAddClass, onAddSyllabus, onViewG
       .filter((o) => !!o.date)
       .map((o) => ({ title: o.title, date: o.date, dotColor: Colors.warning })),
     ...tasks
-      .filter((t) => !!t.dueDate && !isTaskDoneOnDate(t, parseISODateLocal(t.dueDate)))
-      .map((t) => ({
+      // A recurring task's `dueDate` is fixed at whenever it was first set and never
+      // advances — using it here would make an ongoing recurring task vanish from
+      // "Up next" the moment that original date is in the past. Its actual next
+      // occurrence is computed instead; a one-time task keeps using dueDate as-is.
+      .map((t) => ({ task: t, date: t.recurring ? nextTaskOccurrence(t) : parseISODateLocal(t.dueDate) }))
+      .filter((x): x is { task: Task; date: Date } => !!x.date && !Number.isNaN(x.date.getTime()) && !isTaskDoneOnDate(x.task, x.date))
+      .map(({ task: t, date }) => ({
         title: t.title,
-        date: t.dueDate,
+        date: toDateKey(date),
         dotColor: TaskCategories[t.category].color,
         category: t.category,
         priority: t.priority,
@@ -145,9 +153,16 @@ export function StudentPathView({ quickLinks, onAddClass, onAddSyllabus, onViewG
               return (
                 <View key={c.id} style={styles.classRow}>
                   <View style={[styles.classBar, { backgroundColor: color }]} />
-                  <Text style={styles.classRowTitle} numberOfLines={1}>
-                    {c.courseName}
-                  </Text>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={styles.classRowTitle} numberOfLines={1}>
+                      {c.courseName}
+                    </Text>
+                    {!!c.professor && (
+                      <Text style={styles.classRowMeta} numberOfLines={1}>
+                        {c.professor}
+                      </Text>
+                    )}
+                  </View>
                   <Text style={styles.classRowTime}>{c.time}</Text>
                 </View>
               );
@@ -175,6 +190,7 @@ export function StudentPathView({ quickLinks, onAddClass, onAddSyllabus, onViewG
                     <Text style={styles.classRowMeta}>
                       {formatClassDays(c)}
                       {c.time ? ` · ${c.time}` : ''}
+                      {c.professor ? ` · ${c.professor}` : ''}
                     </Text>
                   </View>
                 </View>

@@ -168,7 +168,7 @@ export default function Planner() {
             )}
           </View>
           {!!task.notes?.trim() && (
-            <Text style={styles.taskNotes} numberOfLines={1}>
+            <Text style={styles.taskNotes} numberOfLines={2}>
               {task.notes.trim()}
             </Text>
           )}
@@ -198,8 +198,12 @@ export default function Planner() {
         <View style={styles.metaRow}>
           <Text style={[styles.chip, { color, backgroundColor: Colors.white }]}>Class</Text>
           {!!item.time && <Text style={styles.time}>{item.time}</Text>}
-          {!!item.venue && <Text style={styles.time}>📍 {item.venue}</Text>}
         </View>
+        {(!!item.professor || !!item.venue) && (
+          <Text style={styles.classRecur} numberOfLines={1}>
+            {[item.professor && `👤 ${item.professor}`, item.venue && `📍 ${item.venue}`].filter(Boolean).join('   ')}
+          </Text>
+        )}
         <Text style={styles.classRecur}>↻ {formatClassDays(item, '/')}</Text>
       </View>
       <Pressable
@@ -351,6 +355,11 @@ export default function Planner() {
                               <Text style={styles.weekTaskTime}>
                                 {task.time}
                                 {task.recurring && task.freq ? `${task.time ? ' · ' : ''}↻ ${TASK_FREQ_LABEL[task.freq]}` : ''}
+                              </Text>
+                            )}
+                            {!!task.notes?.trim() && (
+                              <Text style={styles.weekTaskNotes} numberOfLines={1}>
+                                {task.notes.trim()}
                               </Text>
                             )}
                           </View>
@@ -599,6 +608,12 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     color: Colors.textMuted,
     marginTop: 1,
+  },
+  weekTaskNotes: {
+    fontSize: 11.5,
+    color: Colors.textMuted,
+    marginTop: 2,
+    fontStyle: 'italic',
   },
   weekDoneCircle: {
     width: 19,
