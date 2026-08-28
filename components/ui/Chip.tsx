@@ -5,14 +5,11 @@ interface ChipProps {
   label: string;
   selected: boolean;
   onPress: () => void;
-  // Background/border when selected — each caller's chips select a different
-  // color (a category's own color, a fixed brand color, etc), so there's no
-  // sensible single default.
+  // Background/border when selected — no sensible single default since each caller uses a
+  // different color (category color, fixed brand color, etc).
   activeColor: string;
-  // 'pill' (borderWidth 1.5, fontWeight 700) is the more common shape —
-  // habits.tsx's category/frequency chips, NewTaskModal's category chips,
-  // NewGoalModal's type chip. 'compact' (fixed height 34, borderWidth 1,
-  // fontWeight 600) is AddClassModal's and NewTaskModal's frequency chips.
+  // 'pill' (borderWidth 1.5, fontWeight 700) is the more common shape. 'compact' (fixed height
+  // 34, borderWidth 1, fontWeight 600) is used for frequency chips.
   size?: 'pill' | 'compact';
   style?: StyleProp<ViewStyle>;
 }

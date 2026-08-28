@@ -12,12 +12,9 @@ export interface SubscriptionDocument extends Document {
   productIdentifier?: string;
   store?: 'app_store' | 'play_store';
   expiresAt?: Date;
-  // When this was last confirmed directly against Apple/Google (see
-  // services/appStoreVerify.ts / googlePlayVerify.ts) — set on every
-  // successful POST /api/subscription/verify call, which is the only thing
-  // that ever updates this document (no push notifications from either store
-  // in this setup — see subscription.controller.ts for the re-verify-on-read
-  // fallback for expired-looking records).
+  // Last confirmed directly against Apple/Google, set on every successful
+  // POST /api/subscription/verify — the only thing that updates this doc
+  // (no push notifications from either store in this setup).
   lastVerifiedAt: Date;
 }
 

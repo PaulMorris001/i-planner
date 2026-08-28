@@ -5,10 +5,9 @@ import { CREATE_TASK_TOOL, createTasksFromDrafts } from './coachTools';
 
 const openai = new OpenAI({ apiKey: env.openaiApiKey });
 
-// "-chat-latest" is OpenAI's conversational-tuned alias (what powers ChatGPT's
-// own interface) — a better fit for a natural back-and-forth coach than the
-// reasoning-focused base model used for goalMilestones.ts/examTopics.ts's
-// structured JSON output.
+// "-chat-latest" is OpenAI's conversational-tuned alias — better fit for a
+// back-and-forth coach than the reasoning model used for structured JSON output
+// elsewhere (goalMilestones.ts/examTopics.ts).
 const OPENAI_MODEL = 'gpt-5.3-chat-latest';
 
 const MODE_PERSONA: Record<CoachModeId, string> = {
@@ -78,9 +77,8 @@ export async function generateCoachReply(input: {
       functionCall.arguments
     );
 
-    // Feed the tool's result back so the model can confirm in its own words —
-    // previous_response_id chains onto the first call rather than resending
-    // the full conversation history a second time.
+    // previous_response_id chains onto the first call so the model can confirm
+    // in its own words without resending the full history.
     const secondResponse = await openai.responses.create({
       model: OPENAI_MODEL,
       previous_response_id: firstResponse.id,

@@ -18,9 +18,7 @@ export default function CertTracker() {
   const { examPlan, toggleExamTopic, logExamPractice, logExamMockScore, setExamConfidence } = usePlan();
   // UI-only — whether an entry row is expanded and what's currently typed
   // into it. The actual logged numbers (practiceQuestionsLogged, mockScores,
-  // confidence) live on the Exam record itself via PlanContext, not here —
-  // this used to be exactly backwards (the totals were local state that reset
-  // on navigation, and "logging" just added a fixed/fabricated number).
+  // confidence) live on the Exam record via PlanContext, not here.
   const [practiceInputOpen, setPracticeInputOpen] = useState(false);
   const [practiceInputValue, setPracticeInputValue] = useState('');
   const [savingPractice, setSavingPractice] = useState(false);

@@ -7,35 +7,25 @@ export interface SettingsDocument extends Document {
   calendarGateDismissed: boolean;
   // Gates local notifications for both tasks and classes with a due/start date+time.
   remindersEnabled: boolean;
-  // Google OAuth tokens — never exposed via toPublicSettings(). The client secret
-  // for the Google OAuth client itself lives only in backend env, not here.
-  // Encrypted at rest (see utils/tokenCrypto.ts) — always encryptToken() before
-  // writing either field and decryptToken() after reading, never store or use
-  // the raw value directly. Written by googleOAuthCallback.controller.ts and
-  // googleCalendarSync.ts's refreshAccessTokenIfNeeded.
+  // Never exposed via toPublicSettings(). Encrypted at rest (utils/tokenCrypto.ts) —
+  // always encryptToken()/decryptToken(), never store or use the raw value.
   googleAccessToken?: string;
   googleRefreshToken?: string;
   googleTokenExpiresAt?: Date;
-  // Id of the dedicated secondary "i-Planner" Google Calendar synced events are
-  // written to (created on first sync) — keeps synced events isolated from the
-  // user's primary calendar. Not exposed via toPublicSettings(); purely internal.
+  // Id of the dedicated secondary "i-Planner" Google Calendar synced events go to,
+  // keeping them isolated from the user's primary calendar. Internal only.
   googleCalendarId?: string;
-  // IANA timezone captured from the device (e.g. "America/New_York") — used so
-  // synced Google Calendar events land at the correct local hour instead of UTC.
+  // IANA timezone from the device — synced events land at the correct local hour
+  // instead of UTC.
   timeZone?: string;
-  // AI Coach data-access consent (Profile page's "AI Data Access" toggles) —
-  // gates which sections coachContext.ts includes when building the Coach's
-  // context summary. Undefined (pre-existing users) is treated as true, since
-  // the toggles default to on.
+  // AI Coach data-access consent, gates what coachContext.ts includes. Undefined
+  // (pre-existing users) treated as true since the toggles default on.
   aiAccessTasks?: boolean;
   aiAccessGoals?: boolean;
   aiAccessCalendar?: boolean;
-  // Set once the user has seen AiDisclosureGate (names OpenAI, explains what's
-  // sent) and tapped through it — coach.controller.ts refuses to call OpenAI
-  // until this is true, so no personal data reaches a third party before the
-  // user has explicitly agreed. Required by App Store guideline 5.1.2(i):
-  // permission must be obtained *before* sending data, not just revocable
-  // after the fact via the aiAccess* toggles above.
+  // Set once the user taps through AiDisclosureGate — coach.controller.ts refuses
+  // to call OpenAI until true. Required by App Store guideline 5.1.2(i): consent
+  // must precede sending data, not just be revocable after via aiAccess* above.
   aiDisclosureAcknowledged?: boolean;
 }
 

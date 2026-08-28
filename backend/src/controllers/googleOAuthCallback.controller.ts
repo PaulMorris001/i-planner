@@ -13,10 +13,8 @@ interface ClassRecord extends SyncableClassItem {
   id: string;
 }
 
-// Classes/tasks created before the user connected Google still need to end up on
-// the calendar — run the same upsert used by the live sync paths across everything
-// that already exists. Best-effort: a failure here shouldn't break the OAuth flow
-// the user is actively waiting on.
+// Runs the same upsert used by live sync across existing classes/tasks so they end
+// up on the calendar too. Best-effort: a failure here shouldn't break the OAuth flow.
 async function backfillGoogleSync(firebaseUid: string, settings: SettingsDocument) {
   try {
     const plan = await Plan.findOne({ firebaseUid, pathType: 'student' });
@@ -57,10 +55,9 @@ interface GoogleTokenResponse {
   error_description?: string;
 }
 
-// Google's redirect lands here as a plain browser navigation — no auth header, and
-// the user's identity is only known via the signed `state` param minted by
-// startGoogleCalendarConnect. Every path below ends in a redirect back into the app,
-// never a JSON response, since there's no client-side code left to receive one.
+// Plain browser navigation — no auth header; identity comes only from the signed
+// `state` param minted by startGoogleCalendarConnect. Every path redirects back into
+// the app rather than returning JSON, since there's no client code left to receive one.
 export async function handleGoogleCalendarCallback(req: Request, res: Response) {
   const { code, state, error } = req.query;
 

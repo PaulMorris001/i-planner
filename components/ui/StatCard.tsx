@@ -4,18 +4,14 @@ import { Colors } from '@/constants/theme';
 
 interface StatCardProps {
   label: string;
-  // Dashboard's student/exam stat rows split 1.3/0.7 instead of an even
-  // split — everything else (Professional's row, cert-tracker) uses the
-  // default even flex.
+  // Dashboard's student/exam stat rows split 1.3/0.7 instead of an even split.
   flex?: number;
   style?: StyleProp<ViewStyle>;
   children: ReactNode;
 }
 
-// Just the label + card shell — callers supply their own value/title/date
-// content as children, since that shape varies (a big number, a title+date
-// pair, a title with no date, a value + action button) more than it's worth
-// forcing into one rigid layout.
+// Just the label + card shell — callers supply their own value/title/date content as children,
+// since that shape varies more than it's worth forcing into one rigid layout.
 export function StatCard({ label, flex, style, children }: StatCardProps) {
   return (
     <View style={[styles.card, flex !== undefined && { flex }, style]}>

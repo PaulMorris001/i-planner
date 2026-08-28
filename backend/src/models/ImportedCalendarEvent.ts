@@ -5,12 +5,10 @@ export type CalendarSource = 'apple' | 'google';
 export interface ImportedCalendarEventDocument extends Document {
   firebaseUid: string;
   source: CalendarSource;
-  // The source calendar's own event id — apple's expo-calendar id or google's
-  // Calendar API event id. Scoped per (firebaseUid, source) rather than
-  // globally unique, since apple/google id spaces are independent. Used both
-  // to upsert on re-import (don't duplicate a row for an event already seen)
-  // and, on convert, copied onto the new Task's appleEventIds/googleEventId
-  // so the task points at the existing calendar event instead of a new one.
+  // Source calendar's own event id (expo-calendar id or Google Calendar API id).
+  // Scoped per (firebaseUid, source), not globally unique, since apple/google id
+  // spaces are independent. Used to upsert on re-import and, on convert, copied
+  // onto the new Task so it points at the existing event instead of a new one.
   externalId: string;
   title: string;
   startAt: string; // ISO instant
@@ -35,10 +33,8 @@ importedCalendarEventSchema.index({ firebaseUid: 1, source: 1, externalId: 1 }, 
 export function toPublicImportedCalendarEvent(doc: ImportedCalendarEventDocument) {
   return {
     id: doc.id as string,
-    // The actual calendar-provider event id — required for "convert to
-    // task" to link the new task to the SAME event (see NewTaskModal's
-    // draft.appleEventIds/googleEventId). `id` above is only this row's own
-    // Mongo document id, meaningless to expo-calendar/the Google API.
+    // Calendar-provider event id, needed to link a converted task to the SAME
+    // event — `id` above is just this row's Mongo id, meaningless to the provider.
     externalId: doc.externalId,
     source: doc.source,
     title: doc.title,

@@ -26,9 +26,7 @@ export function GreetingHeader({
   onAvatarPress,
 }: GreetingHeaderProps) {
   const { user, initializing } = useAuth();
-  // Only the real un-resolved case (waiting on user, with no explicit
-  // override) should show a skeleton — an explicit name/avatarInitial prop
-  // doesn't depend on auth at all, so it's fine to show immediately.
+  // Only show a skeleton when actually waiting on auth with no explicit override.
   const nameLoading = initializing && !name;
   const avatarLoading = initializing && !avatarInitial;
 
@@ -39,9 +37,8 @@ export function GreetingHeader({
     : undefined;
 
   const displayGreeting = greeting ?? getTimeBasedGreeting();
-  // "||" not "??" — firstName/initial come from an empty-string fallback
-  // (AuthContext stores fullName as '' when Firebase's displayName is null),
-  // and "??" only catches null/undefined, letting '' straight through.
+  // "||" not "??" — AuthContext stores fullName as '' when Firebase's displayName is null,
+  // and "??" wouldn't catch that empty string.
   const displayName = name || firstName || user?.email?.split("@")[0] || "";
   const displayInitial = avatarInitial || initial || emailInitial || "J";
 

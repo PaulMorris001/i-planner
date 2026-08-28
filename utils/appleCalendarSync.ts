@@ -57,6 +57,7 @@ interface RecurrenceInput {
   freq?: 'weekly' | 'weekdays' | 'daily' | 'monthly';
   dayIdxs?: number[];
   notes?: string;
+  location?: string;
 }
 
 // Shared by classes and tasks — expo-calendar's recurrenceRule doesn't reliably
@@ -64,11 +65,11 @@ interface RecurrenceInput {
 // event per dayIdxs occurrence (hence the array return) rather than one event
 // with a compound rule. daily/monthly get a single event with a simple rule.
 async function createRecurringEvents(calendarId: string, input: RecurrenceInput): Promise<string[]> {
-  const { title, baseDateIso, time, durationMinutes, recurring, freq, dayIdxs, notes } = input;
+  const { title, baseDateIso, time, durationMinutes, recurring, freq, dayIdxs, notes, location } = input;
 
   if (!recurring || !freq) {
     const { start, end } = eventWindow(baseDateIso, time, durationMinutes);
-    return [await Calendar.createEventAsync(calendarId, { title, startDate: start, endDate: end, notes })];
+    return [await Calendar.createEventAsync(calendarId, { title, startDate: start, endDate: end, notes, location })];
   }
 
   const eventIds: string[] = [];
@@ -83,6 +84,7 @@ async function createRecurringEvents(calendarId: string, input: RecurrenceInput)
           startDate: start,
           endDate: end,
           notes,
+          location,
           recurrenceRule: { frequency: Calendar.Frequency.WEEKLY },
         })
       );
@@ -91,7 +93,7 @@ async function createRecurringEvents(calendarId: string, input: RecurrenceInput)
     const { start, end } = eventWindow(baseDateIso, time, durationMinutes);
     const frequency = freq === 'daily' ? Calendar.Frequency.DAILY : Calendar.Frequency.MONTHLY;
     eventIds.push(
-      await Calendar.createEventAsync(calendarId, { title, startDate: start, endDate: end, notes, recurrenceRule: { frequency } })
+      await Calendar.createEventAsync(calendarId, { title, startDate: start, endDate: end, notes, location, recurrenceRule: { frequency } })
     );
   }
 
@@ -112,6 +114,8 @@ export async function syncClassToAppleCalendar(item: ClassItem): Promise<string[
       recurring: item.recurring,
       freq: item.freq,
       dayIdxs: item.dayIdxs,
+      notes: item.professor ? `Professor: ${item.professor}` : undefined,
+      location: item.venue,
     });
   } catch (err) {
     console.error('[appleCalendarSync] failed to sync class', err);
@@ -141,13 +145,11 @@ export interface AppleCalendarEvent {
   location?: string;
 }
 
-// Reads across every calendar the user has (not just the one writes go to —
-// getWritableCalendarId's target) since "import my calendar" should surface
-// everything, work/personal/shared calendars included. Returned events still
-// need filtering against this app's own appleEventIds before being treated
-// as genuinely external — see calendarImport.controller.ts's importAppleEvents,
-// since Apple writes land in the same default calendar as the user's real
-// appointments (no separate sync calendar like the Google side has).
+// Reads across every calendar the user has, not just getWritableCalendarId's write
+// target — "import my calendar" should surface everything. Returned events still need
+// filtering against this app's own appleEventIds (see calendarImport.controller.ts's
+// importAppleEvents): Apple writes land in the same default calendar as the user's
+// real appointments, unlike the Google side which has a separate sync calendar.
 export async function readAppleCalendarEvents(startDate: Date, endDate: Date): Promise<AppleCalendarEvent[]> {
   if (!(await hasPermission())) return [];
   try {

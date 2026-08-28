@@ -156,9 +156,8 @@ export default function Profile() {
     <ScreenWrapper
       backgroundColor={Colors.offWhite}
       scroll
-      // See dashboard.tsx's identical fix — 40px alone doesn't clear the
-      // real tab bar height (60 + insets.bottom), so the bottom of the
-      // Legal/Account section can end up unreachable behind the tab bar.
+      // 40px alone doesn't clear the tab bar (60 + insets.bottom); without
+      // this, the Legal/Account section's bottom is unreachable behind it.
       style={{ ...styles.scrollContent, paddingBottom: styles.scrollContent.paddingBottom + tabBarHeight }}
       edges={["top", "right", "left"]}
     >

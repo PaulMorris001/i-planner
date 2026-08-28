@@ -43,8 +43,7 @@ export function ExamCarousel({ exams, onTrackPress }: ExamCarouselProps) {
     setActiveIndex((i) => Math.min(i, Math.max(0, exams.length - 1)));
   }, [exams.length]);
 
-  // Auto-advance every 5s. Restarts only when the exam count changes, not on
-  // every render (sortedExams is a fresh array each render in the parent).
+  // Restarts only when exam count changes, not every render (parent passes a fresh array each time).
   useEffect(() => {
     if (exams.length <= 1) return;
     const interval = setInterval(() => {

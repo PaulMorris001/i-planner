@@ -4,8 +4,8 @@ import { auth } from '@/config/firebase';
 import { goalService } from '@/services/goal.service';
 import type { Goal, Milestone, MilestonePatch, NewGoalInput } from '@/types/goal.types';
 
-// Mirrors the backend's pct derivation (goal.controller.ts) so the optimistic local
-// update can move the progress bar immediately instead of waiting on the round trip.
+// Mirrors the backend's pct derivation (goal.controller.ts) for optimistic
+// updates — moves the progress bar without waiting on the round trip.
 function pctFromMilestones(milestones: Pick<Milestone, 'done'>[]): number {
   if (!milestones.length) return 0;
   return Math.round((milestones.filter((m) => m.done).length / milestones.length) * 100);
@@ -67,9 +67,8 @@ export function GoalsProvider({ children }: { children: ReactNode }) {
 
   const updateGoal = async (id: string, patch: GoalUpdatePatch) => {
     const prevGoals = goals;
-    // Milestones added in this same edit (no real id yet — the backend assigns
-    // one) need a placeholder id for the optimistic Goal object's type/React
-    // keys; it's overwritten within moments by the real one from the server.
+    // Newly added milestones have no real id yet (backend assigns one), so
+    // give them a placeholder for React keys until the server response lands.
     const { milestones: patchMilestones, ...restPatch } = patch;
     const optimisticMilestones: Milestone[] | undefined = patchMilestones?.map((m, i) => ({
       id: m.id ?? `temp-${i}`,
@@ -91,14 +90,10 @@ export function GoalsProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Callers used to build the toggled milestones array themselves from their
-  // own render-closure copy of `goal.milestones`, then hand the whole array
-  // to updateGoal — so two toggles fired back-to-back (e.g. checking off two
-  // milestones on the same goal quickly) each computed their array from the
-  // same pre-toggle snapshot, and whichever save landed last silently
-  // reverted the other. Computing inside the setGoals updater instead reads
-  // React's latest pending state, the same pattern used by
-  // PlanContext.updateExamPlan for the equivalent bug there.
+  // Computed inside the setGoals updater (not from the closure's `goals`) so
+  // two toggles fired back-to-back on the same goal each read the latest
+  // pending state instead of silently reverting each other. Same pattern as
+  // PlanContext.updateExamPlan.
   const toggleMilestone = async (goalId: string, milestoneId: string) => {
     const prevGoals = goals;
     let nextMilestones: Milestone[] | undefined;

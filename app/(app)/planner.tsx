@@ -8,6 +8,7 @@ import { CalendarConnectGate } from '@/components/plan/CalendarConnectGate';
 import { ItemActionSheet } from '@/components/ui/ItemActionSheet';
 import { SegmentedToggle } from '@/components/ui/SegmentedToggle';
 import { MonthCalendarView } from '@/components/planner/MonthCalendarView';
+import { AddClassModal } from '@/components/plan/AddClassModal';
 import { Colors, Spacing } from '@/constants/theme';
 import { TaskCategories, TaskPriorities, TaskPriorityId } from '@/constants/taskMeta';
 import { COURSE_COLORS, COURSE_SOFT_COLORS } from '@/constants/classColors';
@@ -15,6 +16,8 @@ import { useTasks } from '@/hooks/useTasks';
 import { usePlan } from '@/hooks/usePlan';
 import { useSettings } from '@/hooks/useSettings';
 import { useNewTaskModal } from '@/contexts/NewTaskModalContext';
+import { useEditableSheet } from '@/hooks/useEditableSheet';
+import { useClassActions } from '@/hooks/useClassActions';
 import { confirmDelete } from '@/utils/confirmDelete';
 import { weekdayIndexMonday, taskOccursOnDay, isTaskDoneOnDate, DAY_FULL, formatClassDays } from '@/utils/date';
 import { parseTimeToMinutes } from '@/utils/time';
@@ -52,6 +55,8 @@ export default function Planner() {
   const [view, setView] = useState<'day' | 'week' | 'month'>('day');
   const [courseFilter, setCourseFilter] = useState<string | null>(null);
   const [actionSheetTarget, setActionSheetTarget] = useState<Task | null>(null);
+  const classSheet = useEditableSheet<ClassItem>();
+  const { saveClass, deleteClass } = useClassActions();
   const { tasks, toggleDone, removeTask } = useTasks();
   const { plan } = usePlan();
   const { openForEdit } = useNewTaskModal();
@@ -98,9 +103,8 @@ export default function Planner() {
     return [...classItems, ...taskItems].sort((a, b) => a.time - b.time);
   };
 
-  // Monday of the current week, so each Week-view column has a real calendar
-  // date (not just an abstract weekday index) to key a recurring task's
-  // per-occurrence completion off of.
+  // Monday of the current week, so each Week-view column has a real date to
+  // key a recurring task's per-occurrence completion off of.
   const mondayThisWeek = new Date(today);
   mondayThisWeek.setDate(today.getDate() - todayIdx);
 
@@ -163,6 +167,11 @@ export default function Planner() {
               <Text style={styles.time}>↻ {TASK_FREQ_LABEL[task.freq]}</Text>
             )}
           </View>
+          {!!task.notes?.trim() && (
+            <Text style={styles.taskNotes} numberOfLines={1}>
+              {task.notes.trim()}
+            </Text>
+          )}
         </View>
         <Pressable
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -175,7 +184,12 @@ export default function Planner() {
   };
 
   const renderClassRow = (item: ClassItem, color: string, soft: string) => (
-    <View key={`class-${item.id}`} style={[styles.classRow, { backgroundColor: soft }]}>
+    <Pressable
+      key={`class-${item.id}`}
+      style={[styles.classRow, { backgroundColor: soft }]}
+      onPress={() => classSheet.setActionTarget(item)}
+      onLongPress={() => classSheet.setActionTarget(item)}
+    >
       <View style={[styles.classIconBox, { backgroundColor: color }]}>
         <IconSymbol name="calendar" color={Colors.white} size={16} />
       </View>
@@ -184,10 +198,17 @@ export default function Planner() {
         <View style={styles.metaRow}>
           <Text style={[styles.chip, { color, backgroundColor: Colors.white }]}>Class</Text>
           {!!item.time && <Text style={styles.time}>{item.time}</Text>}
+          {!!item.venue && <Text style={styles.time}>📍 {item.venue}</Text>}
         </View>
         <Text style={styles.classRecur}>↻ {formatClassDays(item, '/')}</Text>
       </View>
-    </View>
+      <Pressable
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        onPress={() => classSheet.setActionTarget(item)}
+      >
+        <IconSymbol name="ellipsis" color={Colors.textMuted} size={18} />
+      </Pressable>
+    </Pressable>
   );
 
   const calendarConnected = appleCalendarConnected || googleCalendarConnected;
@@ -221,10 +242,8 @@ export default function Planner() {
     <ScreenWrapper
       backgroundColor={Colors.offWhite}
       scroll
-      // See dashboard.tsx's identical fix — 40px alone doesn't clear the
-      // real tab bar height (60 + insets.bottom), so Month view's detail
-      // panel / Week view's last day column can end up unreachable behind
-      // the tab bar without this.
+      // 40px alone doesn't clear the tab bar (60 + insets.bottom); without
+      // this, Month/Week view's last row can end up unreachable behind it.
       style={{ ...styles.scrollContent, paddingBottom: styles.scrollContent.paddingBottom + tabBarHeight }}
       edges={['top', 'right', 'left']}
     >
@@ -271,6 +290,7 @@ export default function Planner() {
             classes={plan.classes}
             courseFilter={courseFilter}
             onTaskLongPress={setActionSheetTarget}
+            onClassLongPress={classSheet.setActionTarget}
           />
         ) : view === 'day' ? (
           <>
@@ -361,6 +381,20 @@ export default function Planner() {
         onClose={() => setActionSheetTarget(null)}
         onEdit={() => actionSheetTarget && openForEdit(actionSheetTarget)}
         onDelete={() => actionSheetTarget && handleDeleteTask(actionSheetTarget)}
+      />
+
+      <AddClassModal
+        visible={classSheet.open}
+        onClose={classSheet.close}
+        onAdd={saveClass}
+        editingClass={classSheet.editing}
+      />
+
+      <ItemActionSheet
+        visible={!!classSheet.actionTarget}
+        onClose={() => classSheet.setActionTarget(null)}
+        onEdit={() => classSheet.actionTarget && classSheet.openEdit(classSheet.actionTarget)}
+        onDelete={() => classSheet.actionTarget && deleteClass(classSheet.actionTarget)}
       />
     </ScreenWrapper>
   );
@@ -479,6 +513,12 @@ const styles = StyleSheet.create({
   time: {
     fontSize: 12,
     color: Colors.textMuted,
+  },
+  taskNotes: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    marginTop: 3,
+    fontStyle: 'italic',
   },
   classRow: {
     flexDirection: 'row',

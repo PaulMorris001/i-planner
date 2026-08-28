@@ -37,8 +37,7 @@ interface SuccessSummary {
 }
 
 // Shared between onboarding's student-plan.tsx and the post-signin Syllabi
-// screens (syllabi.tsx, Dashboard's My Syllabi card) — works in both since
-// TasksProvider now lives at the root layout rather than just the (app) group.
+// screens (syllabi.tsx, Dashboard's My Syllabi card).
 export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalProps) {
   const { updatePlan } = usePlan();
   const { createTask } = useTasks();
@@ -51,9 +50,9 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
   const [courseName, setCourseName] = useState('');
   const [deadlines, setDeadlines] = useState<DraftDeadline[]>([]);
   const [datePickerKey, setDatePickerKey] = useState<string | null>(null);
-  // True when `deadlines` was seeded from the syllabus's topic outline rather
-  // than real dated deadlines — changes the review screen's copy so the
-  // placeholder dates don't look like something the AI actually found.
+  // True when `deadlines` was seeded from the topic outline, not real dated
+  // deadlines — swaps the review screen's copy so placeholder dates don't
+  // look like something the AI actually found.
   const [showingTopicsFallback, setShowingTopicsFallback] = useState(false);
   const [successSummary, setSuccessSummary] = useState<SuccessSummary | null>(null);
 
@@ -95,19 +94,15 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
       const file = new File(asset.uri);
       const fileBase64 = await file.base64();
       const extraction = await syllabusService.extract({ fileBase64, filename: asset.name });
-      // d.date is a plain "YYYY-MM-DD" from the extraction — parsed as local
-      // midnight (not `new Date(d.date)`'s UTC midnight) so the date this
-      // becomes a task's dueDate later round-trips to the same calendar day
-      // for users west of UTC instead of landing on the previous day.
+      // Parsed as local midnight, not `new Date(d.date)`'s UTC midnight, so
+      // this round-trips to the same calendar day for users west of UTC.
       const extractedDeadlines = extraction.deadlines.map((d, i) => ({
         key: `ex-${i}`,
         title: d.title,
         date: parseISODateLocal(d.date),
       }));
-      // No dated deadlines — fall back to the syllabus's topic outline
-      // instead (subtopics never have a real date, so every row starts on
-      // today and the user picks the actual ones). Only if even that comes
-      // back empty do we fall back further to one blank row to type into.
+      // No dated deadlines — fall back to the topic outline (rows start on
+      // today; user picks real dates), or one blank row if even that's empty.
       const topicFallback = extraction.subtopics.map((title, i) => ({
         key: `topic-${i}`,
         title,
@@ -126,10 +121,8 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
       setStep('review');
     } catch (err) {
       console.error('[SyllabusUploadModal] extraction failed', err);
-      // Defense in depth — the client-side check above only fires if
-      // `syllabi` (from useSyllabi()) already shows a prior upload; this
-      // covers that being stale, since the backend's own exemption check
-      // (syllabus.controller.ts) is the real source of truth.
+      // Defense in depth — covers `syllabi` being stale; the backend's
+      // exemption check (syllabus.controller.ts) is the real source of truth.
       const field = (err as { field?: string } | null)?.field;
       if (field === 'tier') {
         setUpgradeVisible(true);
@@ -161,9 +154,8 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
         id: Date.now().toString(),
         courseName: name,
         startDate: new Date().toISOString(),
-        // The syllabus gives us deadlines, not a weekly meeting schedule — this
-        // class is created as a one-off record (edit it later to add a real
-        // recurring schedule) rather than guessing days/times it doesn't state.
+        // Syllabus gives deadlines, not a meeting schedule, so this is a
+        // one-off record; edit later to add a real recurring schedule.
         recurring: false,
         freq: 'weekly',
         dayIdxs: [weekdayIndexMonday(new Date())],
@@ -179,9 +171,8 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
             category: 'academic',
             priority: 'medium',
             day: weekdayIndexMonday(d.date),
-            // No specific time extracted from the syllabus — 23 matches
-            // NewTaskModal's "no time picked" convention, so these sort after
-            // actually time-scheduled tasks within the same priority tier.
+            // 23 matches NewTaskModal's "no time picked" convention, so these
+            // sort after time-scheduled tasks within the same priority tier.
             hour: 23,
             time: '',
             dueDate: d.date.toISOString(),
@@ -234,28 +225,28 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
 
       {(step === 'review' || step === 'creating') && (
         <>
-          <Text style={styles.title}>Review</Text>
-          <Text style={styles.sub}>Edit anything the AI got wrong before adding it to your planner.</Text>
-
-          <Text style={styles.fieldLabel}>Course name</Text>
-          <TextInput
-            value={courseName}
-            onChangeText={setCourseName}
-            placeholder="Course name"
-            placeholderTextColor={Colors.textMuted}
-            style={styles.input}
-          />
-
-          <Text style={[styles.fieldLabel, { marginTop: 16 }]}>
-            {showingTopicsFallback ? "Topics — set a date for each" : 'Deadlines'}
-          </Text>
-          {showingTopicsFallback && (
-            <Text style={styles.topicsNote}>
-              No dated deadlines found, so here's the course's topic outline instead — pick a date for
-              each one you want tracked, or remove ones you don't.
-            </Text>
-          )}
           <ScrollView style={styles.deadlineList} keyboardShouldPersistTaps="handled">
+            <Text style={styles.title}>Review</Text>
+            <Text style={styles.sub}>Edit anything the AI got wrong before adding it to your planner.</Text>
+
+            <Text style={styles.fieldLabel}>Course name</Text>
+            <TextInput
+              value={courseName}
+              onChangeText={setCourseName}
+              placeholder="Course name"
+              placeholderTextColor={Colors.textMuted}
+              style={styles.input}
+            />
+
+            <Text style={[styles.fieldLabel, { marginTop: 16 }]}>
+              {showingTopicsFallback ? "Topics — set a date for each" : 'Deadlines'}
+            </Text>
+            {showingTopicsFallback && (
+              <Text style={styles.topicsNote}>
+                No dated deadlines found, so here's the course's topic outline instead — pick a date for
+                each one you want tracked, or remove ones you don't.
+              </Text>
+            )}
             {deadlines.map((d) => (
               <View key={d.key} style={styles.deadlineRow}>
                 <View style={styles.deadlineInputs}>

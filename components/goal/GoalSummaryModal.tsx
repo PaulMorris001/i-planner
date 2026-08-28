@@ -12,15 +12,10 @@ interface GoalSummaryModalProps {
   goal: Goal | null;
 }
 
-// Summary of a single goal — used by the Dashboard's "View" action so a user can
-// check progress and tick off milestones without leaving the home page. Full
-// editing (title, type, target fields) still only happens on the Goals page.
+// Progress + milestone toggles only; full editing is Goals-page only.
 export function GoalSummaryModal({ visible, onClose, goal: goalProp }: GoalSummaryModalProps) {
   const { goals, toggleMilestone: toggleMilestoneInContext } = useGoals();
-  // `goalProp` is a snapshot handed in once when "View" was tapped — it never
-  // changes again even though checking a milestone updates the real goal in
-  // GoalsContext right away. Re-reading the live copy by id means a toggle
-  // shows up immediately instead of only after closing and reopening.
+  // `goalProp` is a static snapshot; re-read by id so milestone toggles reflect live.
   const goal = goalProp ? goals.find((g) => g.id === goalProp.id) ?? goalProp : null;
 
   if (!goal) return null;

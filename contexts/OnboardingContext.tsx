@@ -26,13 +26,9 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
       setHasOnboarded(onboarded === 'true');
       setFocusProfileState(focus);
     }).catch((err) => {
-      // Without this, a rejected read (storage corruption, low-level I/O
-      // error — rare but not impossible) is a genuinely unhandled promise
-      // rejection, and hasOnboarded stays null forever — whatever gate reads
-      // it (app/index.tsx) would be stuck on a loading state indefinitely.
-      // Falls back to "not onboarded" rather than guessing true, matching
-      // resetOnboarding's own default — safe to redo onboarding, unsafe to
-      // wrongly skip it.
+      // Falls back to "not onboarded" rather than leaving hasOnboarded null
+      // (which would stick app/index.tsx's gate on loading forever) or
+      // guessing true — safe to redo onboarding, unsafe to wrongly skip it.
       console.error('[OnboardingProvider] failed to read onboarding state', err);
       setHasOnboarded(false);
       setFocusProfileState(null);

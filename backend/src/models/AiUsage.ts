@@ -1,8 +1,7 @@
 import { Schema, model, Document } from 'mongoose';
 
-// One doc per user, reset in place whenever the tracking window rolls over —
-// mirrors Subscription's one-doc-per-user pattern rather than growing a row
-// per period. See services/aiUsageLimiter.ts for the read/reset/increment flow.
+// One doc per user, reset in place when the tracking window rolls over.
+// See services/aiUsageLimiter.ts for the read/reset/increment flow.
 export interface AiUsageDocument extends Document {
   firebaseUid: string;
   // Start of the current tracking window (Monday 00:00 UTC for weekly/free,

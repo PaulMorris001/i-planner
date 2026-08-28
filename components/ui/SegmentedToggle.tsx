@@ -10,8 +10,7 @@ interface SegmentedToggleProps<T extends string> {
   textSize?: number;
 }
 
-// 2-3 option pill toggle — planner.tsx's Day/Week view switch and coach.tsx's
-// mode switch, independently hand-rolled with identical structure/styles.
+// 2-3 option pill toggle — used by planner.tsx's Day/Week switch and coach.tsx's mode switch.
 export function SegmentedToggle<T extends string>({
   options,
   value,

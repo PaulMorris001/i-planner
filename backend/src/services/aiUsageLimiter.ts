@@ -3,8 +3,7 @@ import { AI_QUERY_CAPS, USAGE_PERIOD_BY_TIER, UsagePeriod } from '../constants/a
 import type { SubscriptionTier } from '../models/Subscription';
 
 // Monday 00:00 UTC of the current week (matches the app's Monday-start week
-// convention — see utils/date.ts's weekdayIndexMonday) or the 1st of the
-// current month 00:00 UTC.
+// convention) or the 1st of the current month 00:00 UTC.
 export function currentPeriodStart(period: UsagePeriod, now: Date): Date {
   if (period === 'month') {
     return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
@@ -30,12 +29,10 @@ export interface UsageCheckResult {
   resetsAt: Date;
 }
 
-// Checks the caller's current-period usage against their tier's cap and, if
-// under it, atomically consumes one query. Not fully race-proof against two
-// truly simultaneous requests from the same user (a plain read-then-write for
-// the period-rollover reset step) — acceptable here since a single user sends
-// one coach message at a time from one device, and the worst case is letting
-// one extra message through right at a period boundary.
+// Checks usage against the tier's cap and, if under it, atomically consumes one
+// query. Not fully race-proof for simultaneous requests (period-rollover reset is
+// read-then-write) — acceptable since a user sends one message at a time; worst
+// case is one extra message through right at a period boundary.
 export async function checkAndConsumeQuery(
   firebaseUid: string,
   tier: SubscriptionTier

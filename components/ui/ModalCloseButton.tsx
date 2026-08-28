@@ -4,8 +4,7 @@ import { Colors } from '@/constants/theme';
 
 interface ModalCloseButtonProps {
   onPress: () => void;
-  // 'text' = "✕" glyph (AddClassModal/AddExamModal), 'icon' = IconSymbol
-  // xmark (NewTaskModal) — same circular button shell, two established looks.
+  // 'text' = "✕" glyph, 'icon' = IconSymbol xmark — same circular button shell, two looks.
   variant?: 'text' | 'icon';
 }
 

@@ -1,8 +1,7 @@
 import { createTaskDoc } from './taskCreation';
 
-// Only offered in "Plan My Day" mode (coach.controller.ts) — the one mode
-// that's actually about scheduling, so the model isn't tempted to create
-// tasks out of a casual Study Buddy or Goal Coach conversation.
+// Only offered in "Plan My Day" mode — the one mode actually about scheduling,
+// so the model isn't tempted to create tasks from a casual conversation.
 export const CREATE_TASK_TOOL = {
   type: 'function',
   name: 'create_task',
@@ -16,9 +15,8 @@ export const CREATE_TASK_TOOL = {
     properties: {
       tasks: {
         type: 'array',
-        // minItems/maxItems aren't in OpenAI's supported strict-schema subset
-        // (same reason syllabusExtraction.ts's SYLLABUS_SCHEMA omits them) — the
-        // 10-item cap is enforced in createTasksFromDrafts below instead.
+        // minItems/maxItems aren't in OpenAI's strict-schema subset — the 10-item
+        // cap is enforced in createTasksFromDrafts below instead.
         items: {
           type: 'object',
           properties: {
@@ -64,9 +62,8 @@ function weekdayIndexMonday(date: Date): number {
   return (date.getDay() + 6) % 7;
 }
 
-// Mirrors utils/time.ts's parseTimeToMinutes / googleCalendarSync.ts's
-// parseTime — "no time" falls back to 23 to match NewTaskModal's convention
-// (unscheduled tasks sort after time-scheduled ones within the same priority).
+// "No time" falls back to 23 to match NewTaskModal's convention — unscheduled
+// tasks sort after time-scheduled ones within the same priority.
 function parseTimeToHour(time: string): number {
   const match = time.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
   if (!match) return 23;
@@ -84,10 +81,8 @@ interface RawTaskDraft {
   notes?: unknown;
 }
 
-// Validates and creates each task the model asked for, then summarizes the
-// outcome as plain text — fed back to the model (coachChat.ts's
-// continueAfterToolCall) so it can confirm naturally, including any that
-// were skipped, rather than the caller silently swallowing partial failures.
+// Validates and creates each task, then summarizes the outcome as plain text fed
+// back to the model so it can confirm naturally, including any skipped tasks.
 export async function createTasksFromDrafts(
   firebaseUid: string,
   rawArguments: string
@@ -119,17 +114,13 @@ export async function createTasksFromDrafts(
     let day = weekdayIndexMonday(new Date());
     if (typeof raw.dueDate === 'string' && raw.dueDate) {
       // Keep the model's date-only "YYYY-MM-DD" as-is rather than round-tripping
-      // it through `new Date(...).toISOString()` — that anchors it to this
-      // server's own UTC midnight, and the client later reading it back as a
-      // local calendar day can land on the previous day for anyone west of
-      // UTC. The server has no idea what the user's timezone even is, so the
-      // only correct move is to leave the date-only value for the client to
-      // resolve in its own local time (see utils/date.ts's parseISODateLocal).
+      // through `new Date(...).toISOString()`, which would anchor it to this
+      // server's UTC midnight and can land the client a day early west of UTC.
+      // Left for the client to resolve in its own local time.
       const match = raw.dueDate.match(/^(\d{4})-(\d{2})-(\d{2})/);
       if (match) {
         dueDateIso = `${match[1]}-${match[2]}-${match[3]}`;
-        // getUTCDay, not getDay — this must stay independent of whatever
-        // timezone this particular server process happens to run in.
+        // getUTCDay, not getDay — must stay independent of the server's own timezone.
         const utcDate = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
         day = (utcDate.getUTCDay() + 6) % 7;
       }

@@ -6,19 +6,13 @@ export function hasTier(userTier: SubscriptionTier, required: SubscriptionTier):
   return TIER_RANK[userTier] >= TIER_RANK[required];
 }
 
-// Minimum tier required for each AI-consuming feature — mirrored on the
-// frontend in constants/featureTiers.ts (kept in sync manually, same as
-// TaskCategories/TaskPriorities elsewhere in this backend, since frontend and
-// backend don't share a types package). Coach chat's own message-count cap
-// (AI_QUERY_CAPS in aiUsage.ts) is separate from and layered on top of this —
-// this map decides whether a feature is reachable at all, the cap decides how
-// many calls you get once it is.
+// Minimum tier per AI-consuming feature — mirrored manually on the frontend
+// (constants/featureTiers.ts; no shared types package). Separate from and layered
+// under AI_QUERY_CAPS (aiUsage.ts): this decides if a feature is reachable at all,
+// the cap decides how many calls once it is.
 export const FEATURE_MIN_TIER = {
-  // Free-tier accessible, gated only by AI_QUERY_CAPS.free (5/week) — the
-  // Plans page's feature list under Student ("AI Study Buddy") describes the
-  // mode's home tier for marketing purposes, but AI_QUERY_CAPS.free's
-  // existence implies free users were meant to have some Coach access, and
-  // Study Buddy is the mode that makes sense as that free taste.
+  // Free-tier accessible, gated only by AI_QUERY_CAPS.free (5/week) — the free
+  // taste of Coach access despite Plans marketing "AI Study Buddy" under Student.
   coach_study: 'free',
   coach_plan: 'professional',
   coach_goal: 'professional',

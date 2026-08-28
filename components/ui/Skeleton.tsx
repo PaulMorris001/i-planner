@@ -9,9 +9,7 @@ interface SkeletonBlockProps {
   style?: ViewStyle;
 }
 
-// A single pulsing placeholder shape — the building block for every skeleton
-// loading state in the app (currently just the Dashboard, but reusable anywhere
-// a screen fetches data before it can render its real content).
+// A single pulsing placeholder shape — the building block for every skeleton loading state.
 export function SkeletonBlock({ width = '100%', height = 16, borderRadius = 8, style }: SkeletonBlockProps) {
   const opacity = useRef(new Animated.Value(0.4)).current;
 

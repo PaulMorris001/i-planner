@@ -59,12 +59,9 @@ export async function generateExamTopicsHandler(req: AuthedRequest, res: Respons
     throw new ApiError(400, 'weeksRemaining must be a positive number.', 'general');
   }
 
-  // First-ever exam plan is free (covers onboarding's exam-plan.tsx, which has
-  // no separate endpoint of its own) — gated from the second exam onward. See
-  // the "Onboarding exemption" section of the tier-gating plan for why this is
-  // keyed off real server-side state (an existing Plan doc) rather than a
-  // client-supplied "still onboarding" flag, which would be spoofable via
-  // OnboardingContext's resetOnboarding().
+  // First-ever exam plan is free (covers onboarding, which has no separate endpoint);
+  // gated from the second exam onward. Keyed off an existing Plan doc rather than a
+  // client-supplied "still onboarding" flag, which would be spoofable.
   const existingExamPlan = await Plan.findOne({ firebaseUid: req.userId, pathType: 'exam' });
   if (existingExamPlan) {
     const subscription = await Subscription.findOne({ firebaseUid: req.userId });
@@ -90,9 +87,8 @@ export async function generateExamTopicsHandler(req: AuthedRequest, res: Respons
   res.json({ topics });
 }
 
-// Single choke point for Google-class-sync: all 3 frontend class call sites
-// (classes.tsx, dashboard.tsx, student-plan.tsx) already funnel through this one
-// savePlan endpoint, so no frontend changes are needed for Google sync at all.
+// All frontend class call sites funnel through savePlan, so this is the single
+// choke point for Google-class-sync — no frontend changes needed to add it.
 async function syncClassesToGoogle(firebaseUid: string, newClasses: ClassRecord[]) {
   const settings = await Settings.findOne({ firebaseUid });
   if (!settings?.googleCalendarConnected) return;
@@ -118,6 +114,8 @@ async function syncClassesToGoogle(firebaseUid: string, newClasses: ClassRecord[
       old.recurring !== item.recurring ||
       old.freq !== item.freq ||
       old.time !== item.time ||
+      old.professor !== item.professor ||
+      old.venue !== item.venue ||
       JSON.stringify(old.dayIdxs) !== JSON.stringify(item.dayIdxs);
 
     if (!changed) {

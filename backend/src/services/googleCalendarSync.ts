@@ -2,19 +2,16 @@ import { SettingsDocument } from '../models/Settings';
 import { env } from '../config/env';
 import { encryptToken, decryptToken } from '../utils/tokenCrypto';
 
-// Hand-rolled fetch calls against Calendar API v3 — matches this backend's existing
-// no-extra-HTTP-client convention (see googleOAuthCallback.controller.ts's token
-// exchange). Every exported function no-ops cleanly when the user hasn't connected
-// Google Calendar, so callers never need their own connected-check.
+// Hand-rolled fetch calls against Calendar API v3. Every exported function no-ops
+// cleanly when the user hasn't connected Google Calendar, so callers never need
+// their own connected-check.
 
 const CALENDAR_API = 'https://www.googleapis.com/calendar/v3';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const BYDAY = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'];
 
-// Minimal shapes this service needs — Classes are a schemaless blob
-// (Plan.data.classes) and this backend doesn't share a types package with the app
-// (same reasoning as Task.ts's category/priority fields), so these are declared
-// locally rather than imported from the frontend.
+// Minimal shapes this service needs — Classes are a schemaless blob (Plan.data.classes)
+// and this backend doesn't share a types package with the app.
 export interface SyncableClassItem {
   courseName: string;
   startDate: string;
@@ -22,6 +19,8 @@ export interface SyncableClassItem {
   freq: 'weekly' | 'weekdays' | 'daily' | 'monthly';
   dayIdxs: number[];
   time: string;
+  professor?: string;
+  venue?: string;
   googleEventId?: string;
 }
 
@@ -49,22 +48,19 @@ function pad(n: number): string {
   return String(n).padStart(2, '0');
 }
 
-// Formats a UTC-arithmetic instant back into a floating "wall clock" string with
-// no offset — Date.UTC/getUTC* here is just deterministic minute arithmetic (start
-// + duration), never a real instant, so this is unaffected by the server's own TZ.
+// Formats a UTC-arithmetic instant back into a floating "wall clock" string with no
+// offset — Date.UTC/getUTC* here is just deterministic minute arithmetic, not a real
+// instant, so this is unaffected by the server's own TZ.
 function formatFloating(ms: number): string {
   const d = new Date(ms);
   return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}T${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:00`;
 }
 
-// dueDate/startDate is either a plain "YYYY-MM-DD" (no time-of-day at all —
-// its digits ARE the intended calendar day, full stop) or a full timestamp
-// from a date picker's `Date.toISOString()` (an arbitrary but real moment).
-// Naively slicing the first 10 characters is only correct for the first case
-// — for the second, those digits are the instant's *UTC* day, which can
-// differ from the user's actual local day (e.g. a late-evening pick rolls
-// into the next UTC day). Resolving via the user's own stored timeZone
-// handles both correctly.
+// dueDate/startDate is either a plain "YYYY-MM-DD" (digits ARE the calendar day)
+// or a full timestamp from a date picker (an arbitrary real moment). Naive
+// slicing only works for the first case — for the second, those digits are the
+// instant's UTC day, which can differ from the user's local day (e.g. a
+// late-evening pick rolls into the next UTC day). Resolve via stored timeZone.
 function localDatePart(dateIso: string, timeZone: string): string {
   if (!dateIso.includes('T')) return dateIso.slice(0, 10);
   const date = new Date(dateIso);
@@ -73,11 +69,9 @@ function localDatePart(dateIso: string, timeZone: string): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
 }
 
-// Builds floating (no-offset) local datetime strings for the event window. Paired
-// with an explicit IANA timeZone in toGoogleEventTime, Google interprets the
-// wall-clock hour/minute literally in the user's timezone rather than treating it
-// as a UTC instant — so a class set for "9:00 AM" lands at 9:00 AM local time,
-// not 9:00 AM UTC.
+// Builds floating (no-offset) local datetime strings. Paired with an explicit IANA
+// timeZone in toGoogleEventTime, Google interprets the hour/minute literally in the
+// user's timezone rather than as a UTC instant — "9:00 AM" lands at 9 AM local.
 function buildEventWindow(dateIso: string, time: string | undefined, durationMinutes: number, timeZone: string) {
   const { hour, minute } = parseTime(time);
   const datePart = localDatePart(dateIso, timeZone);
@@ -233,6 +227,8 @@ export async function upsertClassEvent(
     summary: item.courseName,
     start: toGoogleEventTime(start, timeZone),
     end: toGoogleEventTime(end, timeZone),
+    location: item.venue || undefined,
+    description: item.professor ? `Professor: ${item.professor}` : undefined,
   };
   const rrule = item.recurring ? buildRRule(item.freq, item.dayIdxs) : undefined;
   if (rrule) body.recurrence = [rrule];
@@ -291,13 +287,10 @@ export interface RemoteGoogleEvent {
   location?: string;
 }
 
-// Reads from the user's own "primary" calendar — deliberately not the
-// dedicated "i-Planner" secondary calendar this file writes to (settings.
-// googleCalendarId, created by ensureSyncCalendar above). That separation is
-// what makes this import naturally exclude everything the app already wrote
-// out via upsertClassEvent/upsertTaskEvent, with no id-matching needed on
-// this side (unlike the Apple import path, where writes and the user's real
-// calendar share the same default calendar).
+// Reads the user's "primary" calendar — deliberately not the dedicated
+// "i-Planner" secondary calendar this file writes to. That separation naturally
+// excludes everything the app already wrote via upsertClassEvent/upsertTaskEvent,
+// with no id-matching needed (unlike the Apple import path, which shares one calendar).
 export async function listPrimaryGoogleEvents(
   settings: SettingsDocument,
   timeMinIso: string,

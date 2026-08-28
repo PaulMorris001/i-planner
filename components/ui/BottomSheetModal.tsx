@@ -11,18 +11,13 @@ interface BottomSheetModalProps {
   maxHeightPct?: number;
 }
 
-// Shared bottom-sheet shell for every "New X" modal in the app. Handles two things
-// every one of them needs and previously handled inconsistently (or not at all):
-//  1. Bottom safe-area clearance, so the save/create button doesn't sit behind
-//     Android's gesture/nav bar — the sheet is content-sized, not screen-height, so a
-//     flat hardcoded paddingBottom isn't enough on devices with a tall nav bar.
-//  2. Keyboard avoidance — RN's Modal renders in its own native window, so a
-//     KeyboardAvoidingView anywhere else in the app (e.g. ScreenWrapper) has no
-//     effect on content inside a Modal; each sheet needs its own. RN's own
-//     KeyboardAvoidingView doesn't reliably reset itself once the keyboard closes
-//     inside a Modal on Android (the sheet is left "floating" instead of settling
-//     back to the screen bottom) — useKeyboardOffset tracks the keyboard height
-//     manually instead, so "hidden" always means exactly 0, not a stale value.
+// Shared bottom-sheet shell for every "New X" modal. Handles:
+//  1. Bottom safe-area clearance — the sheet is content-sized, not screen-height, so a flat
+//     hardcoded paddingBottom isn't enough to clear Android's gesture/nav bar.
+//  2. Keyboard avoidance — RN's Modal renders in its own native window, unreachable by a
+//     KeyboardAvoidingView elsewhere in the app. RN's own KeyboardAvoidingView also doesn't
+//     reliably reset once the keyboard closes inside a Modal on Android (sheet stays "floating"),
+//     so useKeyboardOffset tracks keyboard height manually instead.
 export function BottomSheetModal({ visible, onClose, children, maxHeightPct = 90 }: BottomSheetModalProps) {
   const insets = useSafeAreaInsets();
   const keyboardOffset = useKeyboardOffset();

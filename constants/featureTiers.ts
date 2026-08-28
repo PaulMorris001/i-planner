@@ -6,16 +6,11 @@ export function hasTier(userTier: SubscriptionTier, required: SubscriptionTier):
   return TIER_RANK[userTier] >= TIER_RANK[required];
 }
 
-// Mirrors backend/src/constants/featureTiers.ts — kept in sync manually, same
-// as TaskCategories/TaskPriorities elsewhere (frontend and backend don't
-// share a types package). Used for a client-side pre-check so tapping a
-// gated feature shows UpgradeModal immediately instead of round-tripping to
-// the server first; the backend enforces the same map independently, since a
-// stale/bypassed client check must never be the only thing standing between
-// a free user and a paid AI call.
+// Mirrors backend/src/constants/featureTiers.ts — kept in sync manually.
+// Client-side pre-check only (shows UpgradeModal immediately); the backend
+// enforces the same map independently since this check can be bypassed.
 export const FEATURE_MIN_TIER = {
-  // Free-tier accessible, gated only by the existing 5/week usage cap — see
-  // backend/src/constants/featureTiers.ts for why.
+  // Free-tier accessible, gated only by the existing 5/week usage cap.
   coach_study: 'free',
   coach_plan: 'professional',
   coach_goal: 'professional',

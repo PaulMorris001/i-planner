@@ -2,9 +2,7 @@ import type { Task } from '@/types/task.types';
 import type { ClassItem } from '@/types/plan.types';
 import { parseTimeToMinutes } from '@/utils/time';
 
-// Monday-start day names, matching weekdayIndexMonday's index convention
-// (0=Mon..6=Sun) — was independently redefined in planner.tsx, classes.tsx,
-// StudentPathView.tsx, and student-plan.tsx before being consolidated here.
+// Monday-start day names, matching weekdayIndexMonday's index convention (0=Mon..6=Sun).
 export const DAY_FULL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 export const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -19,45 +17,32 @@ export function formatMonthYear(iso: string): string {
   return parseISODateLocal(iso).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 }
 
-// "Jun 12"-style short date, used anywhere a due/created/exam date needs a
-// compact label — was independently redefined in exams.tsx, syllabi.tsx,
-// ExamCarousel.tsx, and dashboardHelpers.ts before being consolidated here.
+// "Jun 12"-style short date for a due/created/exam date label.
 export function formatShortDate(iso: string): string {
   return parseISODateLocal(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-// "Mon · Wed · Fri"-style recurrence summary for a class — was independently
-// redefined (with only the join separator differing) in classes.tsx,
-// StudentPathView.tsx, and planner.tsx before being consolidated here.
-// `separator` defaults to the more common ' · '; planner.tsx's tighter
-// layout passes '/' instead.
+// "Mon · Wed · Fri" recurrence summary. Defaults to ' · '; planner.tsx
+// passes '/' for its tighter layout.
 export function formatClassDays(item: ClassItem, separator = ' · '): string {
   if (!item.recurring) return 'One time';
   if (item.freq === 'monthly') return 'Monthly';
   return (item.dayIdxs ?? []).map((i) => DAY_SHORT[i]).join(separator);
 }
 
-// "12 Jun 2027"-style label for a date-picker button's display value — was
-// independently redefined in AddClassModal.tsx, NewTaskModal.tsx,
-// NewGoalModal.tsx, SyllabusUploadModal.tsx, and student-plan.tsx before
-// being consolidated here. Distinct from formatShortDate above (different
-// locale/fields, and takes a real Date rather than an ISO string) so it
-// wasn't caught by that earlier consolidation.
+// "12 Jun 2027"-style label for a date-picker button. Distinct from formatShortDate
+// above — different locale/fields, and takes a Date rather than an ISO string.
 export function formatDatePickerLabel(date: Date): string {
   return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-// "9:30 AM"-style label for a time-picker button's display value — was
-// independently redefined in AddClassModal.tsx, NewTaskModal.tsx, and
-// student-plan.tsx before being consolidated here.
+// "9:30 AM"-style label for a time-picker button's display value.
 export function formatTimeLabel(date: Date): string {
   return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
-// Inverse of formatTimeLabel/parseTimeToMinutes — turns a stored "9:30 AM"
-// string back into a Date (today's date, that time-of-day) for handing to a
-// <DateTimePicker>. Was independently redefined in AddClassModal.tsx and
-// NewTaskModal.tsx before being consolidated here.
+// Inverse of formatTimeLabel/parseTimeToMinutes — turns a stored "9:30 AM" string
+// back into a Date (today's date, that time-of-day) for handing to a <DateTimePicker>.
 export function parseTimeToDate(time: string): Date {
   const minutes = parseTimeToMinutes(time);
   const d = new Date();
@@ -65,11 +50,9 @@ export function parseTimeToDate(time: string): Date {
   return d;
 }
 
-// Which weekdays a recurring item occurs on, Monday-start — was
-// independently redefined (NewTaskModal.tsx's own comment even flagged it as
-// mirroring AddClassModal.tsx's copy) before being consolidated here. Only
-// covers the 3 frequencies that map to a weekly day-grid; a class's
-// 'monthly' option has no grid slot and is handled by its caller instead.
+// Which weekdays a recurring item occurs on, Monday-start. Only covers the 3
+// frequencies that map to a weekly day-grid; a class's 'monthly' option has no
+// grid slot and is handled by its caller instead.
 export function dayIdxsForFrequency(freq: 'weekly' | 'weekdays' | 'daily', referenceWeekday: number): number[] {
   if (freq === 'weekly') return [referenceWeekday];
   if (freq === 'weekdays') return [0, 1, 2, 3, 4];
@@ -111,21 +94,18 @@ export function isTaskDoneOnDate(task: Task, date: Date): boolean {
   return (task.completedDates ?? []).includes(toDateKey(date));
 }
 
-// dueDate/startDate/targetDate carry two genuinely different shapes depending
-// on how they were created, and this has to handle both correctly:
+// dueDate/startDate/targetDate carry two different shapes depending on how they
+// were created, and both need handling:
 //  - Plain "YYYY-MM-DD" with no time-of-day (AI/syllabus-created tasks, some
-//    onboarding items) — `new Date(iso)` parses that as UTC midnight, which
-//    lands on the *previous* local calendar day for anyone west of UTC (e.g.
-//    US timezones). Reading the Y/M/D digits directly and building a local
-//    date from them avoids that UTC round-trip.
-//  - A full timestamp (has a "T", from a date picker's `Date.toISOString()`)
-//    — this already encodes a real instant, so standard `new Date(iso)`
-//    parsing is correct here; re-deriving from the string's leading digits
-//    would actually be wrong, since those digits are the instant's *UTC* day,
-//    which can differ from its local day (e.g. a late-evening pick rolls
-//    into the next UTC day).
-// Prefer this over `new Date(iso)` whenever the result feeds into a same-day
-// comparison (localMidnight, isSameLocalDay, weekday extraction, etc.).
+//    onboarding items) — `new Date(iso)` parses that as UTC midnight, landing on
+//    the *previous* local day for anyone west of UTC. Reading the Y/M/D digits
+//    directly avoids that UTC round-trip.
+//  - A full timestamp (has a "T", from a date picker's `Date.toISOString()`) already
+//    encodes a real instant, so standard `new Date(iso)` parsing is correct;
+//    re-deriving from the leading digits would be wrong since those are the
+//    instant's *UTC* day, which can differ from its local day.
+// Prefer this over `new Date(iso)` for any same-day comparison (localMidnight,
+// isSameLocalDay, weekday extraction, etc.).
 export function parseISODateLocal(iso: string): Date {
   if (iso.includes('T')) return new Date(iso);
   const match = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -134,27 +114,23 @@ export function parseISODateLocal(iso: string): Date {
 }
 
 // True when dateIso's calendar day (local time) is today or later. Deliberately
-// ignores whatever time-of-day is embedded in the ISO string itself — that
-// varies by creation path (e.g. AI/syllabus-created tasks are pinned to UTC
-// midnight, manually-created ones carry whatever time the date picker's Date
-// object happened to hold) and isn't meaningful on its own, so comparing full
-// instants against Date.now() can wrongly drop something due later today. A
-// task's real time-of-day, when it has one, lives in its separate `hour`/`time`
-// fields instead.
+// ignores whatever time-of-day is embedded in the ISO string — that varies by
+// creation path (AI/syllabus tasks pin UTC midnight; manual ones carry whatever
+// the date picker held) and isn't meaningful on its own, so comparing full instants
+// against Date.now() could wrongly drop something due later today. A task's real
+// time-of-day, when it has one, lives in its separate `hour`/`time` fields.
 export function isDueTodayOrLater(dateIso: string): boolean {
   const date = parseISODateLocal(dateIso);
   if (Number.isNaN(date.getTime())) return false;
   return localMidnight(date) >= localMidnight(new Date());
 }
 
-// Current task-completion streak: counts consecutive "active" days (any
-// calendar day with at least one task due — by its actual dueDate, not
-// recurring occurrences) working backward from today, where at least one due
-// task on that day was completed. A day with no due tasks is skipped entirely —
-// it neither extends nor breaks the streak, it just doesn't count. Today never
-// breaks the streak while still in progress (you can't fail a day that isn't
-// over yet); it only adds to the streak once something on it is actually
-// completed.
+// Current task-completion streak: counts consecutive "active" days (a calendar day
+// with at least one task due, by dueDate, not recurring occurrences) working
+// backward from today, where at least one due task was completed. A day with no
+// due tasks is skipped — it neither extends nor breaks the streak. Today never
+// breaks the streak while still in progress; it only adds once something on it
+// is actually completed.
 export function computeTaskStreak(tasks: Task[]): number {
   const completedByDay = new Map<number, boolean>();
 

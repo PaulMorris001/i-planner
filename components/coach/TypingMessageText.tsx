@@ -4,20 +4,14 @@ import { useEffect, useRef, useState } from "react";
 interface TypingMessageTextProps {
   content: string;
   variant: "user" | "assistant";
-  // Only a message's very first render as a freshly-arrived reply should
-  // type in — history loaded from the server, and this same message on any
-  // later re-render, just shows the full text immediately.
+  // True only on a freshly-arrived reply's first render; history/re-renders show full text immediately.
   animate: boolean;
   onProgress?: () => void;
 }
 
 const CHARS_PER_SECOND = 105;
 
-// Reveals `content` a bit at a time to read as typing rather than a chat
-// bubble popping in fully-formed. Driven by requestAnimationFrame computing
-// how many characters *should* be visible from real elapsed time (not a
-// fixed-size step per tick), so the pace stays even even if a frame or two
-// gets dropped — a naive setInterval counter would visibly stutter instead.
+// Reveals `content` a bit at a time. Uses real elapsed time via requestAnimationFrame, not a tick counter, so pace stays even if a frame drops.
 export function TypingMessageText({
   content,
   variant,

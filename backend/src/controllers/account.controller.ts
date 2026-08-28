@@ -10,10 +10,8 @@ import { Syllabus } from '../models/Syllabus';
 import { AiUsage } from '../models/AiUsage';
 import { AuthedRequest } from '../middleware/requireAuth';
 
-// Wipes every piece of app data owned by this user. The Firebase Auth account
-// itself is deleted client-side afterward (firebase/auth's deleteUser can
-// self-delete the currently signed-in user without admin privileges) — this
-// endpoint must run first, while the caller's token is still valid.
+// Wipes every piece of app data owned by this user. Firebase Auth account deletion
+// happens client-side afterward — must run first, while the caller's token is still valid.
 export async function deleteAccount(req: AuthedRequest, res: Response) {
   const firebaseUid = req.userId;
 

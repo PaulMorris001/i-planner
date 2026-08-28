@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
+import { View, Text, TextInput, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { BottomSheetModal } from '@/components/ui/BottomSheetModal';
 import { ItemActionSheet } from '@/components/ui/ItemActionSheet';
@@ -184,6 +184,7 @@ export default function Habits() {
       </View>
 
       <BottomSheetModal visible={sheet.open} onClose={sheet.close}>
+          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           <Text style={styles.sheetTitle}>{sheet.editing ? 'Edit habit' : 'New habit'}</Text>
 
           <TextInput
@@ -232,6 +233,7 @@ export default function Habits() {
               {sheet.editing ? 'Save changes' : 'Create habit'}
             </Text>
           </Pressable>
+          </ScrollView>
       </BottomSheetModal>
 
       <ItemActionSheet

@@ -8,10 +8,8 @@ import { scheduleTaskNotifications, cancelNotifications } from '@/utils/notifica
 import { toDateKey } from '@/utils/date';
 import type { Task, NewTaskInput } from '@/types/task.types';
 
-// Fields that affect what's scheduled — the same set for both the Apple Calendar
-// event and the local reminder notification (notes only affects the calendar
-// event's description, but reusing one set keeps this simple; an unnecessary
-// notes-only reschedule is harmless).
+// Fields that affect scheduling — shared between Apple Calendar sync and reminder
+// notifications; an unnecessary notes-only reschedule is harmless.
 const SYNC_RELEVANT_FIELDS = ['title', 'dueDate', 'time', 'notes', 'recurring', 'freq', 'dayIdxs'] as const;
 
 interface TasksContextValue {
@@ -58,22 +56,16 @@ export function TasksProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const createTask = async (input: NewTaskInput) => {
-    // Random suffix, not just Date.now() — SyllabusUploadModal fires createTask
-    // for several deadlines back-to-back (Promise.allSettled), all synchronously
-    // before any of them await, so a timestamp alone can collide within the
-    // same millisecond and corrupt the optimistic-update replacement below.
+    // Random suffix, not just Date.now() — SyllabusUploadModal fires createTask for
+    // several deadlines synchronously (Promise.allSettled), so a timestamp alone
+    // can collide within the same millisecond and corrupt the optimistic replace below.
     const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     setTasks((prev) => [...prev, { ...input, id: tempId, done: false }]);
-    // Apple sync and reminder scheduling both run client-side — do both first so
-    // the resulting ids ride along on the create request. Apple sync is
-    // skipped when the input already points at an existing Apple event
-    // (converting an imported calendar event to a task — see
-    // NewTaskModal/NewTaskModalContext's TaskDraft) — that event already
-    // exists, so syncing here would create a second, duplicate one. Scoped
-    // to appleEventIds specifically, not googleEventId too — a Google-sourced
-    // conversion has no existing Apple event to speak of, and wrongly
-    // skipping Apple sync there would leave the task with no Apple entry at
-    // all despite Apple Calendar being connected.
+    // Apple sync and reminder scheduling run client-side, so do both first and let the
+    // resulting ids ride along on the create request. Skipped when input already has
+    // appleEventIds — that means we're importing an existing Apple event (see TaskDraft),
+    // and syncing again would create a duplicate. Google-sourced conversions still get
+    // synced since there's no existing Apple event for them.
     const alreadyLinkedApple = !!input.appleEventIds?.length;
     const appleEventIds = !alreadyLinkedApple && appleCalendarConnected ? await syncTaskToAppleCalendar(input) : (input.appleEventIds ?? []);
     const notificationIds = remindersEnabled ? await scheduleTaskNotifications(input) : [];
@@ -91,27 +83,20 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // A recurring task is one Task document shared across every weekday it
-  // occurs on — toggling `done` globally would mark every occurrence (past,
-  // future, and any other day visible in the same Week view) as done at
-  // once. So a recurring task's completion is tracked per calendar date in
-  // `completedDates` instead, keyed off the `date` this specific occurrence
-  // was rendered for; a one-time task keeps the original single-`done` path,
-  // including the reminder cancel/reschedule (which only makes sense for a
-  // single occurrence — a recurring task's reminder repeats weekly and isn't
-  // tied to any one date).
+  // A recurring task is one document shared across every weekday it occurs on, so
+  // toggling `done` globally would mark every occurrence done at once. Completion is
+  // tracked per date in `completedDates` instead; a one-time task keeps the single-`done`
+  // path, including reminder cancel/reschedule (a recurring task's reminder repeats
+  // weekly and isn't tied to one date).
   const toggleDone = async (id: string, date: Date) => {
     const target = tasks.find((t) => t.id === id);
     if (!target) return;
 
     if (target.recurring) {
       const dateKey = toDateKey(date);
-      // Computed inside the updater (against React's latest pending state,
-      // not the `tasks` closure above) so two toggles fired back-to-back —
-      // e.g. the same recurring task shown on two Week-view day columns,
-      // both tapped before the first request lands — don't have the second
-      // one compute its patch from a snapshot that predates the first one's
-      // change, silently dropping it.
+      // Computed inside the updater against React's latest pending state so two toggles
+      // fired back-to-back (e.g. the same recurring task on two Week-view columns) don't
+      // silently drop one.
       let prevDates: string[] = [];
       let nextDates: string[] = [];
       setTasks((prev) =>
@@ -136,12 +121,9 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     const nextDone = !target.done;
     const prevNotificationIds = target.notificationIds;
 
-    // A completed task doesn't need a reminder anymore; un-completing one that
-    // still has a future due date/time should get its reminder back. Reads
-    // `target` (not the freshest state) since scheduling is an async device
-    // call that has to happen before the state update either way — a rapid
-    // double-tap racing this is an accepted edge case here, unlike the
-    // recurring branch above where a lost update silently drops data.
+    // Reads `target`, not the freshest state, since scheduling is an async device call
+    // that has to happen before the state update either way — a rapid double-tap race
+    // here is accepted, unlike the recurring branch above.
     let notificationIds = target.notificationIds;
     if (remindersEnabled) {
       if (nextDone) {
@@ -171,12 +153,9 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     const syncRelevant = SYNC_RELEVANT_FIELDS.some((k) => k in patch);
     if (syncRelevant && current) {
       const merged = { ...current, ...patch };
-      // A task created by converting an imported calendar event points its
-      // appleEventIds at a real event the app doesn't own — deleting and
-      // recreating it here (the normal resync path) would delete the user's
-      // actual calendar entry. Only the app's own copy of the task changes;
-      // reminders are unaffected either way, since they're a separate local
-      // notification about the task, not the calendar event itself.
+      // A task converted from an imported calendar event points appleEventIds at an
+      // event the app doesn't own — deleting/recreating it (the normal resync path)
+      // would delete the user's real calendar entry, so only the app's copy changes.
       if (appleCalendarConnected && !current.calendarLinkExternal) {
         await deleteAppleEvents(current.appleEventIds);
         finalPatch = { ...finalPatch, appleEventIds: await syncTaskToAppleCalendar(merged) };
@@ -197,16 +176,11 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // For tasks created by a path other than createTask (currently: the AI Coach's
-  // create_task tool, which is a pure backend flow) — Apple sync and local
-  // notifications can only happen client-side, so this runs that step after the
-  // fact instead of duplicating it into a second creation path.
-  //
-  // Takes the task itself rather than an id to look up in `tasks` state: the
-  // caller (coach.tsx) awaits refetch() and then this in the same handler, and
-  // this closure's own `tasks` would still be the pre-refetch snapshot from
-  // when the closure was created (a fresh `tasks` only exists in the *next*
-  // render's closure) — looking it up here would always miss.
+  // For tasks created by a backend-only path (the AI Coach's create_task tool) — Apple
+  // sync and notifications only happen client-side, so this runs them after the fact.
+  // Takes the task itself rather than an id: caller (coach.tsx) awaits refetch() then
+  // this in the same handler, so this closure's `tasks` is still the pre-refetch
+  // snapshot and a lookup here would always miss.
   const syncExternallyCreatedTask = async (task: Task) => {
     const appleEventIds = appleCalendarConnected ? await syncTaskToAppleCalendar(task) : [];
     const notificationIds = remindersEnabled ? await scheduleTaskNotifications(task) : [];

@@ -26,9 +26,8 @@ import {
   useState,
 } from "react";
 
-// Distinguishes "need a password to finish" from a real failure — thrown by
-// deleteAccount so the caller can prompt for a password and retry, rather
-// than showing this as a plain error.
+// Thrown by deleteAccount when it needs a password to finish, so the caller
+// can prompt for one and retry instead of showing a plain error.
 export class ReauthRequiredError extends Error {}
 
 interface AuthContextValue {
@@ -49,11 +48,8 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 // Single source of truth for Firebase auth state — every screen/component
 // that needs `user` reads it from here instead of running its own
-// onAuthStateChanged listener. Previously useAuth was a plain hook, so every
-// caller (GreetingHeader, profile.tsx, login/register, etc.) had its own
-// independent listener and its own `user` state starting at null on mount —
-// each one flashed its "not logged in yet" fallback on every mount, even long
-// after some other copy elsewhere had already resolved the real user.
+// onAuthStateChanged listener, which would flash a "not logged in yet"
+// fallback on every mount even after auth had already resolved elsewhere.
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [initializing, setInitializing] = useState(true);
@@ -120,12 +116,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setError(null);
   };
 
-  // Wipes all app data first (needs a still-valid session), then deletes the
-  // Firebase Auth account itself. If the session is too old, Firebase requires
-  // a fresh password before it'll allow deleting the account — that's the one
-  // case where app data ends up gone before the account does; harmless, since
-  // signing back in would just show an empty account, and retrying with the
-  // password (via reauthPassword) finishes the job.
+  // Wipes app data first, then deletes the Firebase Auth account. If the
+  // session is too stale, Firebase requires a fresh password before deleting
+  // the account — app data ends up gone before the account does, which is
+  // harmless since retrying with reauthPassword finishes the job.
   const deleteAccount = async (reauthPassword?: string) => {
     const currentUser = auth.currentUser;
     if (!currentUser)

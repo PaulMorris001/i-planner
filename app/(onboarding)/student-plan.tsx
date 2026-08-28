@@ -198,9 +198,8 @@ export default function StudentPlan() {
   const handleContinue = async () => {
     setLoading(true);
     try {
-      // Onboarding builds classes purely in local state and saves once here, so
       // Apple sync (best-effort — syncClassToAppleCalendar never throws) happens
-      // right before the single savePlan call rather than at each addClass.
+      // here, right before the single savePlan call.
       const syncedClasses = await Promise.all(
         plan.classes.map(async (item) => ({
           ...item,
@@ -484,11 +483,11 @@ export default function StudentPlan() {
 
       {/* ── Add recruitment sheet ── */}
       <BottomSheetModal visible={recSheetOpen} onClose={() => setRecSheetOpen(false)} maxHeightPct={88}>
-          <View style={styles.sheetHeaderRow}>
-            <Text style={styles.sheetTitle}>Add a coffee chat or interview</Text>
-            <ModalCloseButton onPress={() => setRecSheetOpen(false)} />
-          </View>
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            <View style={styles.sheetHeaderRow}>
+              <Text style={styles.sheetTitle}>Add a coffee chat or interview</Text>
+              <ModalCloseButton onPress={() => setRecSheetOpen(false)} />
+            </View>
             <Text style={styles.sheetEyebrow}>Task type</Text>
             <View style={styles.chipRow}>
               {TASK_TYPES.map(t => (
@@ -534,11 +533,11 @@ export default function StudentPlan() {
 
       {/* ── Add social sheet ── */}
       <BottomSheetModal visible={socialSheetOpen} onClose={() => setSocialSheetOpen(false)} maxHeightPct={88}>
-          <View style={styles.sheetHeaderRow}>
-            <Text style={styles.sheetTitle}>Add a party or event</Text>
-            <ModalCloseButton onPress={() => setSocialSheetOpen(false)} />
-          </View>
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            <View style={styles.sheetHeaderRow}>
+              <Text style={styles.sheetTitle}>Add a party or event</Text>
+              <ModalCloseButton onPress={() => setSocialSheetOpen(false)} />
+            </View>
             <Text style={styles.sheetEyebrow}>Activity</Text>
             <TextInput
               style={styles.input}
@@ -570,11 +569,11 @@ export default function StudentPlan() {
 
       {/* ── Add routine sheet ── */}
       <BottomSheetModal visible={routineSheetOpen} onClose={() => setRoutineSheetOpen(false)} maxHeightPct={88}>
-          <View style={styles.sheetHeaderRow}>
-            <Text style={styles.sheetTitle}>Add a routine block</Text>
-            <ModalCloseButton onPress={() => setRoutineSheetOpen(false)} />
-          </View>
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            <View style={styles.sheetHeaderRow}>
+              <Text style={styles.sheetTitle}>Add a routine block</Text>
+              <ModalCloseButton onPress={() => setRoutineSheetOpen(false)} />
+            </View>
             <Text style={styles.sheetEyebrow}>Routine name</Text>
             <TextInput
               style={styles.input}

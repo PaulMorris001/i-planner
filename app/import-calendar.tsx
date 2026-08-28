@@ -36,21 +36,15 @@ export default function ImportCalendar() {
     }
   }, []);
 
-  // Refetches whenever this screen regains focus — a real navigation away
-  // and back (e.g. switching tabs and returning).
+  // Refetches on real navigation back to this screen (e.g. switching tabs and returning).
   useFocusEffect(
     useCallback(() => {
       fetchList();
     }, [fetchList])
   );
 
-  // NewTaskModal is a plain React Native <Modal> (see BottomSheetModal),
-  // not a route — opening/closing it never blurs or refocuses this screen,
-  // so useFocusEffect above never fires for it. Refetching on the
-  // open→closed transition instead covers both outcomes of "Convert to
-  // task" correctly: saved (the row is now genuinely gone server-side) or
-  // backed out without saving (the row was never actually removed
-  // server-side, so it correctly reappears here).
+  // NewTaskModal isn't a route (plain RN <Modal>), so useFocusEffect above never fires
+  // for it — refetch on close instead, which covers both save (row gone) and cancel (row reappears).
   const wasTaskModalOpen = useRef(false);
   useEffect(() => {
     if (wasTaskModalOpen.current && !taskModalOpen) fetchList();
@@ -92,19 +86,16 @@ export default function ImportCalendar() {
   };
 
   const handleConvert = (event: ImportedCalendarEvent) => {
-    // Not optimistically removed here — the modal covers this screen while
-    // open, and the open→closed effect above refetches the real state
-    // either way once it closes (saved or cancelled), which is the only
-    // way to know which actually happened.
+    // Not optimistically removed — the effect above refetches real state once the modal
+    // closes, since that's the only way to know save vs. cancel.
     const start = new Date(event.startAt);
     openWithDraft({
       title: event.title,
       dueDate: event.startAt,
       time: event.allDay ? undefined : formatTimeLabel(start),
       notes: event.location ? `📍 ${event.location}` : undefined,
-      // externalId, not id — id is this row's own Mongo document id, which
-      // means nothing to expo-calendar/the Google API. externalId is the
-      // real calendar-provider event id this should link to.
+      // externalId, not id — id is this row's own Mongo doc id; externalId is the real
+      // calendar-provider event id.
       appleEventIds: event.source === 'apple' ? [event.externalId] : undefined,
       googleEventId: event.source === 'google' ? event.externalId : undefined,
       draftSourceId: event.id,

@@ -31,10 +31,9 @@ const milestoneSchema = new Schema<MilestoneDocument>({
 
 const goalSchema = new Schema<GoalDocument>({
   firebaseUid: { type: String, required: true, index: true },
-  // type is the canonical GoalTypeId ('study'|'career'|'personal'|'habit') from the
-  // frontend's New Goal sheet; tag/color are its display label/color at creation
-  // time, stored directly rather than re-derived so past goals don't shift if the
-  // frontend's type palette changes later.
+  // type is the canonical GoalTypeId ('study'|'career'|'personal'|'habit'). tag/color
+  // are stored at creation time rather than re-derived, so past goals don't shift if
+  // the frontend's type palette changes later.
   type: { type: String, required: true },
   tag: { type: String, required: true },
   title: { type: String, required: true, trim: true },

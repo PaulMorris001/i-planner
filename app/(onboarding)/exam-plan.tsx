@@ -69,9 +69,7 @@ export default function ExamPlan() {
   const handleContinue = async () => {
     setLoading(true);
     try {
-      // Generate a week-by-week topic breakdown for each added exam — best-effort,
-      // a failed generation just leaves that exam without topics rather than
-      // blocking onboarding.
+      // Best-effort: a failed topic generation just leaves that exam without topics.
       const examsWithTopics = await Promise.all(
         exams.map(async (exam) => {
           try {

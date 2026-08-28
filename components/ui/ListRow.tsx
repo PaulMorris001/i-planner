@@ -17,9 +17,7 @@ interface ListRowProps {
   onMenuPress?: () => void;
 }
 
-// Shared "leading accent + title/meta + optional trailing menu" row used by
-// classes/exams/syllabi and Dashboard's class/exam list sections — same shape,
-// independently hand-rolled 5+ times before this extraction.
+// Shared row: leading accent + title/meta + optional trailing "⋮" menu.
 export function ListRow({ leading, title, meta, onPress, onLongPress, onMenuPress }: ListRowProps) {
   return (
     <Pressable style={styles.row} onPress={onPress} onLongPress={onLongPress}>

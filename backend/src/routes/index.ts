@@ -29,7 +29,6 @@ router.use('/syllabi', syllabusRouter);
 router.use('/subscription', subscriptionRouter);
 router.use('/calendar', calendarImportRouter);
 
-// Google's OAuth redirect lands here directly (a browser navigation, not an
-// authenticated API call) — kept as a sibling to /settings rather than nested under
-// it, since settingsRouter blanket-applies requireAuth to everything it owns.
+// Sibling to /settings, not nested — settingsRouter blanket-applies requireAuth,
+// but this unauthenticated browser redirect can't carry one.
 router.use('/oauth/google', googleOAuthRouter);

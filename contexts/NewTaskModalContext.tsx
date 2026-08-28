@@ -1,11 +1,10 @@
 import { createContext, useContext, useMemo, useState, ReactNode } from 'react';
 import type { Task } from '@/types/task.types';
 
-// Pre-fill for a brand-new task — distinct from editingTask (which represents
-// an existing Task with an id already in our system). Used by the "convert
-// imported calendar event to task" flow: title/dueDate/time come from the
-// event, appleEventIds/googleEventId point NewTaskModal's save at the same
-// existing calendar event instead of creating a duplicate one.
+// Pre-fill for a brand-new task, distinct from editingTask (an existing Task
+// with an id). Used by the "convert imported calendar event to task" flow —
+// appleEventIds/googleEventId point NewTaskModal's save at the same existing
+// calendar event instead of creating a duplicate.
 export interface TaskDraft {
   title: string;
   dueDate?: string;
@@ -13,9 +12,8 @@ export interface TaskDraft {
   notes?: string;
   appleEventIds?: string[];
   googleEventId?: string;
-  // The ImportedCalendarEvent id this draft came from, if any — NewTaskModal
-  // deletes that row once the task is actually created, so the "review your
-  // imported events" screen doesn't keep showing something already converted.
+  // ImportedCalendarEvent id this draft came from, if any — NewTaskModal
+  // deletes that row on save so it stops showing in "review imported events".
   draftSourceId?: string;
 }
 

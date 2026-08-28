@@ -14,14 +14,11 @@ interface UpgradeModalProps {
   featureLabel: string;
 }
 
-// Shown wherever a tapped feature exceeds the user's current tier — see
-// constants/featureTiers.ts's FEATURE_MIN_TIER for what's gated. Every gated
-// call site should check this client-side first (so tapping shows the modal
-// instantly, no round trip) and also handle a 403 with field "tier" from the
-// server as a fallback, since the server enforces the same map independently
-// and can reject a call the client thought was fine (e.g. the "first free
-// use" exemptions in plan.controller.ts/syllabus.controller.ts, which the
-// client can't cheaply know the state of ahead of time).
+// Shown wherever a tapped feature exceeds the user's tier — see FEATURE_MIN_TIER in
+// constants/featureTiers.ts. Gated call sites should check this client-side first (instant, no
+// round trip) and also handle a 403 with field "tier" as a fallback, since the server enforces
+// the same map independently and can reject a call the client thought was fine (e.g. "first free
+// use" exemptions the client can't cheaply know ahead of time).
 export function UpgradeModal({ visible, onClose, requiredTier, featureLabel }: UpgradeModalProps) {
   const router = useRouter();
 

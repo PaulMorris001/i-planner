@@ -1,9 +1,7 @@
 import { Schema, model, Document } from 'mongoose';
 
-// Lightweight bookkeeping record only — the actual PDF is never stored, just
-// sent to OpenAI for extraction and discarded. classId links to the ClassItem
-// created from this syllabus (schemaless, lives in Plan.data.classes for the
-// 'student' pathType — see plan.controller.ts).
+// Bookkeeping only — the PDF itself is never stored, just sent to OpenAI and
+// discarded. classId links to the ClassItem in Plan.data.classes it created.
 export interface SyllabusDocument extends Document {
   firebaseUid: string;
   fileName: string;

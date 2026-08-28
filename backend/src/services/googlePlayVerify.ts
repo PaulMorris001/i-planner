@@ -2,14 +2,11 @@ import { google } from 'googleapis';
 import { env } from '../config/env';
 
 // Subscription states that mean "the user currently has access." Grace period
-// still grants access (Google's own guidance) — the user's card failed but
-// they get a short window to fix it before actually losing access; on-hold
-// does not.
+// still grants access (a short window to fix a failed card); on-hold does not.
 const ACTIVE_STATES = new Set(['SUBSCRIPTION_STATE_ACTIVE', 'SUBSCRIPTION_STATE_IN_GRACE_PERIOD']);
 
-// Built lazily (not at module load) so a backend started before Play Console
-// credentials are configured still comes up fine — see appStoreVerify.ts for
-// the same reasoning on the Apple side.
+// Built lazily so a backend started before Play Console credentials are
+// configured still comes up fine (same as appStoreVerify.ts).
 let androidPublisher: ReturnType<typeof google.androidpublisher> | null = null;
 
 function getAndroidPublisher() {
@@ -31,11 +28,8 @@ export interface GoogleVerificationResult {
   expiresAt?: Date;
 }
 
-// `purchaseToken` is the token Google Play hands the device on purchase
-// (expo-iap's PurchaseAndroid.purchaseToken) — looking it up via the Play
-// Developer API confirms Google actually issued it and returns the real
-// current subscription state, rather than trusting whatever the client
-// claims those are.
+// Looking up purchaseToken via the Play Developer API confirms Google actually
+// issued it and returns the real subscription state, not the client's claims.
 export async function verifyGooglePurchase(purchaseToken: string): Promise<GoogleVerificationResult> {
   if (!env.googlePlayPackageName) {
     throw new Error('GOOGLE_PLAY_PACKAGE_NAME is not configured.');

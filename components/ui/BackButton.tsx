@@ -4,9 +4,7 @@ import { IconSymbol } from './icon-symbol';
 import { Colors, Spacing, Typography } from '@/constants/theme';
 
 interface BackButtonProps {
-  // 'icon' = chevron + "Back" (list/detail screens). 'text' = inline "← Back"
-  // (auth screens). Same intent, two established looks — kept as a variant
-  // rather than picking one, to avoid a visual change neither look asked for.
+  // 'icon' = chevron + "Back" (list/detail screens). 'text' = inline "← Back" (auth screens).
   variant?: 'icon' | 'text';
   onPress?: () => void;
   style?: StyleProp<ViewStyle>;

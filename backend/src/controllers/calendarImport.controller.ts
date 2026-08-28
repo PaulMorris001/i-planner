@@ -7,10 +7,8 @@ import { AuthedRequest } from '../middleware/requireAuth';
 import { ApiError } from '../utils/ApiError';
 import { listPrimaryGoogleEvents } from '../services/googleCalendarSync';
 
-// How far ahead to pull events on each import — matches this app's general
-// planning horizon (exam/class scheduling elsewhere looks weeks out, not
-// months), and keeps both the Google API call and the Apple-side local read
-// bounded.
+// How far ahead to pull events on each import — keeps both the Google API call and
+// the Apple-side local read bounded.
 const IMPORT_WINDOW_DAYS = 60;
 
 function importWindow(): { start: Date; end: Date } {
@@ -31,15 +29,11 @@ export async function importGoogleEvents(req: AuthedRequest, res: Response) {
   }
 
   const { start, end } = importWindow();
-  // Reads the user's own "primary" calendar, never the dedicated "i-Planner"
-  // secondary calendar this app writes its own synced classes/tasks to — see
-  // listPrimaryGoogleEvents's own comment. That separation excludes the app's
-  // OWN synced-out classes/tasks automatically, but not a task created by
-  // CONVERTING an imported event — createTaskDoc deliberately skips syncing
-  // that one to the secondary calendar (it already points at a real primary-
-  // calendar event), so it would otherwise keep reappearing here forever
-  // after being converted. Filtered out below the same way Apple's import
-  // already has to for every event, not just converted ones.
+  // Reads the user's "primary" calendar, not the dedicated "i-Planner" secondary
+  // calendar this app syncs its own tasks/classes to, so those are excluded
+  // automatically. A task created by CONVERTING an imported event is the exception —
+  // createTaskDoc skips syncing it to the secondary calendar since it already points
+  // at a real primary-calendar event — so it's filtered out below instead.
   const remoteEvents = await listPrimaryGoogleEvents(settings, start.toISOString(), end.toISOString());
 
   const ownedTasks = await Task.find(
@@ -82,10 +76,8 @@ interface IncomingAppleEvent {
   location?: string;
 }
 
-// Minimal shape needed to check whether an Apple event id is already one this
-// app wrote out itself — Task's real schema has more fields, and a class is a
-// schemaless Plan.data.classes entry (see plan.controller.ts's same pattern),
-// but only appleEventIds matters here.
+// Minimal shape to check whether an Apple event id is one this app already wrote —
+// only appleEventIds matters here, Task/class schemas have more fields.
 interface HasAppleEventIds {
   appleEventIds?: string[];
 }
@@ -97,10 +89,8 @@ export async function importAppleEvents(req: AuthedRequest, res: Response) {
   }
 
   // Apple writes land in the same default device calendar as the user's real
-  // appointments (see utils/appleCalendarSync.ts — no dedicated sync calendar
-  // like the Google side), so this import can't exclude the app's own output
-  // by calendar alone. Filters out anything whose id is already recorded on
-  // one of this user's own tasks or classes instead.
+  // appointments (no dedicated sync calendar like the Google side), so this can't
+  // exclude the app's own output by calendar alone — filter by recorded ids instead.
   const [tasks, studentPlan] = await Promise.all([
     Task.find({ firebaseUid: req.userId, appleEventIds: { $exists: true, $ne: [] } }, 'appleEventIds'),
     Plan.findOne({ firebaseUid: req.userId, pathType: 'student' }),
@@ -138,10 +128,8 @@ export async function importAppleEvents(req: AuthedRequest, res: Response) {
   res.json(stored.map(toPublicImportedCalendarEvent));
 }
 
-// Used both to dismiss an event the user doesn't want to see again and, by
-// the client, right after successfully converting one to a task — there's no
-// separate "convert" endpoint since conversion is just "create a task that
-// points at this same external event, then remove the imported-event row."
+// Also used by the client right after converting an event to a task — there's no
+// separate "convert" endpoint; conversion is just create-task-then-delete-this-row.
 export async function deleteImportedEvent(req: AuthedRequest, res: Response) {
   const { id } = req.params;
   await ImportedCalendarEvent.deleteOne({ _id: id, firebaseUid: req.userId });

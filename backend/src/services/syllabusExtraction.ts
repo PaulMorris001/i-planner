@@ -3,10 +3,8 @@ import { env } from '../config/env';
 
 const openai = new OpenAI({ apiKey: env.openaiApiKey });
 
-// Same structured-output pattern as goalMilestones.ts/examTopics.ts, but this
-// task needs real document comprehension (reading an actual PDF's layout and
-// tables), not just short generation from a prompt — using the base model
-// rather than the mini tier for better accuracy on real syllabus documents.
+// Base model, not the mini tier — this needs real document comprehension
+// (reading a PDF's layout/tables), not just short generation from a prompt.
 const OPENAI_MODEL = 'gpt-5.4';
 
 export interface SyllabusDeadline {
@@ -17,12 +15,9 @@ export interface SyllabusDeadline {
 export interface SyllabusExtractionResult {
   courseName: string;
   deadlines: SyllabusDeadline[];
-  // Course topics/units/chapters, in the order they're covered — pulled from
-  // the syllabus's schedule or table of contents. Unlike deadlines, these
-  // never have a real date attached (the syllabus doesn't give one), so the
-  // client shows them as editable rows the user can attach a date to
-  // themselves. Guarantees the extraction returns *something* usable even for
-  // a syllabus with no explicit dated deadlines at all.
+  // Course topics/units/chapters in the order covered. Unlike deadlines these have
+  // no real date, so the client shows them as editable rows the user can date
+  // themselves — guarantees something usable even with no dated deadlines at all.
   subtopics: string[];
 }
 
@@ -66,12 +61,9 @@ const SYLLABUS_SCHEMA = {
   additionalProperties: false,
 };
 
-// Extracts the course name, every dated deadline, and the course's topic
-// outline from a syllabus PDF. Sent directly to OpenAI as a file input
-// (base64) — no separate OCR/parsing step. Throws on failure (unlike
-// goalMilestones/examTopics, there's no sensible canned fallback for a real
-// document's real content) — the controller maps that to a clean
-// user-facing error.
+// Sent directly to OpenAI as a file input (base64) — no separate OCR/parsing step.
+// Throws on failure, unlike goalMilestones/examTopics — no sensible canned
+// fallback for a real document's content; the controller maps it to a clean error.
 export async function extractSyllabus(input: {
   fileBase64: string;
   filename: string;

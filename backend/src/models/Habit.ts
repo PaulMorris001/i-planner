@@ -18,9 +18,8 @@ const habitSchema = new Schema<HabitDocument>(
     // Free-form string, canonical list lives in the frontend's constants/taskMeta.ts.
     category: { type: String, required: true },
     freq: { type: String, enum: ['daily', 'weekdays', 'weekly', 'monthly'], default: 'daily' },
-    // Calendar days ('YYYY-MM-DD', UTC) the habit was marked done. Streak and
-    // the week grid are derived from this plus createdAt rather than stored,
-    // so ticking always starts on the day the habit was actually created.
+    // Calendar days ('YYYY-MM-DD', UTC) marked done. Streak/week grid are derived
+    // from this plus createdAt so tracking starts on the actual creation day.
     completedDates: { type: [String], default: [] },
   },
   { timestamps: { createdAt: true, updatedAt: false } }
@@ -135,10 +134,8 @@ function computeWeek(completedDates: string[], createdAt: Date): boolean[] {
 }
 
 export function toPublicHabit(doc: HabitDocument) {
-  // Habits created before completedDates/createdAt existed on this schema
-  // won't have either field populated in the database — fall back to the
-  // epoch so legacy habits behave as if always trackable, rather than
-  // crashing on a missing Date.
+  // Legacy habits predate completedDates/createdAt on this schema — fall back to
+  // epoch so they behave as always-trackable instead of crashing on a missing Date.
   const createdAt = doc.createdAt ?? new Date(0);
   const completedDates = doc.completedDates ?? [];
   const freq = doc.freq ?? 'daily';

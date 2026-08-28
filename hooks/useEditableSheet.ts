@@ -1,12 +1,9 @@
 import { useState } from 'react';
 
-// Shared state shape for a "list screen with an add/edit sheet and a
-// long-press action sheet" — was independently redefined (same 3-state
-// wiring: an open/editing pair for the sheet, a separate target for the
-// action sheet) in classes.tsx, exams.tsx, goals.tsx, and habits.tsx before
-// being consolidated here. Each screen's actual save/remove logic (Apple
-// Calendar sync, exam-plan updates, etc.) stays in the screen — this only
-// owns the "which sheet is open, editing what" bookkeeping around it.
+// Shared state for a "list screen with an add/edit sheet and a long-press action
+// sheet": an open/editing pair for the sheet plus a separate target for the action
+// sheet. Each screen's own save/remove logic stays in the screen — this only owns
+// the "which sheet is open, editing what" bookkeeping.
 export function useEditableSheet<T>() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<T | null>(null);

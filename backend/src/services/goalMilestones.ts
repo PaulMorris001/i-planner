@@ -8,8 +8,7 @@ export interface MilestoneSuggestion {
 
 const openai = new OpenAI({ apiKey: env.openaiApiKey });
 
-// Cost-effective tier appropriate for short structured JSON output — confirmed
-// against the live /v1/models list rather than assumed.
+// Cost-effective tier, appropriate for short structured JSON output.
 const OPENAI_MODEL = 'gpt-5.4-mini';
 
 // Used when the API call fails or returns something unusable — goal creation
@@ -69,8 +68,8 @@ const MILESTONES_SCHEMA = {
   additionalProperties: false,
 };
 
-// Real OpenAI call, replacing the old hardcoded stub. Uses Structured Outputs
-// (json_schema, strict mode) for reliable JSON rather than parsing freeform text.
+// Uses Structured Outputs (json_schema, strict mode) for reliable JSON rather
+// than parsing freeform text.
 export async function generateGoalMilestones(input: {
   title: string;
   type: string;

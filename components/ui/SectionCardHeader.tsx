@@ -8,9 +8,7 @@ interface SectionCardHeaderProps {
   onActionPress: () => void;
 }
 
-// Card title + "+ Add X" pill action — Dashboard's My Classes/My Syllabi/My
-// Exams section headers, independently hand-rolled 3 times before this
-// extraction.
+// Card title + "+ Add X" pill action — Dashboard's My Classes/My Syllabi/My Exams headers.
 export function SectionCardHeader({ title, actionLabel, onActionPress }: SectionCardHeaderProps) {
   return (
     <View style={styles.row}>

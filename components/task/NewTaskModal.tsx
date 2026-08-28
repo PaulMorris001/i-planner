@@ -4,6 +4,7 @@ import { BottomSheetModal } from '@/components/ui/BottomSheetModal';
 import { ModalCloseButton } from '@/components/ui/ModalCloseButton';
 import { Chip } from '@/components/ui/Chip';
 import { InlineDateTimePicker } from '@/components/ui/InlineDateTimePicker';
+import { WeekdayPicker } from '@/components/ui/WeekdayPicker';
 import { useNewTaskModal } from '@/contexts/NewTaskModalContext';
 import { useTasks } from '@/hooks/useTasks';
 import { calendarImportService } from '@/services/calendarImport.service';
@@ -27,8 +28,6 @@ const TASK_FREQ_OPTIONS: { key: TaskFrequency; label: string }[] = [
   { key: 'weekdays', label: 'Weekdays' },
   { key: 'daily',    label: 'Every day' },
 ];
-// Planner's day-of-week grouping, derived from the due date when one is set
-// rather than asked for separately (Monday-start, matching Planner's grid).
 // Falls back to Planner's fixed "today" column when no due date is picked.
 const DEFAULT_DAY_INDEX = 1;
 
@@ -45,10 +44,13 @@ export function NewTaskModal() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [recurring, setRecurring] = useState(false);
   const [freq, setFreq] = useState<TaskFrequency>('weekly');
+  const [selectedDays, setSelectedDays] = useState<number[]>([]);
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const canSave = title.trim().length > 0 && !submitting;
+  const currentWd = dueDate ? weekdayIndexMonday(dueDate) : DEFAULT_DAY_INDEX;
+  const canSave =
+    title.trim().length > 0 && !submitting && !(recurring && freq === 'weekly' && selectedDays.length === 0);
 
   const reset = () => {
     setTitle('');
@@ -58,6 +60,7 @@ export function NewTaskModal() {
     setDueDate(null);
     setRecurring(false);
     setFreq('weekly');
+    setSelectedDays([]);
     setNotes('');
   };
 
@@ -71,11 +74,10 @@ export function NewTaskModal() {
       setDueDate(editingTask.dueDate ? parseISODateLocal(editingTask.dueDate) : null);
       setRecurring(editingTask.recurring);
       setFreq(editingTask.freq ?? 'weekly');
+      setSelectedDays(editingTask.freq === 'weekly' ? editingTask.dayIdxs ?? [] : []);
       setNotes(editingTask.notes);
     } else if (draft) {
-      // Category/priority have no source on a draft (a converted calendar
-      // event doesn't carry either) — left at their normal defaults for the
-      // user to actually pick, same as any other new task.
+      // Category/priority have no source on a draft (a converted calendar event) — left at defaults.
       reset();
       setTitle(draft.title);
       setDueTime(draft.time ? parseTimeToDate(draft.time) : null);
@@ -96,13 +98,16 @@ export function NewTaskModal() {
     if (!canSave) return;
     setSubmitting(true);
     try {
-      const dueWd = dueDate ? weekdayIndexMonday(dueDate) : DEFAULT_DAY_INDEX;
-      const dayIdxs = recurring ? dayIdxsForFrequency(freq, dueWd) : undefined;
+      const dayIdxs = recurring
+        ? freq === 'weekly'
+          ? (selectedDays.length ? selectedDays : [currentWd])
+          : dayIdxsForFrequency(freq, currentWd)
+        : undefined;
       const patch = {
         title: title.trim(),
         category,
         priority,
-        day: dueWd,
+        day: currentWd,
         hour: dueTime ? dueTime.getHours() : 23,
         time: dueTime ? formatTimeLabel(dueTime) : '',
         dueDate: dueDate ? dueDate.toISOString() : '',
@@ -110,11 +115,9 @@ export function NewTaskModal() {
         freq: recurring ? freq : undefined,
         dayIdxs,
         notes: notes.trim(),
-        // Points this task at the same calendar event the draft came from,
-        // instead of TasksContext.createTask/the backend creating a new one
-        // — see their own "already linked" checks. calendarLinkExternal
-        // marks it permanently so future edits/deletes never touch that
-        // event either (see TasksContext.updateTask/removeTask).
+        // Points this task at the same calendar event the draft came from rather than creating a
+        // new one. calendarLinkExternal marks it permanently so future edits/deletes never touch
+        // that event (see TasksContext.updateTask/removeTask).
         ...(draft?.appleEventIds ? { appleEventIds: draft.appleEventIds } : {}),
         ...(draft?.googleEventId ? { googleEventId: draft.googleEventId } : {}),
         ...(draft?.draftSourceId ? { calendarLinkExternal: true } : {}),
@@ -124,9 +127,8 @@ export function NewTaskModal() {
       } else {
         await createTask(patch);
         if (draft?.draftSourceId) {
-          // Best-effort — if this fails, the import review screen just shows
-          // the event again next visit, harmless since converting twice is
-          // itself harmless (it'd point another task at the same event id).
+          // Best-effort — if this fails, the import review screen just shows the event again next
+          // visit, harmless since converting twice would just point another task at the same id.
           calendarImportService.remove(draft.draftSourceId).catch((err) => {
             console.error('[NewTaskModal] failed to clean up converted imported event', err);
           });
@@ -142,12 +144,12 @@ export function NewTaskModal() {
 
   return (
     <BottomSheetModal visible={isOpen} onClose={handleClose}>
-        <View style={styles.headerRow}>
-          <Text style={styles.title}>{editingTask ? 'Edit task' : 'New task'}</Text>
-          <ModalCloseButton onPress={handleClose} variant="icon" />
-        </View>
-
         <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          <View style={styles.headerRow}>
+            <Text style={styles.title}>{editingTask ? 'Edit task' : 'New task'}</Text>
+            <ModalCloseButton onPress={handleClose} variant="icon" />
+          </View>
+
           <TextInput
             value={title}
             onChangeText={setTitle}
@@ -258,12 +260,26 @@ export function NewTaskModal() {
                   key={f.key}
                   label={f.label}
                   selected={freq === f.key}
-                  onPress={() => setFreq(f.key)}
+                  onPress={() => {
+                    setFreq(f.key);
+                    if (f.key === 'weekly') {
+                      setSelectedDays(prev => (prev.length ? prev : [currentWd]));
+                    }
+                  }}
                   activeColor={Colors.primaryLight}
                   size="compact"
                 />
               ))}
             </View>
+          )}
+
+          {recurring && freq === 'weekly' && (
+            <>
+              <WeekdayPicker selected={selectedDays} onChange={setSelectedDays} activeColor={Colors.primaryLight} />
+              {selectedDays.length === 0 && (
+                <Text style={styles.weekdayHint}>Select at least one day</Text>
+              )}
+            </>
           )}
 
           <Text style={styles.eyebrow}>Notes</Text>
@@ -406,6 +422,11 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
     marginTop: 10,
+  },
+  weekdayHint: {
+    fontSize: 12,
+    color: Colors.error,
+    marginTop: 8,
   },
   footerRow: {
     flexDirection: 'row',

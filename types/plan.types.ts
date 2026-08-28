@@ -9,6 +9,8 @@ export interface ClassItem {
   freq:       ClassFrequency;
   dayIdxs:    number[];  // Monday-start weekday indices (0=Mon..6=Sun) this class occurs on
   time:       string;
+  professor?: string;
+  venue?:     string;
   // Calendar-sync event ids, one per synced entry (Apple gets one event per
   // dayIdxs occurrence; Google gets a single event with a multi-day RRULE).
   appleEventIds?: string[];

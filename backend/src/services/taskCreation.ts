@@ -3,8 +3,7 @@ import { Settings } from '../models/Settings';
 import { deleteTaskEvent, upsertTaskEvent } from './googleCalendarSync';
 
 // Shared by task.controller.ts's REST endpoint and coachTools.ts's create_task
-// tool — one place for the day/hour defaults and Google Calendar sync, so both
-// call sites stay in sync instead of duplicating this logic.
+// tool — one place for day/hour defaults and Google Calendar sync.
 
 export interface CreateTaskInput {
   title: string;

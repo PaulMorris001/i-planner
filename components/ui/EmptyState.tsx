@@ -9,9 +9,7 @@ interface EmptyStateProps {
   onPress: () => void;
 }
 
-// Dashed icon box + title/subtitle, tappable — Dashboard's "nothing here yet"
-// prompt for goals-this-week, an exam, and a career goal, independently
-// hand-rolled 3 times before this extraction.
+// Dashed icon box + title/subtitle, tappable — Dashboard's "nothing here yet" prompt.
 export function EmptyState({ icon, title, subtitle, onPress }: EmptyStateProps) {
   return (
     <Pressable style={styles.row} onPress={onPress}>

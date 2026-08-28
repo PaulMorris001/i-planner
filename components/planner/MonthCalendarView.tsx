@@ -11,24 +11,22 @@ import type { Task } from '@/types/task.types';
 import type { ClassItem } from '@/types/plan.types';
 
 const WEEKDAY_HEADERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-// >3 items on a day collapses to 2 dots + this glyph, per the requested design
-// (a bare "+", not "+N") — matches the reference screenshot's overflow treatment.
+// >3 items on a day collapses to 2 dots + a bare "+" overflow glyph.
 const MAX_VISIBLE_DOTS = 2;
 
 interface MonthCalendarViewProps {
   classes: ClassItem[];
   courseFilter: string | null;
   onTaskLongPress: (task: Task) => void;
+  onClassLongPress: (item: ClassItem) => void;
 }
 
 function isSameLocalDay(a: Date, b: Date): boolean {
   return localMidnight(a) === localMidnight(b);
 }
 
-// A recurring item's dayIdxs match every week going forward AND backward from
-// its anchor date (startDate for classes, dueDate for tasks) — so without this,
-// a class created today that recurs every Monday would wrongly show dots on
-// Mondays last month too. Only cells on/after the anchor date count as started.
+// dayIdxs match every week in both directions from the anchor date (startDate/dueDate); without
+// this a class recurring every Monday would wrongly show dots on Mondays before it existed.
 function hasStartedBy(anchorIso: string, cellDate: Date): boolean {
   if (!anchorIso) return true;
   const anchor = parseISODateLocal(anchorIso);
@@ -43,9 +41,7 @@ function fullDateLabel(date: Date): string {
   return date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 }
 
-// Placeholder row shown in the detail panel while its real content is being
-// built (see the panelLoading effect below) — a soft pulsing bar rather than a
-// static gray block, so it reads as "still loading" instead of "empty".
+// Pulsing placeholder for the detail panel while its content loads (see panelLoading below).
 function SkeletonRow() {
   const opacity = useRef(new Animated.Value(0.4)).current;
 
@@ -71,7 +67,7 @@ function SkeletonRow() {
   );
 }
 
-export function MonthCalendarView({ classes, courseFilter, onTaskLongPress }: MonthCalendarViewProps) {
+export function MonthCalendarView({ classes, courseFilter, onTaskLongPress, onClassLongPress }: MonthCalendarViewProps) {
   const { tasks, toggleDone } = useTasks();
   const today = new Date();
   const [monthCursor, setMonthCursor] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
@@ -87,12 +83,8 @@ export function MonthCalendarView({ classes, courseFilter, onTaskLongPress }: Mo
     [classes]
   );
 
-  // Recurring classes/tasks match by weekday (same convention Day/Week use) so
-  // they show on every matching week from their start date onward; one-time
-  // ones match by their real dueDate/startDate instead, so they show exactly
-  // once — unlike Day/Week's shared helpers, which key everything off weekday
-  // alone and would wrongly repeat a one-time item on every matching weekday
-  // across the whole month, or show a recurring item before it even started.
+  // Recurring items match by weekday (like Day/Week); one-time items match by their real date
+  // instead, so they show exactly once rather than repeating on every matching weekday.
   const classesOnDate = (date: Date): ClassItem[] => {
     const wd = weekdayIndexMonday(date);
     return classes
@@ -121,11 +113,8 @@ export function MonthCalendarView({ classes, courseFilter, onTaskLongPress }: Mo
     ...tasksOnDate(date).map((t) => ({ key: `t-${t.id}`, color: TaskCategories[t.category].color })),
   ];
 
-  // Computing each cell's dots means scanning every class/task per cell (up to
-  // 42 cells), so it's memoized on the data that actually changes it — tapping
-  // a day only changes `selectedDate`, which isn't a dependency here, so a
-  // selection no longer re-runs this whole scan and the highlight responds
-  // immediately instead of waiting on it.
+  // Memoized since computing dots scans every class/task per cell (up to 42 cells); selectedDate
+  // isn't a dependency, so tapping a day doesn't re-run the scan.
   const cells = useMemo(() => {
     const year = monthCursor.getFullYear();
     const month = monthCursor.getMonth();
@@ -141,11 +130,8 @@ export function MonthCalendarView({ classes, courseFilter, onTaskLongPress }: Mo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [monthCursor, classes, tasks, courseFilter, classColorById]);
 
-  // Selecting a day updates the circle instantly (cheap — just isSelected
-  // flips), but building the detail panel's rows is comparatively heavy on a
-  // busy day. Deferring that build to after the tap's interaction/animation
-  // finishes lets the highlight paint first instead of both happening in the
-  // same blocked frame; a skeleton fills the panel in the meantime.
+  // Building the detail panel is comparatively heavy on a busy day; deferring it past the tap's
+  // interaction/animation lets the selection highlight paint first, with a skeleton meanwhile.
   const [panelLoading, setPanelLoading] = useState(false);
   const [panelData, setPanelData] = useState<{ classes: ClassItem[]; tasks: Task[] } | null>(null);
 
@@ -194,9 +180,7 @@ export function MonthCalendarView({ classes, courseFilter, onTaskLongPress }: Mo
           const isSelected = !!selectedDate && isSameLocalDay(date, selectedDate);
           const overflow = dots.length > MAX_VISIBLE_DOTS + 1;
           const visibleDots = overflow ? dots.slice(0, MAX_VISIBLE_DOTS) : dots;
-          // Selected always wins so the number stays legible against the filled
-          // dark circle — otherwise a selected "today" would keep its blue
-          // today-text color and disappear into the same-ish dark fill.
+          // Selected wins over today's blue text so the number stays legible against the dark fill.
           const numberColor = isSelected
             ? Colors.white
             : isToday
@@ -261,13 +245,25 @@ export function MonthCalendarView({ classes, courseFilter, onTaskLongPress }: Mo
                 <View style={styles.detailGroup}>
                   <Text style={styles.detailGroupLabel}>Classes</Text>
                   {panelData.classes.map((item) => (
-                    <View key={item.id} style={styles.detailRow}>
+                    <Pressable
+                      key={item.id}
+                      style={styles.detailRow}
+                      onPress={() => onClassLongPress(item)}
+                      onLongPress={() => onClassLongPress(item)}
+                    >
                       <View style={[styles.detailBar, { backgroundColor: classColorById.get(item.id) }]} />
                       <View style={{ flex: 1 }}>
                         <Text style={styles.detailTitle}>{item.courseName}</Text>
-                        {!!item.time && <Text style={styles.detailTime}>{item.time}</Text>}
+                        {(!!item.time || !!item.venue) && (
+                          <Text style={styles.detailTime}>
+                            {[item.time, item.venue].filter(Boolean).join(' · ')}
+                          </Text>
+                        )}
                       </View>
-                    </View>
+                      <Pressable hitSlop={8} onPress={() => onClassLongPress(item)}>
+                        <IconSymbol name="ellipsis" color={Colors.textMuted} size={16} />
+                      </Pressable>
+                    </Pressable>
                   ))}
                 </View>
               )}

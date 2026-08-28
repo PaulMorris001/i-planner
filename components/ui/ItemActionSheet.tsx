@@ -12,9 +12,8 @@ interface ItemActionSheetProps {
   deleteLabel?: string;
 }
 
-// Shared "⋮" / long-press menu used by every editable-and-deletable list row in the
-// app (goals, tasks, classes, exams, habits) — one consistent Edit/Delete surface
-// instead of five slightly different ones.
+// Shared "⋮" / long-press menu for every editable-and-deletable list row (goals, tasks,
+// classes, exams, habits) — one consistent Edit/Delete surface.
 export function ItemActionSheet({
   visible,
   onClose,

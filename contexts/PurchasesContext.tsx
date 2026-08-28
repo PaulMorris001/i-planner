@@ -5,10 +5,9 @@ import type { ProductSubscription, Purchase } from 'expo-iap';
 import { subscriptionService } from '@/services/subscription.service';
 import type { SubscriptionTier } from '@/types/subscription.types';
 
-// Product ids created in App Store Connect / Play Console — see app/plans.tsx
-// for the full tier list these map back to (backend/src/controllers/
-// subscription.controller.ts derives the tier from whichever of these
-// substrings the verified productId contains).
+// Product ids created in App Store Connect / Play Console. Backend derives
+// the tier from whichever of these substrings the verified productId
+// contains (backend/src/controllers/subscription.controller.ts).
 export const PRODUCT_IDS = [
   'student_monthly',
   'student_annual',
@@ -19,11 +18,8 @@ export const PRODUCT_IDS = [
 ];
 
 // Kill switch: false renders DisabledPurchasesProvider below — no useIAP()
-// call, no store connection, every plans.tsx CTA stays in its "Coming soon"
-// state. Kept (rather than deleted) after the Aug 2026 startup-crash
-// investigation: expo-iap was exonerated (the crash was an RN core bug — see
-// patches/react-native+0.81.5.patch), but if a store-side issue ever needs
-// purchasing pulled quickly, this is a one-line change instead of an
+// call, no store connection, every plans.tsx CTA stays "Coming soon". Lets a
+// store-side issue pull purchasing with a one-line change instead of an
 // uninstall cycle.
 const IAP_ENABLED = true;
 
@@ -95,11 +91,8 @@ function LivePurchasesProvider({ children }: { children: ReactNode }) {
     restorePurchases: restorePurchasesIap,
     getActiveSubscriptions,
   } = useIAP({
-    // Keep this handler minimal — it can't safely reference finishTransaction
-    // (not returned by the hook yet, at the point these options are being
-    // built for this same call). The actual verify+finish flow runs in the
-    // effect below, once the purchase lands in state and finishTransaction is
-    // available in this component's own closure.
+    // Kept minimal — finishTransaction isn't returned by the hook yet at this
+    // point. The actual verify+finish flow runs in the effect below.
     onPurchaseSuccess: (purchase) => setPendingPurchase(purchase),
     onPurchaseError: (error) => {
       setPurchasing(null);
@@ -117,11 +110,9 @@ function LivePurchasesProvider({ children }: { children: ReactNode }) {
     }
   }, [connected, fetchedProducts, fetchProducts]);
 
-  // Verifies a completed purchase against this app's own backend — which
-  // talks to Apple/Google directly (backend/src/services/appStoreVerify.ts /
-  // googlePlayVerify.ts) — and only finishes/acknowledges the store
-  // transaction once that verification actually succeeds. A purchase that
-  // fails verification is left unfinished rather than silently granted.
+  // Verifies against this app's backend (appStoreVerify.ts / googlePlayVerify.ts)
+  // and only finishes the store transaction once that succeeds — a purchase
+  // that fails verification is left unfinished rather than silently granted.
   useEffect(() => {
     if (!pendingPurchase) return;
     const purchase = pendingPurchase;
@@ -143,10 +134,9 @@ function LivePurchasesProvider({ children }: { children: ReactNode }) {
     })();
   }, [pendingPurchase, finishTransaction, setTier]);
 
-  // Reconciles this device's currently-active subscriptions with the backend
-  // on connect — the only real substitute, in a setup with no store-pushed
-  // renewal/cancellation webhooks, for keeping the backend's stored tier from
-  // going stale after a renewal happens while the app isn't open.
+  // Reconciles active subscriptions with the backend on connect — with no
+  // store-pushed renewal/cancellation webhooks, this is what keeps the
+  // backend's stored tier from going stale after a renewal happens offline.
   useEffect(() => {
     if (!connected) return;
     getActiveSubscriptions().catch((err) => {

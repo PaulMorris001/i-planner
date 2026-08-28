@@ -1,5 +1,6 @@
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { Redirect } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { useOnboarding } from '@/hooks/useOnboarding';
 import { useAuth } from '@/hooks/useAuth';
 import { Routes } from '@/constants/routes';
@@ -9,15 +10,13 @@ export default function Index() {
   const { hasOnboarded } = useOnboarding();
   const { user, initializing } = useAuth();
 
-  // hasOnboarded (device-local, AsyncStorage) and user (Firebase session) are
-  // independent and both async — wait for both before routing. Without this,
-  // a device that finished onboarding but has no live session (expired
-  // token, or — as happened here — every earlier build had broken Firebase
-  // config so no session was ever established) lands straight on the
-  // Dashboard with no auth, where every backend call silently 401s.
+  // hasOnboarded (AsyncStorage) and user (Firebase session) are independent and both
+  // async — wait for both, or an onboarded device with no live session lands on
+  // Dashboard unauthenticated and every backend call silently 401s.
   if (hasOnboarded === null || initializing) {
     return (
       <View style={styles.loading}>
+        <StatusBar style="light" />
         <ActivityIndicator color={Colors.accent} size="large" />
       </View>
     );

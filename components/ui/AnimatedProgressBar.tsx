@@ -6,9 +6,7 @@ interface AnimatedProgressBarProps {
   color: string;
 }
 
-// Renders just the animated fill — the caller wraps it in its own sized/styled
-// track View (heights/radii differ slightly between the Goals list and the
-// Dashboard's cards, so the track itself isn't part of this component).
+// Renders just the animated fill; the caller wraps it in its own sized/styled track View.
 export function AnimatedProgressBar({ pct, color }: AnimatedProgressBarProps) {
   const widthAnim = useRef(new Animated.Value(pct)).current;
 

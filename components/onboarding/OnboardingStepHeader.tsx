@@ -10,9 +10,7 @@ interface OnboardingStepHeaderProps {
   onBack?: () => void;
 }
 
-// Sticky header shared by the three onboarding path screens (student/exam/
-// professional-plan) — back arrow, step badge, and progress bar, byte-identical
-// across all three before this extraction.
+// Sticky header shared by the three onboarding path screens.
 export function OnboardingStepHeader({ stepLabel, progress, onBack }: OnboardingStepHeaderProps) {
   const insets = useSafeAreaInsets();
 

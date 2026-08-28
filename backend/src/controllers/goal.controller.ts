@@ -44,10 +44,7 @@ export async function createGoal(req: AuthedRequest, res: Response) {
     title: title.trim(),
     color,
     milestones: milestoneInputs,
-    // Freshly created milestones are always undone, so pct is always 0 here
-    // regardless of count — pctFromMilestones is still used for consistency with
-    // updateGoal, where it does the real work.
-    pct: pctFromMilestones(milestoneInputs),
+    pct: pctFromMilestones(milestoneInputs), // always 0 here, but kept for consistency with updateGoal
     targetRole,
     targetIndustry,
     targetDate,
@@ -68,10 +65,7 @@ export async function updateGoal(req: AuthedRequest, res: Response) {
   if (targetIndustry !== undefined) goal.targetIndustry = targetIndustry;
   if (targetDate !== undefined) goal.targetDate = targetDate;
   if (Array.isArray(milestones)) {
-    // Preserve _id for milestones the client references by id (existing ones being
-    // toggled/edited) — rebuilding every subdocument from scratch on every save
-    // reassigns fresh ids app-wide, which churns React's list keys on the client for
-    // every milestone, not just the one that changed.
+    // Preserve _id for referenced milestones so React list keys don't churn client-side.
     const incoming = milestones.filter(
       (m): m is { id?: string; title: string; done?: boolean; dueLabel?: string } => !!m?.title
     );

@@ -13,11 +13,10 @@ import { TasksProvider } from '@/contexts/TasksContext';
 import { SyllabiProvider } from '@/contexts/SyllabiContext';
 import { initNotificationHandler } from '@/utils/notifications';
 
-// Catches render/startup errors in any route and shows them on screen —
-// expo-router uses this in production builds too, where the default is a
-// blank screen and (with no Mac to read device logs) no way to see what
-// actually failed. Deliberately styled inline with plain RN primitives so it
-// can't itself fail on a broken theme/context import.
+// Catches render/startup errors and shows them on screen — used in production
+// too, where the default is a blank screen with no way to see what failed.
+// Styled inline with plain RN primitives so it can't itself fail on a broken
+// theme/context import.
 export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
   return (
     <View style={{ flex: 1, backgroundColor: '#1a1a2e', paddingTop: 80, paddingHorizontal: 24 }}>
@@ -55,7 +54,7 @@ export default function RootLayout() {
                 <GoalsProvider>
                   <TasksProvider>
                     <SyllabiProvider>
-                      <StatusBar style="light" />
+                      <StatusBar style="dark" />
                       <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }} />
                     </SyllabiProvider>
                   </TasksProvider>

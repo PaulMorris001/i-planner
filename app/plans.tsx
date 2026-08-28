@@ -24,23 +24,21 @@ interface Tier {
   id: SubscriptionTier;
   name: string;
   monthlyPrice: string;
-  // Annual cost expressed as a per-month equivalent, for the "Annual" toggle
-  // state, plus the real yearly total shown as a small caption underneath.
+  // Per-month equivalent for the "Annual" toggle; annualTotal is the real yearly price
+  // shown as a caption underneath.
   annualMonthlyEquivalent: string;
   annualTotal: string;
   desc: string;
   features: string[];
   highlight?: boolean;
-  // Product identifiers this tier's monthly/annual buttons map to — must
-  // match exactly what's created in App Store Connect / Play Console. Free
-  // has neither; it's never purchasable.
+  // Must match the product ids created in App Store Connect / Play Console. Free has
+  // neither — it's never purchasable.
   monthlyProductId?: string;
   annualProductId?: string;
 }
 
-// Only features with real, shipped functionality behind them — no invented
-// usage caps, plan-count limits, or "advanced" variants that don't actually
-// exist in the app yet.
+// Only features with real, shipped functionality behind them — no invented caps,
+// limits, or "advanced" variants that don't exist yet.
 const TIERS: Tier[] = [
   {
     id: "free",
@@ -188,10 +186,8 @@ export default function Plans() {
       <View style={styles.tierList}>
         {TIERS.map((tierRow) => {
           const isFree = tierRow.id === "free";
-          // Not gated on `ready` (store-connection status for NEW purchases)
-          // — currentTier comes from our own backend (useKnownTier, verified
-          // against the store independently) and is meaningful even before
-          // the live store connection finishes, so this shouldn't wait on it.
+          // Not gated on `ready` (store-connection status for new purchases) — currentTier
+          // comes from our own backend and is meaningful before the store connection finishes.
           const isCurrent = currentTier === tierRow.id;
           const productId =
             period === "monthly"
@@ -220,14 +216,10 @@ export default function Plans() {
             ctaDisabled = false;
           }
 
-          // Once the store has actually returned this product, always show its
-          // real localized price instead of the static estimate below — the
-          // static strings are US-only guesses and go stale the moment a
-          // price changes in App Store Connect / Play Console without a
-          // matching code change. The annual live price is the true yearly
-          // total (not a derived per-month figure, which would need parsing
-          // a formatted currency string back into a number), so its unit
-          // label reads "/yr" instead of "/mo" and needs no separate caption.
+          // Prefer the store's live localized price over the static estimate — the static
+          // strings are US-only guesses that go stale when App Store Connect / Play Console
+          // pricing changes. The live annual price is the true yearly total, not a per-month
+          // figure, so its unit reads "/yr" and needs no separate caption.
           const liveProduct = productId
             ? subscriptions.find((s) => s.id === productId)
             : undefined;
@@ -330,8 +322,7 @@ export default function Plans() {
         )}
       </Pressable>
 
-      {/* Apple Guideline 3.1.2: the purchase screen must show renewal terms
-          and carry functional links to the Terms of Use and Privacy Policy. */}
+      {/* Apple Guideline 3.1.2: purchase screen must show renewal terms + working ToU/Privacy links. */}
       <Text style={styles.legalNote}>
         Subscriptions renew automatically until canceled at least 24 hours
         before the end of the current period. Manage or cancel anytime in your

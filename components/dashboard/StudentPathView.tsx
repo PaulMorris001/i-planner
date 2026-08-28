@@ -44,8 +44,7 @@ function isThisWeek(dateIso: string): boolean {
 }
 
 interface StudentPathViewProps {
-  // Dashboard's shared Calendar/Goals quick-links block — passed in rather
-  // than rebuilt here so it doesn't remount when the path view re-renders.
+  // Passed in rather than rebuilt here so it doesn't remount on re-render.
   quickLinks: ReactNode;
   onAddClass: () => void;
   onAddSyllabus: () => void;
@@ -68,16 +67,14 @@ export function StudentPathView({ quickLinks, onAddClass, onAddSyllabus, onViewG
     .filter((c) => (c.dayIdxs ?? []).includes(todayIdx))
     .sort((a, b) => parseTimeToMinutes(a.time) - parseTimeToMinutes(b.time));
 
-  // Most-recently-created first — class ids are Date.now() timestamps, so a
-  // numeric sort on id doubles as a creation-order sort.
+  // Most-recently-created first; class ids are Date.now() timestamps, so a
+  // numeric sort on id is a creation-order sort.
   const recentClasses = [...plan.classes].sort((a, b) => Number(b.id) - Number(a.id));
   const visibleClasses = recentClasses.slice(0, 3);
 
-  // Nearest dated items from onboarding (recruitment tasks + "other" items
-  // that were given a date) plus real tasks with a due date, soonest-first
-  // and excluding anything already past or done — this feeds both the "Up
-  // next" stat card and the UPCOMING list below. Only real tasks carry
-  // category/priority/time — recruitment/other items don't have that data.
+  // Feeds "Up next" and the UPCOMING list: onboarding recruitment/other items
+  // with a date plus real tasks with a due date, soonest-first, excluding
+  // past/done. Only real tasks carry category/priority/time.
   const studentUpcoming: {
     title: string;
     date: string;
@@ -105,10 +102,9 @@ export function StudentPathView({ quickLinks, onAddClass, onAddSyllabus, onViewG
         time: t.time,
       })),
   ]
-    // Calendar-day comparison, not raw instant — recruitment/other/task dates
-    // each carry a different, essentially arbitrary time-of-day (see
-    // isDueTodayOrLater), so comparing full timestamps against Date.now() can
-    // wrongly drop something still due later today.
+    // Calendar-day comparison, not raw instant — each item's date carries an
+    // arbitrary time-of-day, so comparing timestamps directly could wrongly
+    // drop something still due later today (see isDueTodayOrLater).
     .filter((item) => isDueTodayOrLater(item.date))
     .sort((a, b) => localMidnight(parseISODateLocal(a.date)) - localMidnight(parseISODateLocal(b.date)))
     .slice(0, 3);

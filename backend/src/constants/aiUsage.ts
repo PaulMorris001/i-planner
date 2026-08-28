@@ -1,9 +1,7 @@
 import type { SubscriptionTier } from '../models/Subscription';
 
-// AI Coach query caps, per the shareholder pricing strategy doc. Flat across
-// every region — regional/tiered subscription *prices* are configured
-// per-territory directly in App Store Connect / Play Console (same product
-// id, different shelf price), but usage caps don't vary by region.
+// AI Coach query caps. Flat across regions — subscription prices vary by territory
+// in App Store Connect / Play Console, but usage caps don't.
 export const AI_QUERY_CAPS: Record<SubscriptionTier, number> = {
   free: 5,
   student: 50,
@@ -11,9 +9,8 @@ export const AI_QUERY_CAPS: Record<SubscriptionTier, number> = {
   premium: 1000,
 };
 
-// Free resets weekly (Monday, matching the app's Monday-start week convention
-// used elsewhere — see utils/date.ts's weekdayIndexMonday); every paid tier
-// resets on the calendar month.
+// Free resets weekly (Monday-start, per utils/date.ts's weekdayIndexMonday); paid
+// tiers reset monthly.
 export type UsagePeriod = 'week' | 'month';
 
 export const USAGE_PERIOD_BY_TIER: Record<SubscriptionTier, UsagePeriod> = {

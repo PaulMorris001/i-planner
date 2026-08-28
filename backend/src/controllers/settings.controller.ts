@@ -4,10 +4,8 @@ import { AuthedRequest } from '../middleware/requireAuth';
 import { env } from '../config/env';
 import { signState } from '../utils/googleOAuthState';
 
-// Write scope — needed to create the dedicated sync calendar and write events to it,
-// not just read. Requesting this broader scope means the OAuth consent screen's
-// configured scopes in Google Cloud Console must include it (see plan notes); any
-// user connected under the old readonly scope will need to reconnect once.
+// Write scope — needed to create the sync calendar and write events, not just read.
+// Users connected under the old readonly scope will need to reconnect once.
 const GOOGLE_CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar';
 
 export async function getSettings(req: AuthedRequest, res: Response) {
@@ -16,9 +14,8 @@ export async function getSettings(req: AuthedRequest, res: Response) {
 }
 
 export async function updateSettings(req: AuthedRequest, res: Response) {
-  // googleCalendarConnected is intentionally not settable here — it's only ever
-  // set by the OAuth callback (googleOAuthCallback.controller.ts), which verifies a
-  // real token exchange first.
+  // googleCalendarConnected is intentionally not settable here — only the OAuth
+  // callback sets it, after a real token exchange.
   const {
     appleCalendarConnected, calendarGateDismissed, remindersEnabled, timeZone,
     aiAccessTasks, aiAccessGoals, aiAccessCalendar, aiDisclosureAcknowledged,
@@ -43,9 +40,8 @@ export async function updateSettings(req: AuthedRequest, res: Response) {
   res.json(toPublicSettings(settings));
 }
 
-// Kicks off the backend-relay OAuth flow (see routes/googleOAuth.routes.ts for the
-// callback half). The app never sees a Google client ID/secret/code — it just opens
-// this URL in an external browser and waits for the iplanner:// deep link back.
+// Backend-relay OAuth flow — the app never sees a Google client ID/secret/code,
+// it just opens this URL externally and waits for the iplanner:// deep link back.
 export async function startGoogleCalendarConnect(req: AuthedRequest, res: Response) {
   const redirectUri = `${env.backendPublicUrl}/api/oauth/google/callback`;
   const authorizeUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');

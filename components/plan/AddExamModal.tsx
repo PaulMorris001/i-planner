@@ -28,10 +28,7 @@ interface AddExamModalProps {
   onClose: () => void;
   onAdd: (exam: Exam) => void;
   editingExam?: Exam | null;
-  // Whether the user already has at least one saved exam — the backend's
-  // first-exam-is-free exemption (see plan.controller.ts) keys off this same
-  // signal server-side; this lets the client skip an unnecessary upgrade
-  // prompt for someone who's genuinely still on their free first exam.
+  // Mirrors the backend's first-exam-is-free exemption (plan.controller.ts) so the client skips an unnecessary upgrade prompt.
   hasExistingExams: boolean;
 }
 
@@ -71,8 +68,7 @@ export function AddExamModal({ visible, onClose, onAdd, editingExam, hasExisting
     reset();
   };
 
-  // Editing an existing exam keeps its already-generated topics as-is — only a
-  // brand-new exam needs a fresh topic breakdown to review.
+  // Editing keeps its already-generated topics as-is; only a brand-new exam needs a fresh breakdown.
   const handleSaveEdit = () => {
     if (!editingExam) return;
     const name = examName.trim() || EXAM_NAME_PLACEHOLDER;
@@ -97,9 +93,7 @@ export function AddExamModal({ visible, onClose, onAdd, editingExam, hasExisting
       setStep('review');
     } catch (err) {
       console.error('[AddExamModal] failed to generate exam topics', err);
-      // Defense in depth — the client-side check above only runs if
-      // hasExistingExams is already true; this covers it being stale (e.g.
-      // the free first exam was just added from another device).
+      // Covers hasExistingExams being stale (e.g. the free first exam was just added from another device).
       const field = (err as { field?: string } | null)?.field;
       if (field === 'tier') {
         setUpgradeVisible(true);
@@ -187,10 +181,10 @@ export function AddExamModal({ visible, onClose, onAdd, editingExam, hasExisting
 
         {step === 'review' && (
           <>
-            <Text style={styles.title}>Review your study plan</Text>
-            <Text style={styles.reviewSub}>Edit, remove, or add topics before creating the exam.</Text>
-
             <ScrollView style={styles.topicList} keyboardShouldPersistTaps="handled">
+              <Text style={styles.title}>Review your study plan</Text>
+              <Text style={styles.reviewSub}>Edit, remove, or add topics before creating the exam.</Text>
+
               {topics.map((t) => (
                 <View key={t.key} style={styles.topicRow}>
                   <View style={styles.weekBadge}>

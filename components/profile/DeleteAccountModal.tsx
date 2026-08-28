@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Text, TextInput, Pressable, Alert, StyleSheet } from 'react-native';
+import { View, Text, TextInput, Pressable, Alert, ScrollView, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { BottomSheetModal } from '@/components/ui/BottomSheetModal';
 import { Button } from '@/components/ui/Button';
@@ -62,6 +62,7 @@ export function DeleteAccountModal({ visible, onClose }: DeleteAccountModalProps
 
   return (
     <BottomSheetModal visible={visible} onClose={handleClose}>
+      <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
       <Text style={styles.title}>Delete account</Text>
 
       {!needsPassword ? (
@@ -126,6 +127,7 @@ export function DeleteAccountModal({ visible, onClose }: DeleteAccountModalProps
           </View>
         </>
       )}
+      </ScrollView>
     </BottomSheetModal>
   );
 }

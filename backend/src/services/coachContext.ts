@@ -3,9 +3,8 @@ import { Goal } from '../models/Goal';
 import { Habit, toPublicHabit } from '../models/Habit';
 import { Plan } from '../models/Plan';
 
-// Minimal shapes needed here — Classes/Exams are schemaless (Plan.data), same
-// reasoning as elsewhere in this backend for not sharing a types package with
-// the app (see Task.ts's category/priority fields).
+// Minimal shapes needed here — Classes/Exams are schemaless (Plan.data), since
+// this backend doesn't share a types package with the app.
 interface ClassRecord {
   courseName: string;
   dayIdxs: number[];
@@ -29,26 +28,17 @@ function weekdayIndexMonday(date: Date): number {
   return (date.getDay() + 6) % 7;
 }
 
-// Date-only "YYYY-MM-DD" values (AI/syllabus-created tasks) mean exactly what
-// their digits say — parsing them through `new Date()` here would reinterpret
-// them as UTC midnight in *this server's* timezone, which isn't necessarily
-// the user's. Full-timestamp values (manually-created tasks) still go through
-// standard parsing; this is just informational text for the model, and the
-// server has no reliable way to know the user's own timezone here.
+// Date-only "YYYY-MM-DD" values mean exactly what their digits say — parsing
+// through `new Date()` would reinterpret them as UTC midnight in the server's
+// timezone, not the user's. Full timestamps still go through standard parsing.
 function formatDueForCoach(dueDateIso: string): string {
   if (!dueDateIso.includes('T')) return dueDateIso;
   return new Date(dueDateIso).toDateString();
 }
 
-// A recurring task is one Task document shared across every weekday it
-// occurs on — its `done` field is frozen false forever once toggleDone starts
-// writing to `completedDates` instead (see contexts/TasksContext.tsx on the
-// frontend), so reading `done` directly here would make every recurring task
-// look permanently incomplete and the Coach would nag about it forever
-// regardless of how many times it's actually been completed. Approximates
-// "today" as UTC (same tradeoff formatDueForCoach documents above — the
-// server has no reliable way to know the user's own timezone), so this can
-// be off by one day for a user far from UTC right around midnight.
+// `done` is frozen false for recurring tasks (see TasksContext.toggleDone,
+// which writes completedDates instead) — check completedDates for those.
+// "Today" approximated as UTC; can be off by a day near midnight.
 function isTaskDoneToday(task: TaskDocument): boolean {
   if (!task.recurring) return task.done;
   const todayKey = new Date().toISOString().slice(0, 10);
@@ -68,15 +58,11 @@ export interface CoachDataConsent {
   calendar: boolean;
 }
 
-// Builds a compact text summary of the user's real planner data, dropped into
-// the Coach's system prompt so it can give personalized (not generic) answers.
-// Shared across all 3 modes rather than mode-specific queries — simpler than
-// bespoke fetching per mode, and the system prompt's per-mode framing already
-// steers which parts of this the assistant actually leans on. Each section is
-// gated by the matching Profile page "AI Data Access" toggle — habits have no
-// toggle of their own, so that section is never gated. Consent-disabled
-// sections aren't just omitted silently; queries for that data are skipped
-// entirely, so a disabled category never reaches this function's memory at all.
+// Compact text summary of the user's planner data, dropped into the Coach's system
+// prompt for personalized answers. Shared across all 3 modes — the per-mode system
+// prompt framing already steers which parts get used. Each section is gated by the
+// matching "AI Data Access" toggle (habits have none, so never gated); disabled
+// categories are skipped at the query level, not just omitted from the output.
 export async function buildContextSummary(firebaseUid: string, consent: CoachDataConsent): Promise<string> {
   const [tasks, goals, habits, studentPlan, examPlan] = await Promise.all([
     consent.tasks ? Task.find({ firebaseUid }) : Promise.resolve([]),

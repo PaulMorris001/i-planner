@@ -5,21 +5,16 @@ import { ApiError } from '../utils/ApiError';
 import { verifyAppleTransaction } from '../services/appStoreVerify';
 import { verifyGooglePurchase } from '../services/googlePlayVerify';
 
-// The client's own on-device purchase state is convenient for immediate UI
-// feedback right after a purchase, but isn't what feature-gating should trust
-// — a modified client could fake it. This document is the real source of
-// truth, only ever updated by verifySubscription below actually confirming a
-// purchase with Apple/Google directly.
+// The client's on-device purchase state is fine for immediate UI feedback but not
+// for gating (a modified client could fake it) — this doc, updated only by
+// verifySubscription confirming with Apple/Google directly, is the source of truth.
 export async function getSubscription(req: AuthedRequest, res: Response) {
   const subscription = await Subscription.findOne({ firebaseUid: req.userId });
   res.json(toPublicSubscription(subscription));
 }
 
-// Tier names are deliberately baked into the product id (see app/plans.tsx's
-// TIERS array — e.g. "student_monthly", "com.obitoventures.iplanner.premium.annual")
-// rather than keyed off an exact-match table, so small naming differences
-// between what's actually typed into App Store Connect/Play Console and this
-// list don't silently break gating.
+// Matched by substring, not exact-match table, so naming differences between
+// what's typed into App Store Connect/Play Console and this list don't break gating.
 function tierFromProductId(productId: string): SubscriptionTier {
   if (productId.includes('premium')) return 'premium';
   if (productId.includes('professional')) return 'professional';
@@ -27,11 +22,8 @@ function tierFromProductId(productId: string): SubscriptionTier {
   return 'free';
 }
 
-// Called right after a client-side purchase (or during restore/reconciliation
-// — see contexts/PurchasesContext.tsx) with the raw token the store handed
-// the device. Verifies it directly against Apple/Google using this backend's
-// own credentials, and only then updates the stored tier — the client never
-// gets to just assert "I'm premium now."
+// Verifies the store token directly against Apple/Google before updating the
+// stored tier — the client never gets to just assert "I'm premium now."
 export async function verifySubscription(req: AuthedRequest, res: Response) {
   const { platform, purchaseToken } = req.body ?? {};
 

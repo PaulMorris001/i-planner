@@ -7,9 +7,7 @@ interface CoachMessageTextProps {
   variant: 'user' | 'assistant';
 }
 
-// Splits a line into plain-text/**bold**/`code` runs and renders each as a
-// nested <Text> — RN Text supports inline child Text with its own style, so
-// this needs no markdown library, just a small regex split.
+// Splits a line into plain-text/**bold**/`code` runs, each a nested styled <Text> — no markdown library needed.
 function renderInline(line: string, textColor: string, codeColor: string) {
   const tokens = line.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).filter((t) => t.length > 0);
   return tokens.map((token, i) => {
@@ -35,10 +33,7 @@ function renderInline(line: string, textColor: string, codeColor: string) {
   });
 }
 
-// Chat bubbles render the coach's raw text directly (no markdown library),
-// so without this the model's **bold**/## headings/`code`/- bullets would
-// show their literal symbols. This turns the handful of markdown patterns
-// the coach prompt is told it can use into real RN styling instead.
+// Renders **bold**/## headings/`code`/- bullets as real RN styling instead of literal markdown symbols.
 export function CoachMessageText({ content, variant }: CoachMessageTextProps) {
   const textColor = variant === 'user' ? Colors.white : Colors.textPrimary;
   const codeColor = variant === 'user' ? Colors.white : Colors.primaryLight;

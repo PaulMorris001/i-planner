@@ -11,25 +11,19 @@ type ConsentKey = (typeof CONSENT_ROWS)[number]['key'];
 interface AiDisclosureGateProps {
   consent: Record<ConsentKey, boolean>;
   onToggle: (key: ConsentKey, value: boolean) => void;
-  // Returns whether it actually saved — false shows an error here instead of
-  // silently re-showing this same gate with no explanation, which is exactly
-  // what a swallowed failure used to look like (see acknowledgeAiDisclosure
-  // in contexts/SettingsContext.tsx).
+  // Returns whether it saved; false shows an error instead of silently
+  // re-showing this gate (see acknowledgeAiDisclosure in SettingsContext.tsx).
   onAgree: () => Promise<boolean>;
 }
 
-// Shown once, before the very first message ever reaches app/(app)/coach.tsx's
-// send flow — required by App Store guideline 5.1.2(i): personal data can only
-// go to a third-party AI service after the app names who it's sent to and gets
-// permission first, not just offer a way to revoke it afterward. Gated by
-// Settings.aiDisclosureAcknowledged (see contexts/SettingsContext.tsx), which
-// coach.controller.ts also checks server-side so this can't be bypassed by
-// calling the API directly.
+// Shown once before the first message reaches coach.tsx's send flow —
+// required by App Store guideline 5.1.2(i) (must name the third-party AI
+// service and get consent before sending personal data). Gated by
+// Settings.aiDisclosureAcknowledged; coach.controller.ts also enforces this
+// server-side so it can't be bypassed via direct API calls.
 export function AiDisclosureGate({ consent, onToggle, onAgree }: AiDisclosureGateProps) {
-  // Without this, a slow network turns one tap into a silent double-submit
-  // (or a failed save quietly re-shows this exact screen with zero
-  // indication anything went wrong, which looked like "I had to agree
-  // twice") — this makes the tap non-reentrant and surfaces a real error.
+  // Prevents double-submit on a slow network and surfaces save failures
+  // instead of silently re-showing this screen.
   const [submitting, setSubmitting] = useState(false);
 
   const handleAgree = async () => {

@@ -16,17 +16,12 @@ import {
 import type { Settings } from '@/types/settings.types';
 import type { StudentPlan, ClassItem } from '@/types/plan.types';
 
-// Applies per-class field patches (appleEventIds/notificationIds) computed by
-// the backfill functions below. Re-fetches the plan immediately before saving
-// instead of reusing the snapshot the calling function fetched at its own
-// start — that loop can take several seconds for a full class list (one
-// Calendar-API/notification call per class), and planService.save replaces
-// the whole document, so writing back a stale snapshot would silently
-// clobber any class the user added/edited/removed via classes.tsx or
-// dashboard.tsx (both go through PlanContext.updatePlan) during that window.
-// Doesn't fully close the race — the fetch-then-save here still isn't atomic
-// — but narrows it from "the whole backfill loop's duration" to one request
-// round trip.
+// Applies per-class patches (appleEventIds/notificationIds) from the backfill
+// functions below. Re-fetches the plan right before saving rather than reusing
+// the caller's snapshot — the backfill loop can take several seconds, and
+// planService.save replaces the whole document, so a stale snapshot would
+// clobber classes edited elsewhere meanwhile. Narrows the race window to one
+// request round trip; doesn't fully close it.
 async function saveClassPatches(patches: Map<string, Partial<ClassItem>>) {
   if (!patches.size) return;
   const freshPlan = await planService.get<StudentPlan>('student');
@@ -35,11 +30,9 @@ async function saveClassPatches(patches: Map<string, Partial<ClassItem>>) {
   await planService.save('student', { ...freshPlan, classes });
 }
 
-// Classes/tasks created before the user connected Apple Calendar still need to end
-// up on the device calendar — fetched directly via services (not usePlan()/
-// useTasks()) since SettingsProvider is mounted above TasksProvider, which is
-// scoped to the (app) tab group and wouldn't be in scope here. Runs in the
-// background — best-effort, never blocks the "connect" button.
+// Backfills classes/tasks created before Apple Calendar was connected. Fetched
+// directly via services, not usePlan()/useTasks(), since SettingsProvider is
+// mounted above TasksProvider. Best-effort, never blocks the "connect" button.
 async function backfillAppleCalendar() {
   try {
     const [plan, tasks] = await Promise.all([

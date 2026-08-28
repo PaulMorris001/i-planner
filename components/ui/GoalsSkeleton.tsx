@@ -2,9 +2,8 @@ import { View, StyleSheet } from 'react-native';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { Colors } from '@/constants/theme';
 
-// Approximates a couple of goal cards (tag/pct header, title, progress bar, a
-// couple of milestone rows) so opening the Goals page doesn't flash "No goals
-// yet" for a beat before the real list arrives.
+// Approximates a couple of goal cards so opening the Goals page doesn't flash "No goals yet"
+// for a beat before the real list arrives.
 export function GoalsSkeleton() {
   return (
     <View style={styles.list}>

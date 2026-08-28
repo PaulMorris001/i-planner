@@ -9,36 +9,27 @@ export interface TaskDocument extends Document {
   hour: number;
   time: string;
   dueDate: string;
-  // Authoritative completion state only for a one-time task (recurring is
-  // false). A recurring task's per-occurrence completion lives in
-  // completedDates instead — this field isn't meaningful per-occurrence for
-  // it, since one Task document represents every occurrence.
+  // Authoritative only for a one-time task. A recurring task shares one Task
+  // document across every occurrence, so per-occurrence completion lives in
+  // completedDates instead.
   done: boolean;
   recurring: boolean;
   freq?: 'weekly' | 'weekdays' | 'daily';
   dayIdxs?: number[];
-  // Local "YYYY-MM-DD" dates this recurring task was marked done on — same
-  // pattern as Habit.completedDates, for the same reason: one Task document
-  // represents every weekday it recurs on, so completion has to be tracked
-  // per calendar date instead of a single shared boolean, or completing
-  // today's occurrence would show every other occurrence as done too. Only
-  // meaningful when recurring is true.
+  // Local "YYYY-MM-DD" dates this recurring task was completed on (same pattern
+  // as Habit.completedDates) — otherwise completing one occurrence would mark
+  // every other occurrence done too. Only meaningful when recurring is true.
   completedDates?: string[];
   notes: string;
   appleEventIds?: string[];
   googleEventId?: string;
-  // Locally-scheduled expo-notifications reminder ids (client-side only — the
-  // backend never schedules or sends these, it just persists the ids so the app
-  // can find and cancel/reschedule them later). One per weekday occurrence for a
-  // 'weekdays' task, same array-per-occurrence reasoning as appleEventIds.
+  // Client-scheduled expo-notifications reminder ids — backend just persists them
+  // so the app can find and cancel/reschedule later. One per weekday occurrence.
   notificationIds?: string[];
-  // Set once, at creation, when this task was created by converting an
-  // ImportedCalendarEvent — its appleEventIds/googleEventId point at a real
-  // pre-existing calendar event the app doesn't own, not one it created for
-  // itself. When true, editing this task's content must never delete/recreate
-  // that event (see task.controller.ts's updateTask and TasksContext's client
-  // equivalent) — the app only ever edits its OWN copy of the details from
-  // that point on, never the user's actual calendar.
+  // Set at creation when converted from an ImportedCalendarEvent — appleEventIds/
+  // googleEventId then point at a real pre-existing event the app doesn't own.
+  // When true, edits must never delete/recreate that event, only the app's own
+  // copy of the details (see task.controller.ts's updateTask).
   calendarLinkExternal?: boolean;
 }
 

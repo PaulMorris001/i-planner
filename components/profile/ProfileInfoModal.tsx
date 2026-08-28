@@ -21,16 +21,14 @@ interface ProfileInfoModalProps {
 
 type PathId = "student" | "exam" | "professional";
 
-// focus.tsx stores 'exam_candidate'; kept short here to match profile.tsx's
-// own local PathId convention.
+// focus.tsx stores 'exam_candidate'; kept short here to match profile.tsx's own PathId convention.
 function toPathId(focusProfile: string | null): PathId {
   if (focusProfile === "student") return "student";
   if (focusProfile === "exam_candidate") return "exam";
   return "professional";
 }
 
-// Same three paths/icons as focus.tsx's onboarding picker, so "your current
-// path" reads as the same concept the user chose there.
+// Same three paths/icons as focus.tsx's onboarding picker, so "your current path" matches.
 const PATH_META: Record<
   PathId,
   {
@@ -75,12 +73,8 @@ export function ProfileInfoModal({
   const initial = displayName.charAt(0).toUpperCase();
   const path = PATH_META[toPathId(focusProfile)];
 
-  // Modal's own "fade" animationType handles the overlay; this scale+opacity
-  // pair gives the card itself a soft pop-in instead of just snapping to full
-  // size, which is what makes a centered dialog read as "smooth" rather than
-  // a plain fade. Re-armed every time the modal opens (RN Modal unmounts its
-  // content when closed, so there's no exit animation to drive — the native
-  // fade covers dismissal).
+  // Modal's "fade" animationType covers the overlay; this scale+opacity pair gives the card a
+  // soft pop-in. Re-armed on every open since RN Modal unmounts content on close (no exit to drive).
   const scale = useRef(new Animated.Value(0.9)).current;
   const opacity = useRef(new Animated.Value(0)).current;
 

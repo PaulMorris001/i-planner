@@ -35,13 +35,12 @@ export async function createTask(req: AuthedRequest, res: Response) {
     freq: freq ?? undefined,
     dayIdxs: Array.isArray(dayIdxs) ? dayIdxs : undefined,
     notes,
-    // Apple sync and local notification scheduling both run client-side — the
-    // frontend already created the device calendar event(s)/reminder(s) before
-    // this request and just wants the ids persisted.
+    // Apple sync and notifications run client-side; the frontend already created
+    // the device event(s)/reminder(s) and just wants the ids persisted.
     appleEventIds: Array.isArray(appleEventIds) ? appleEventIds : undefined,
     notificationIds: Array.isArray(notificationIds) ? notificationIds : undefined,
-    // Only meaningful when converting an imported calendar event to a task —
-    // see createTaskDoc, which skips its own Google sync when this is set.
+    // Only set when converting an imported calendar event — createTaskDoc skips
+    // its own Google sync when this is present.
     googleEventId: typeof googleEventId === 'string' && googleEventId ? googleEventId : undefined,
     calendarLinkExternal: !!calendarLinkExternal,
   });
@@ -77,11 +76,9 @@ export async function updateTask(req: AuthedRequest, res: Response) {
   if (notificationIds !== undefined) task.notificationIds = Array.isArray(notificationIds) ? notificationIds : undefined;
   if (completedDates !== undefined) task.completedDates = Array.isArray(completedDates) ? completedDates : undefined;
 
-  // calendarLinkExternal is deliberately never read from the request body —
-  // it's a creation-time-only flag (see createTask) and must never be
-  // settable via an update. A task created by converting an imported
-  // calendar event points at a real event the app doesn't own, so editing
-  // it must never touch that event — only the app's own copy of the details.
+  // calendarLinkExternal is never read from the body — it's creation-time-only
+  // (see createTask). A converted task points at an event the app doesn't own,
+  // so edits must never touch that event, only the app's own copy.
   if (hasContentChange && !task.calendarLinkExternal) {
     task.googleEventId = await syncTaskToGoogle(req.userId!, task);
   }

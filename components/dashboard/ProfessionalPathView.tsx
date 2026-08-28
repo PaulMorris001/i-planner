@@ -15,8 +15,7 @@ import { taskOccursOnDay, weekdayIndexMonday, formatMonthYear, isTaskDoneOnDate 
 import { dashboardStyles as styles } from './dashboardStyles';
 
 interface ProfessionalPathViewProps {
-  // Dashboard's shared Calendar/Goals quick-links block — passed in rather
-  // than rebuilt here so it doesn't remount when the path view re-renders.
+  // Passed in rather than rebuilt here so it doesn't remount on re-render.
   quickLinks: ReactNode;
   onViewGoal: (goal: Goal | null) => void;
 }

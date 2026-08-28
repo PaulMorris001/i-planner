@@ -2,11 +2,8 @@ import { View, StyleSheet } from 'react-native';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { Colors, Spacing } from '@/constants/theme';
 
-// Approximates the general shape/rhythm of the real Dashboard (stat row, a couple
-// of full-width cards, the Coach/Habits cards, quick links) without needing to
-// match any one of the three path variants (student/exam/professional) exactly —
-// just enough to avoid the sharp "content pops in from nothing" glitch while
-// plan/tasks/habits are still loading.
+// Approximates the Dashboard's general shape without matching any one path variant exactly —
+// just enough to avoid a "content pops in from nothing" glitch while data is still loading.
 export function DashboardSkeleton() {
   return (
     <View style={styles.stack}>

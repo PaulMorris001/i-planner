@@ -12,20 +12,17 @@ export async function listSyllabi(req: AuthedRequest, res: Response) {
   res.json(syllabi.map(toPublicSyllabus));
 }
 
-// Stateless preview — extraction only, nothing persisted yet. The frontend
-// reviews/edits the result and, on confirm, creates the real Class/Tasks
-// itself (via usePlan()/useTasks(), so calendar sync and reminders apply the
-// same as any manually-created class/task) then calls createSyllabus below.
+// Stateless preview — nothing persisted. Frontend reviews/edits, then creates the
+// real Class/Tasks itself (so calendar sync and reminders apply normally) and
+// calls createSyllabus below.
 export async function extractSyllabusHandler(req: AuthedRequest, res: Response) {
   const { fileBase64, filename } = req.body ?? {};
   if (!fileBase64 || typeof fileBase64 !== 'string') {
     throw new ApiError(400, 'A PDF file is required.', 'general');
   }
 
-  // First-ever syllabus is free (covers onboarding's student-plan.tsx, which
-  // shares this same endpoint with the in-app SyllabusUploadModal) — gated
-  // from the second syllabus onward. Same reasoning as
-  // generateExamTopicsHandler's existingExamPlan check.
+  // First-ever syllabus is free (onboarding shares this endpoint with the in-app
+  // upload modal); gated from the second onward — same as generateExamTopicsHandler.
   const existingSyllabus = await Syllabus.findOne({ firebaseUid: req.userId });
   if (existingSyllabus) {
     const subscription = await Subscription.findOne({ firebaseUid: req.userId });

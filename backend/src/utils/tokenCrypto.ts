@@ -4,11 +4,9 @@ import { env } from '../config/env';
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12; // recommended IV size for GCM
 const AUTH_TAG_LENGTH = 16;
-// Distinguishes an encrypted value from a legacy plaintext token already sitting
-// in the database from before this was added — Google's own token formats never
-// start with this, so the check is unambiguous. Lets decryptToken() read old
-// plaintext rows as-is instead of needing a separate migration pass; they get
-// encrypted the next time that field is written (token refresh or reconnect).
+// Distinguishes an encrypted value from a legacy plaintext token (Google's token
+// formats never start with this). Lets decryptToken() read old plaintext rows
+// as-is with no migration pass; they get encrypted on next write.
 const PREFIX = 'enc1:';
 
 function getKey(): Buffer {

@@ -87,12 +87,9 @@ export function PlanProvider({ children }: { children: ReactNode }) {
     await planService.save('student', newPlan);
   };
 
-  // Same reasoning/pattern as updateExamPlan below — callers used to build
-  // `{ ...plan, classes: ... }` from their own render-closure copy of `plan`,
-  // so e.g. AddClassModal's "add a class, close, immediately add another"
-  // flow (it doesn't await the save before closing) could have the second
-  // add computed from a `plan` that doesn't yet include the first one,
-  // silently dropping it once both saves resolve.
+  // Computes inside the setPlan updater so two calls fired back-to-back (e.g.
+  // AddClassModal's "add, close, add another") don't have the second overwrite
+  // the first from a stale closure snapshot.
   const updatePlan = async (updater: (plan: StudentPlan) => StudentPlan) => {
     let prevPlan: StudentPlan = EMPTY_PLAN;
     let nextPlan: StudentPlan = EMPTY_PLAN;
@@ -119,16 +116,9 @@ export function PlanProvider({ children }: { children: ReactNode }) {
     await planService.save('professional', newProfessionalPlan);
   };
 
-  // Computes the next exams array inside the setExamPlan updater — against
-  // React's latest pending state, not whatever `examPlan` this closure was
-  // created with — so two of these fired back-to-back (e.g. checking off
-  // several exam topics in quick succession, or deleting two exams one
-  // right after the other, before the first request lands) don't have the
-  // second call compute its patch from a snapshot that predates the first
-  // call's change, silently reverting it once both network requests
-  // resolve. Also rolls the optimistic update back on save failure — rather
-  // than leaving the UI showing a change that was never actually persisted —
-  // and rethrows so callers can still show their own error message.
+  // Computes inside the setExamPlan updater so back-to-back calls (e.g. checking
+  // off several topics quickly) don't revert each other. Rolls back and rethrows
+  // on save failure so the UI never shows an unpersisted change.
   const updateExamPlan = async (updater: (exams: ExamPlan['exams']) => ExamPlan['exams']) => {
     let prevExams: ExamPlan['exams'] = [];
     let nextExams: ExamPlan['exams'] = [];
@@ -156,9 +146,6 @@ export function PlanProvider({ children }: { children: ReactNode }) {
       )
     );
 
-  // Real persisted counterparts to what cert-tracker.tsx used to fake with
-  // local-only useState (a hardcoded +10 per tap, and a formulaic increasing
-  // "mock score" nobody actually entered) — see plan file for that fix.
   const logExamPractice = (examId: string, count: number) =>
     updateExamPlan((exams) =>
       exams.map((e) => (e.id === examId ? { ...e, practiceQuestionsLogged: (e.practiceQuestionsLogged ?? 0) + count } : e))

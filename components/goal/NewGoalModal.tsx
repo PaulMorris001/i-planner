@@ -27,9 +27,8 @@ const GOAL_TYPES: { id: GoalTypeId; label: string; color: string }[] = [
 
 interface DraftMilestone {
   key: string;
-  // Present for a milestone that already exists on the goal being edited (so
-  // its identity/done state round-trips); absent for one just added here,
-  // which the backend assigns a fresh id to.
+  // Set for an existing milestone (so identity/done state round-trips);
+  // absent for one just added here, which the backend assigns an id to.
   id?: string;
   title: string;
   dueLabel: string;
@@ -188,7 +187,7 @@ export function NewGoalModal({ visible, onClose, onCreate, editingGoal, onSave }
   return (
     <BottomSheetModal visible={visible} onClose={handleClose} maxHeightPct={85}>
         {step === 'form' && (
-          <>
+          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             <Text style={styles.sheetTitle}>{editingGoal ? 'Edit goal' : 'New goal'}</Text>
 
             <Text style={styles.sheetEyebrow}>Type</Text>
@@ -248,7 +247,7 @@ export function NewGoalModal({ visible, onClose, onCreate, editingGoal, onSave }
             {editingGoal && (
               <>
                 <Text style={styles.sheetEyebrow}>Milestones</Text>
-                <ScrollView style={styles.editMilestoneList} keyboardShouldPersistTaps="handled">
+                <View style={styles.editMilestoneList}>
                   {milestones.map((m) => (
                     <View key={m.key} style={styles.milestoneRow}>
                       <View style={styles.milestoneInputs}>
@@ -275,7 +274,7 @@ export function NewGoalModal({ visible, onClose, onCreate, editingGoal, onSave }
                   <Pressable style={styles.addMilestoneButton} onPress={addMilestone}>
                     <Text style={styles.addMilestoneText}>+ Add milestone</Text>
                   </Pressable>
-                </ScrollView>
+                </View>
               </>
             )}
 
@@ -288,7 +287,7 @@ export function NewGoalModal({ visible, onClose, onCreate, editingGoal, onSave }
                 {editingGoal ? (submitting ? 'Saving…' : 'Save changes') : 'Generate plan'}
               </Text>
             </Pressable>
-          </>
+          </ScrollView>
         )}
 
         {step === 'generating' && (
@@ -300,10 +299,10 @@ export function NewGoalModal({ visible, onClose, onCreate, editingGoal, onSave }
 
         {step === 'review' && (
           <>
-            <Text style={styles.sheetTitle}>Review milestones</Text>
-            <Text style={styles.sheetSub}>Edit, remove, or add to the plan before saving.</Text>
-
             <ScrollView style={styles.milestoneList} keyboardShouldPersistTaps="handled">
+              <Text style={styles.sheetTitle}>Review milestones</Text>
+              <Text style={styles.sheetSub}>Edit, remove, or add to the plan before saving.</Text>
+
               {milestones.map((m) => (
                 <View key={m.key} style={styles.milestoneRow}>
                   <View style={styles.milestoneInputs}>
@@ -445,11 +444,8 @@ const styles = StyleSheet.create({
   milestoneList: {
     marginTop: 14,
   },
-  // Same list, but bounded — used in the edit form where it sits alongside
-  // other fields in one screen rather than owning the whole sheet.
   editMilestoneList: {
     marginTop: 10,
-    maxHeight: 220,
   },
   milestoneRow: {
     flexDirection: 'row',
@@ -473,8 +469,7 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     padding: 0,
   },
-  // Already-completed milestones (done state isn't editable here — that
-  // happens on the goal summary sheet — but still worth showing at a glance).
+  // Done state isn't editable here (that's the goal summary sheet), just shown.
   milestoneTitleDone: {
     color: Colors.textMuted,
     textDecorationLine: 'line-through',

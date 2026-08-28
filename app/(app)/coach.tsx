@@ -45,10 +45,8 @@ const SUGGESTIONS: Record<CoachModeId, string[]> = {
   goal: ['Set a study goal this week', 'Break down my exam prep', 'Suggest a habit'],
 };
 
-// Fades + slides a bubble in on mount only — since each message keeps the
-// same `key` (m.id) across re-renders, React never remounts an already-shown
-// bubble, so this only plays once per message, the moment it's first added,
-// rather than replaying on every re-render.
+// Fades + slides in only once per message — same `key` (m.id) across
+// re-renders means React never remounts an already-shown bubble.
 function AnimatedMessageRow({ children }: { children: ReactNode }) {
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(10)).current;
@@ -78,11 +76,9 @@ export default function Coach() {
   } = useSettings();
   const { tier } = usePurchases();
   const [modeOverride, setModeOverride] = useState<CoachModeId | null>(null);
-  // Set only when a tap is blocked by tier — the current mode itself can also
-  // be gated (a professional-focus free/student user defaults into "Plan My
-  // Day", which is Professional+), handled separately below via
-  // currentModeGated rather than this, since that case has no accessible
-  // mode to silently fall back to.
+  // Set only when a tap is blocked by tier. A gated *current* mode (e.g. a
+  // professional-focus free user defaulting into "Plan My Day") is handled
+  // separately via currentModeGated, since there's no fallback mode to use.
   const [upgradeTarget, setUpgradeTarget] = useState<CoachModeId | null>(null);
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -90,9 +86,8 @@ export default function Coach() {
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [sending, setSending] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  // The one reply that should type in — set the instant it arrives, then
-  // never reassigned for that id again, so its typing effect plays exactly
-  // once and every other bubble (history, older replies) renders in full.
+  // Id of the reply currently typing in; never reassigned for the same id,
+  // so the effect plays once and everything else renders in full.
   const [typingMessageId, setTypingMessageId] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
 
@@ -110,8 +105,7 @@ export default function Coach() {
     setModeOverride(nextMode);
   };
 
-  // Conversation history is per mode, stored server-side — reload whenever the
-  // active mode changes.
+  // History is stored server-side per mode; refetch on mode change.
   useEffect(() => {
     let cancelled = false;
     setMessages([]);
@@ -174,26 +168,22 @@ export default function Coach() {
       setMessages((prev) => [...prev, reply]);
       setTypingMessageId(reply.id);
       if (reply.createdTaskIds?.length) {
-        // The AI-created task(s) exist server-side (with Google sync already
-        // applied) but still need the client-side Apple Calendar/notification
-        // step that manually-created tasks get. Use refetch()'s own return
-        // value, not the `tasks` in context state — the new task can't be in
-        // that state yet by definition (this closure predates the refetch).
+        // AI-created tasks are already Google-synced server-side but still need
+        // the client Apple Calendar/notification step. Use refetch()'s return
+        // value, not `tasks` from context — that state predates this refetch.
         const freshTasks = await refetchTasks();
         const createdTasks = freshTasks.filter((t) => reply.createdTaskIds!.includes(t.id));
         await Promise.all(createdTasks.map((t) => syncExternallyCreatedTask(t)));
       }
     } catch (err) {
       console.error('[Coach] failed to send message', err);
-      // The AI-usage-cap error (429) has a specific, useful message from the
-      // server — show it as-is rather than the generic connection message.
+      // 429 (usage cap) carries a specific server message — show it as-is.
       const status = (err as { status?: number } | null)?.status;
       const field = (err as { field?: string } | null)?.field;
       const serverMessage = (err as { message?: string } | null)?.message;
       if (status === 403 && field === 'tier') {
-        // Defense-in-depth path — the mode picker already blocks switching to
-        // a gated mode client-side, so this only fires if that check was
-        // somehow stale (e.g. a subscription lapsed mid-session).
+        // Defense-in-depth: the mode picker already blocks gated modes
+        // client-side; this fires only if that check went stale.
         setUpgradeTarget(mode);
       } else if (status === 429 && serverMessage) {
         Alert.alert("You've hit your AI Coach limit", serverMessage);

@@ -51,15 +51,11 @@ export async function deleteHabit(req: AuthedRequest, res: Response) {
 }
 
 export async function toggleHabitToday(req: AuthedRequest, res: Response) {
-  // Validates id format + ownership (404s cleanly on either), same as every
-  // other owned-doc lookup.
   const existing = await findOwnedOrThrow(Habit, req.params.id, req.userId!);
   const todayKey = toDateKey(new Date());
 
-  // Read-modify-write on the JS side (find, mutate the array, save) let two
-  // near-simultaneous toggle requests both read "not present" and both push,
-  // producing duplicate entries — atomic $pull/$addToSet avoids that race and
-  // $pull also self-heals any duplicates already present from before this fix.
+  // Atomic $pull/$addToSet avoids a read-modify-write race from near-simultaneous
+  // toggles; $pull also self-heals any duplicates already present.
   const pulled = await Habit.findOneAndUpdate(
     { _id: existing._id, completedDates: todayKey },
     { $pull: { completedDates: todayKey } },

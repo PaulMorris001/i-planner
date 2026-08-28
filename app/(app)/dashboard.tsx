@@ -52,9 +52,8 @@ const AI_TIP_TEMPLATE: Record<PathKey, (title: string, when: string) => string> 
   professional: (title, when) => `${title} is due ${when} — want a reminder?`,
 };
 
-// "today" / "tomorrow" / "in N days" — calendar-day comparison (see
-// isDueTodayOrLater) so a task due later today still reads as "today", not
-// "in 0 days" or wrongly dropped as past.
+// "today" / "tomorrow" / "in N days" via calendar-day comparison, so a task
+// due later today still reads as "today" rather than "in 0 days".
 function relativeDueLabel(dueDateIso: string): string {
   const days = Math.round((localMidnight(parseISODateLocal(dueDateIso)) - localMidnight(new Date())) / 86400000);
   if (days <= 0) return "today";
@@ -62,11 +61,9 @@ function relativeDueLabel(dueDateIso: string): string {
   return `in ${days} days`;
 }
 
-// Thin orchestrator: owns the data/state genuinely shared across every path
-// (loading, pull-to-refresh, the four modals, the AI Coach/Habits cards) and
-// delegates each path's actual home-screen content to its own view component
-// under components/dashboard/ — Student/Exam/Professional are structurally
-// unrelated screens that just happen to share a route.
+// Owns state shared across every path (loading, pull-to-refresh, modals,
+// AI Coach/Habits cards); delegates home-screen content to per-path view
+// components under components/dashboard/, which are otherwise unrelated.
 export default function Dashboard() {
   const router = useRouter();
   const tabBarHeight = useBottomTabBarHeight();
@@ -109,9 +106,7 @@ export default function Dashboard() {
 
   const pathKey = toPathKey(focusProfile);
 
-  // Nearest real, undone, dated task — soonest due date first — feeds the AI
-  // Coach card below so its tip reflects what's actually on the user's plate
-  // instead of a fixed placeholder.
+  // Nearest undone, dated task — feeds the AI Coach card's tip below.
   const nextTask = [...tasks]
     .filter((t) => !!t.dueDate && !isTaskDoneOnDate(t, parseISODateLocal(t.dueDate)) && isDueTodayOrLater(t.dueDate))
     .sort((a, b) => localMidnight(parseISODateLocal(a.dueDate)) - localMidnight(parseISODateLocal(b.dueDate)))[0];
@@ -123,11 +118,9 @@ export default function Dashboard() {
     const appleEventIds = appleCalendarConnected ? await syncClassToAppleCalendar(item) : [];
     const notificationIds = remindersEnabled ? await scheduleClassNotifications(item) : [];
     try {
-      // Computed against React's latest state inside updatePlan's updater —
-      // Dashboard's "Add class" and Classes tab's "Add class" both call
-      // through here/classes.tsx respectively, so adding one from each
-      // screen in quick succession no longer risks one silently dropping
-      // the other.
+      // Computed against React's latest state inside updatePlan's updater, so
+      // adding a class from Dashboard and Classes in quick succession can't
+      // silently drop one.
       await updatePlan((p) => ({ ...p, classes: [...p.classes, { ...item, appleEventIds, notificationIds }] }));
     } catch (err) {
       console.error("[Dashboard] failed to add class", err);
@@ -147,9 +140,8 @@ export default function Dashboard() {
     }
   };
 
-  // Shared second row on every path's home page (right under the top stats/
-  // hero block) — a plain JSX value, not its own component, so it doesn't
-  // remount on every render the way a function defined in the render body would.
+  // Plain JSX value, not its own component, so it doesn't remount every
+  // render the way a function defined in the render body would.
   const quickLinksRow = (
     <View style={styles.quickLinksRow}>
       <Pressable
@@ -194,10 +186,8 @@ export default function Dashboard() {
       <ScreenWrapper
         backgroundColor={Colors.offWhite}
         scroll
-        // The tab bar (app/(app)/_layout.tsx) is 60 + insets.bottom tall —
-        // real height, not the flat 40px styles.scrollContent reserves on
-        // its own — so without adding it, the bottom of the scroll content
-        // sits behind the tab bar and is unreachable even at max scroll.
+        // Tab bar is 60 + insets.bottom tall; without adding tabBarHeight here,
+        // the scroll content's bottom sits behind it and is unreachable.
         style={{ ...styles.scrollContent, paddingBottom: styles.scrollContent.paddingBottom + tabBarHeight }}
         edges={["top", "right", "left"]}
         onRefresh={handleRefresh}

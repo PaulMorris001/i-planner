@@ -7,16 +7,11 @@ interface GateCardProps {
   icon: IconSymbolName;
   title: string;
   subtitle: string;
-  // The action buttons/links below the subtitle — content and behavior are
-  // entirely up to the caller (CalendarConnectGate's connect buttons,
-  // AiDisclosureGate's consent toggles + agree button, etc).
+  // The action buttons/links below the subtitle — entirely up to the caller.
   children: ReactNode;
 }
 
-// Shared shell for a full-screen "before you can use this feature" gate —
-// was independently redefined (byte-identical wrap/card/iconBadge/title/
-// subtitle styles) in CalendarConnectGate.tsx and AiDisclosureGate.tsx
-// before being consolidated here.
+// Shared shell for a full-screen "before you can use this feature" gate.
 export function GateCard({ icon, title, subtitle, children }: GateCardProps) {
   return (
     <View style={styles.wrap}>

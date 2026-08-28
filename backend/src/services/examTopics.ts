@@ -54,10 +54,8 @@ function buildSchema(count: number) {
   };
 }
 
-// Real OpenAI call — one topic per week of the study plan (weeksRemaining,
-// clamped), ordered foundational-to-advanced with the final week(s) reserved
-// for review. Falls back to generic per-week placeholders on API failure so
-// exam creation never hard-blocks on an AI outage.
+// Falls back to generic per-week placeholders on API failure so exam creation
+// never hard-blocks on an AI outage.
 export async function generateExamTopics(input: {
   name: string;
   subject: string;

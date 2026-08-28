@@ -4,6 +4,7 @@ import { BottomSheetModal } from '@/components/ui/BottomSheetModal';
 import { ModalCloseButton } from '@/components/ui/ModalCloseButton';
 import { Chip } from '@/components/ui/Chip';
 import { InlineDateTimePicker } from '@/components/ui/InlineDateTimePicker';
+import { WeekdayPicker } from '@/components/ui/WeekdayPicker';
 import { Colors, Spacing, Radius } from '@/constants/theme';
 import {
   weekdayIndexMonday,
@@ -35,15 +36,23 @@ export function AddClassModal({ visible, onClose, onAdd, editingClass }: AddClas
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [recurring, setRecurring] = useState(true);
   const [freq, setFreq] = useState<ClassFrequency>('weekly');
+  const [selectedDays, setSelectedDays] = useState<number[]>([]);
   const [time, setTime] = useState<Date | null>(null);
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const [professor, setProfessor] = useState('');
+  const [venue, setVenue] = useState('');
+
+  const canSave = className.trim().length > 0 && !(recurring && freq === 'weekly' && selectedDays.length === 0);
 
   const reset = () => {
     setClassName('');
     setStartDate(new Date());
     setRecurring(true);
     setFreq('weekly');
+    setSelectedDays([]);
     setTime(null);
+    setProfessor('');
+    setVenue('');
   };
 
   useEffect(() => {
@@ -53,7 +62,10 @@ export function AddClassModal({ visible, onClose, onAdd, editingClass }: AddClas
       setStartDate(parseISODateLocal(editingClass.startDate));
       setRecurring(editingClass.recurring);
       setFreq(editingClass.freq);
+      setSelectedDays(editingClass.freq === 'weekly' ? editingClass.dayIdxs : []);
       setTime(editingClass.time ? parseTimeToDate(editingClass.time) : null);
+      setProfessor(editingClass.professor ?? '');
+      setVenue(editingClass.venue ?? '');
     } else {
       reset();
     }
@@ -66,10 +78,17 @@ export function AddClassModal({ visible, onClose, onAdd, editingClass }: AddClas
   };
 
   const handleAdd = () => {
-    if (!className.trim()) return;
+    if (!canSave) return;
     const startWd = weekdayIndexMonday(startDate);
-    // monthly: no weekly grid slot — shows in the class list only, dayIdxs stays empty
-    const dayIdxs = !recurring ? [startWd] : freq === 'monthly' ? [] : dayIdxsForFrequency(freq, startWd);
+    // monthly: no weekly grid slot — shows in the class list only, dayIdxs stays empty.
+    // weekly: user-picked days (falls back to the start date's weekday if none picked).
+    const dayIdxs = !recurring
+      ? [startWd]
+      : freq === 'monthly'
+      ? []
+      : freq === 'weekly'
+      ? (selectedDays.length ? selectedDays : [startWd])
+      : dayIdxsForFrequency(freq, startWd);
     const item: ClassItem = {
       id:         editingClass?.id ?? Date.now().toString(),
       courseName: className.trim(),
@@ -78,6 +97,8 @@ export function AddClassModal({ visible, onClose, onAdd, editingClass }: AddClas
       freq,
       dayIdxs,
       time: time ? formatTimeLabel(time) : '9:00 AM',
+      professor: professor.trim() || undefined,
+      venue: venue.trim() || undefined,
     };
     onAdd(item);
     handleClose();
@@ -85,11 +106,11 @@ export function AddClassModal({ visible, onClose, onAdd, editingClass }: AddClas
 
   return (
     <BottomSheetModal visible={visible} onClose={handleClose} maxHeightPct={88}>
-        <View style={styles.sheetHeaderRow}>
-          <Text style={styles.sheetTitle}>{editingClass ? 'Edit class' : 'Add a class'}</Text>
-          <ModalCloseButton onPress={handleClose} />
-        </View>
         <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          <View style={styles.sheetHeaderRow}>
+            <Text style={styles.sheetTitle}>{editingClass ? 'Edit class' : 'Add a class'}</Text>
+            <ModalCloseButton onPress={handleClose} />
+          </View>
           <TextInput
             style={styles.input}
             placeholder="Class name (e.g. Corporate Finance)"
@@ -130,12 +151,26 @@ export function AddClassModal({ visible, onClose, onAdd, editingClass }: AddClas
                   key={f.key}
                   label={f.label}
                   selected={freq === f.key}
-                  onPress={() => setFreq(f.key)}
+                  onPress={() => {
+                    setFreq(f.key);
+                    if (f.key === 'weekly') {
+                      setSelectedDays(prev => (prev.length ? prev : [weekdayIndexMonday(startDate)]));
+                    }
+                  }}
                   activeColor="#6366F1"
                   size="compact"
                 />
               ))}
             </View>
+          )}
+
+          {recurring && freq === 'weekly' && (
+            <>
+              <WeekdayPicker selected={selectedDays} onChange={setSelectedDays} activeColor="#6366F1" />
+              {selectedDays.length === 0 && (
+                <Text style={styles.weekdayHint}>Select at least one day</Text>
+              )}
+            </>
           )}
 
           <Text style={styles.sheetEyebrow}>Start time</Text>
@@ -153,8 +188,33 @@ export function AddClassModal({ visible, onClose, onAdd, editingClass }: AddClas
             onDismiss={() => setShowTimePicker(false)}
           />
 
-          <TouchableOpacity style={styles.sheetSaveBtn} onPress={handleAdd} activeOpacity={0.85}>
-            <Text style={styles.sheetSaveBtnText}>{editingClass ? 'Save changes' : 'Add class'}</Text>
+          <Text style={styles.sheetEyebrow}>Professor / lecturer</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="e.g. Dr. Adaeze Obi"
+            placeholderTextColor={Colors.textMuted}
+            value={professor}
+            onChangeText={setProfessor}
+          />
+
+          <Text style={styles.sheetEyebrow}>Venue</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="e.g. Room 204, Business Building"
+            placeholderTextColor={Colors.textMuted}
+            value={venue}
+            onChangeText={setVenue}
+          />
+
+          <TouchableOpacity
+            style={[styles.sheetSaveBtn, !canSave && styles.sheetSaveBtnDisabled]}
+            onPress={handleAdd}
+            disabled={!canSave}
+            activeOpacity={0.85}
+          >
+            <Text style={[styles.sheetSaveBtnText, !canSave && styles.sheetSaveBtnTextDisabled]}>
+              {editingClass ? 'Save changes' : 'Add class'}
+            </Text>
           </TouchableOpacity>
         </ScrollView>
     </BottomSheetModal>
@@ -202,5 +262,8 @@ const styles = StyleSheet.create({
     marginTop: 20, backgroundColor: Colors.primary, borderRadius: 14,
     paddingVertical: 15, alignItems: 'center', justifyContent: 'center',
   },
+  sheetSaveBtnDisabled: { backgroundColor: Colors.border },
   sheetSaveBtnText: { fontSize: 16, fontWeight: '700', color: Colors.white },
+  sheetSaveBtnTextDisabled: { color: Colors.textMuted },
+  weekdayHint: { fontSize: 12, color: Colors.error, marginTop: 8 },
 });
