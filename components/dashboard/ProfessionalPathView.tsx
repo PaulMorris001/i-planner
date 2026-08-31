@@ -6,13 +6,20 @@ import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { StatCard } from '@/components/ui/StatCard';
+import { ItemActionSheet } from '@/components/ui/ItemActionSheet';
 import { SavingsGoalCard } from '@/components/dashboard/SavingsGoalCard';
+import { BillRemindersSection } from '@/components/dashboard/BillRemindersSection';
+import { AddBillModal } from '@/components/plan/AddBillModal';
 import { Routes } from '@/constants/routes';
 import { Colors } from '@/constants/theme';
 import { useGoals } from '@/hooks/useGoals';
 import { useTasks } from '@/hooks/useTasks';
 import { useSettings } from '@/hooks/useSettings';
+import { useBills } from '@/hooks/useBills';
+import { useEditableSheet } from '@/hooks/useEditableSheet';
+import { confirmDelete } from '@/utils/confirmDelete';
 import type { Goal } from '@/types/goal.types';
+import type { Bill } from '@/types/bill.types';
 import { taskOccursOnDay, weekdayIndexMonday, formatMonthYear, isTaskDoneOnDate } from '@/utils/date';
 import { dashboardStyles as styles } from './dashboardStyles';
 
@@ -21,13 +28,38 @@ interface ProfessionalPathViewProps {
   quickLinks: ReactNode;
   onViewGoal: (goal: Goal | null) => void;
   onAddSavingsGoal: () => void;
+  onLogSavingsProgress: () => void;
 }
 
-export function ProfessionalPathView({ quickLinks, onViewGoal, onAddSavingsGoal }: ProfessionalPathViewProps) {
+export function ProfessionalPathView({
+  quickLinks,
+  onViewGoal,
+  onAddSavingsGoal,
+  onLogSavingsProgress,
+}: ProfessionalPathViewProps) {
   const router = useRouter();
   const { tasks } = useTasks();
   const { goals } = useGoals();
   const { savingsGoal } = useSettings();
+  const { bills, createBill, updateBill, deleteBill } = useBills();
+  const billSheet = useEditableSheet<Bill>();
+
+  const handleSaveBill = async (input: Parameters<typeof createBill>[0]) => {
+    if (billSheet.editing) {
+      await updateBill(billSheet.editing.id, input);
+    } else {
+      await createBill(input);
+    }
+  };
+
+  const handleDeleteBill = () => {
+    if (!billSheet.actionTarget) return;
+    confirmDelete(billSheet.actionTarget.name, () => {
+      deleteBill(billSheet.actionTarget!.id).catch((err) => {
+        console.error('[ProfessionalPathView] failed to delete bill', err);
+      });
+    });
+  };
 
   const careerGoal = goals.find((g) => g.type === 'career');
   const careerMilestonesDone = careerGoal?.milestones.filter((m) => m.done).length ?? 0;
@@ -119,10 +151,33 @@ export function ProfessionalPathView({ quickLinks, onViewGoal, onAddSavingsGoal 
         )}
       </Card>
 
+      <BillRemindersSection
+        bills={bills}
+        onAddBill={billSheet.openNew}
+        onEditBill={billSheet.openEdit}
+        onLongPressBill={billSheet.setActionTarget}
+      />
+
       <SavingsGoalCard
         goal={savingsGoal}
         emptySubtitle="Budget for courses, certifications & career growth"
         onPress={onAddSavingsGoal}
+        onLogProgress={onLogSavingsProgress}
+      />
+
+      <AddBillModal
+        visible={billSheet.open}
+        onClose={billSheet.close}
+        onSave={handleSaveBill}
+        onRemove={billSheet.editing ? () => deleteBill(billSheet.editing!.id) : undefined}
+        editingBill={billSheet.editing}
+      />
+
+      <ItemActionSheet
+        visible={!!billSheet.actionTarget}
+        onClose={() => billSheet.setActionTarget(null)}
+        onEdit={() => billSheet.actionTarget && billSheet.openEdit(billSheet.actionTarget)}
+        onDelete={handleDeleteBill}
       />
     </>
   );

@@ -7,6 +7,7 @@ import { PurchasesProvider } from '@/contexts/PurchasesContext';
 import { OnboardingProvider } from '@/contexts/OnboardingContext';
 import { HabitsProvider } from '@/contexts/HabitsContext';
 import { NotesProvider } from '@/contexts/NotesContext';
+import { BillsProvider } from '@/contexts/BillsContext';
 import { PlanProvider } from '@/contexts/PlanContext';
 import { SettingsProvider } from '@/contexts/SettingsContext';
 import { GoalsProvider } from '@/contexts/GoalsContext';
@@ -53,14 +54,16 @@ export default function RootLayout() {
             <SettingsProvider>
               <HabitsProvider>
                 <NotesProvider>
-                  <GoalsProvider>
-                    <TasksProvider>
-                      <SyllabiProvider>
-                        <StatusBar style="dark" />
-                        <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }} />
-                      </SyllabiProvider>
-                    </TasksProvider>
-                  </GoalsProvider>
+                  <BillsProvider>
+                    <GoalsProvider>
+                      <TasksProvider>
+                        <SyllabiProvider>
+                          <StatusBar style="dark" />
+                          <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }} />
+                        </SyllabiProvider>
+                      </TasksProvider>
+                    </GoalsProvider>
+                  </BillsProvider>
                 </NotesProvider>
               </HabitsProvider>
             </SettingsProvider>

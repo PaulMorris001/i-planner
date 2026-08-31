@@ -125,6 +125,34 @@ export function isDueTodayOrLater(dateIso: string): boolean {
   return localMidnight(date) >= localMidnight(new Date());
 }
 
+// A recurring bill's stored dueDate is fixed at whenever it was first set and never
+// advances — only its day-of-month is meaningful for a recurring bill. Returns the
+// next occurrence of that day (today or later); a day beyond the current month's
+// length rolls into the following month via the same native Date behavior used
+// elsewhere in this app (no special-casing, matches existing precedent).
+export function nextRecurringDueDate(dueDateIso: string): Date {
+  const day = parseISODateLocal(dueDateIso).getDate();
+  const today = new Date();
+  // Clamp to the target month's actual last day — a bare `new Date(y, m, day)`
+  // doesn't clamp an out-of-range day, it overflows into the following month
+  // (e.g. day 31 in a 28-day February silently becomes March 3rd), which
+  // matches neither a sensible "due date" nor the native MONTHLY notification
+  // trigger's own skip-the-month behavior for a day that month doesn't have.
+  const clampedDate = (year: number, month: number) => {
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    return new Date(year, month, Math.min(day, lastDay));
+  };
+  const candidate = clampedDate(today.getFullYear(), today.getMonth());
+  return localMidnight(candidate) < localMidnight(today)
+    ? clampedDate(today.getFullYear(), today.getMonth() + 1)
+    : candidate;
+}
+
+// Signed day count from today to `date` (negative = in the past/overdue).
+export function daysUntil(date: Date): number {
+  return Math.round((localMidnight(date) - localMidnight(new Date())) / 86400000);
+}
+
 // The next upcoming date a recurring task occurs on (today included, if not
 // already done today) — a recurring task's stored `dueDate` is fixed at whatever
 // date it was first set to and never advances, so it's wrong to use directly for

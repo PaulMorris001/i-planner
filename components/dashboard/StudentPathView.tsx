@@ -55,6 +55,7 @@ interface StudentPathViewProps {
   onAddSyllabus: () => void;
   onViewGoal: (goal: Goal) => void;
   onAddSavingsGoal: () => void;
+  onLogSavingsProgress: () => void;
 }
 
 export function StudentPathView({
@@ -63,6 +64,7 @@ export function StudentPathView({
   onAddSyllabus,
   onViewGoal,
   onAddSavingsGoal,
+  onLogSavingsProgress,
 }: StudentPathViewProps) {
   const router = useRouter();
   const { plan } = usePlan();
@@ -335,6 +337,7 @@ export function StudentPathView({
         goal={savingsGoal}
         emptySubtitle="Budget for tuition, books & living costs"
         onPress={onAddSavingsGoal}
+        onLogProgress={onLogSavingsProgress}
       />
     </>
   );

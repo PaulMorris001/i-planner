@@ -4,10 +4,12 @@ import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { GreetingHeader } from '@/components/ui/GreetingHeader';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { ProfileInfoModal } from '@/components/profile/ProfileInfoModal';
 import { CalendarConnectGate } from '@/components/plan/CalendarConnectGate';
 import { ItemActionSheet } from '@/components/ui/ItemActionSheet';
 import { SegmentedToggle } from '@/components/ui/SegmentedToggle';
 import { MonthCalendarView } from '@/components/planner/MonthCalendarView';
+import { ViewMoreToggle } from '@/components/ui/ViewMoreToggle';
 import { AddClassModal } from '@/components/plan/AddClassModal';
 import { Colors, Spacing } from '@/constants/theme';
 import { TaskCategories, TaskPriorities, TaskPriorityId } from '@/constants/taskMeta';
@@ -15,6 +17,7 @@ import { COURSE_COLORS, COURSE_SOFT_COLORS } from '@/constants/classColors';
 import { useTasks } from '@/hooks/useTasks';
 import { usePlan } from '@/hooks/usePlan';
 import { useSettings } from '@/hooks/useSettings';
+import { useOnboarding } from '@/hooks/useOnboarding';
 import { useNewTaskModal } from '@/contexts/NewTaskModalContext';
 import { useEditableSheet } from '@/hooks/useEditableSheet';
 import { useClassActions } from '@/hooks/useClassActions';
@@ -31,6 +34,7 @@ const VIEW_OPTIONS: { key: 'day' | 'week' | 'month'; label: string }[] = [
 ];
 
 const PRIORITY_RANK: Record<TaskPriorityId, number> = { high: 0, medium: 1, low: 2 };
+const DAY_PREVIEW_COUNT = 3;
 
 function sortTasks(tasks: Task[]) {
   return [...tasks].sort((a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] || a.hour - b.hour);
@@ -55,11 +59,14 @@ export default function Planner() {
   const [view, setView] = useState<'day' | 'week' | 'month'>('day');
   const [courseFilter, setCourseFilter] = useState<string | null>(null);
   const [actionSheetTarget, setActionSheetTarget] = useState<Task | null>(null);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [dayExpanded, setDayExpanded] = useState(false);
   const classSheet = useEditableSheet<ClassItem>();
   const { saveClass, deleteClass } = useClassActions();
   const { tasks, toggleDone, removeTask } = useTasks();
   const { plan } = usePlan();
   const { openForEdit } = useNewTaskModal();
+  const { focusProfile } = useOnboarding();
   const {
     appleCalendarConnected,
     googleCalendarConnected,
@@ -219,7 +226,7 @@ export default function Planner() {
   if (!settingsLoading && !calendarConnected && !calendarGateDismissed) {
     return (
       <ScreenWrapper backgroundColor={Colors.offWhite} edges={['top', 'right', 'left']}>
-        <GreetingHeader />
+        <GreetingHeader onAvatarPress={() => setProfileModalOpen(true)} />
         <CalendarConnectGate
           onConnectApple={async () => {
             const ok = await connectAppleCalendar();
@@ -238,6 +245,11 @@ export default function Planner() {
           }}
           onSkip={dismissCalendarGate}
         />
+        <ProfileInfoModal
+          visible={profileModalOpen}
+          onClose={() => setProfileModalOpen(false)}
+          focusProfile={focusProfile}
+        />
       </ScreenWrapper>
     );
   }
@@ -251,7 +263,7 @@ export default function Planner() {
       style={{ ...styles.scrollContent, paddingBottom: styles.scrollContent.paddingBottom + tabBarHeight }}
       edges={['top', 'right', 'left']}
     >
-      <GreetingHeader />
+      <GreetingHeader onAvatarPress={() => setProfileModalOpen(true)} />
 
       <View style={styles.body}>
         <SegmentedToggle options={VIEW_OPTIONS} value={view} onChange={setView} />
@@ -307,10 +319,15 @@ export default function Planner() {
               {dayItems.length === 0 ? (
                 <Text style={styles.noTasks}>No tasks yet — tap the + button to add one.</Text>
               ) : (
-                dayItems.map((entry) =>
+                (dayExpanded ? dayItems : dayItems.slice(0, DAY_PREVIEW_COUNT)).map((entry) =>
                   entry.kind === 'class' ? renderClassRow(entry.item, entry.color, entry.soft) : renderTaskRow(entry.task, today)
                 )
               )}
+              <ViewMoreToggle
+                expanded={dayExpanded}
+                onPress={() => setDayExpanded((p) => !p)}
+                hiddenCount={Math.max(0, dayItems.length - DAY_PREVIEW_COUNT)}
+              />
             </View>
           </>
         ) : (
@@ -404,6 +421,12 @@ export default function Planner() {
         onClose={() => classSheet.setActionTarget(null)}
         onEdit={() => classSheet.actionTarget && classSheet.openEdit(classSheet.actionTarget)}
         onDelete={() => classSheet.actionTarget && deleteClass(classSheet.actionTarget)}
+      />
+
+      <ProfileInfoModal
+        visible={profileModalOpen}
+        onClose={() => setProfileModalOpen(false)}
+        focusProfile={focusProfile}
       />
     </ScreenWrapper>
   );

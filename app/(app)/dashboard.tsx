@@ -3,6 +3,7 @@ import { ScreenWrapper } from "@/components/layout/ScreenWrapper";
 import { AddClassModal } from "@/components/plan/AddClassModal";
 import { AddExamModal } from "@/components/plan/AddExamModal";
 import { SavingsGoalModal } from "@/components/plan/SavingsGoalModal";
+import { LogSavingsProgressModal } from "@/components/plan/LogSavingsProgressModal";
 import { SyllabusUploadModal } from "@/components/plan/SyllabusUploadModal";
 import { ProfileInfoModal } from "@/components/profile/ProfileInfoModal";
 import { DashboardSkeleton } from "@/components/ui/DashboardSkeleton";
@@ -98,6 +99,7 @@ export default function Dashboard() {
   const [classModalOpen, setClassModalOpen] = useState(false);
   const [examModalOpen, setExamModalOpen] = useState(false);
   const [savingsGoalModalOpen, setSavingsGoalModalOpen] = useState(false);
+  const [logProgressModalOpen, setLogProgressModalOpen] = useState(false);
   const [syllabusModalOpen, setSyllabusModalOpen] = useState(false);
   const [goalSummaryOpen, setGoalSummaryOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
@@ -227,18 +229,21 @@ export default function Dashboard() {
                 onAddSyllabus={() => setSyllabusModalOpen(true)}
                 onViewGoal={openGoalSummary}
                 onAddSavingsGoal={() => setSavingsGoalModalOpen(true)}
+                onLogSavingsProgress={() => setLogProgressModalOpen(true)}
               />
             ) : pathKey === "exam" ? (
               <ExamPathView
                 quickLinks={quickLinksRow}
                 onAddExam={() => setExamModalOpen(true)}
                 onAddSavingsGoal={() => setSavingsGoalModalOpen(true)}
+                onLogSavingsProgress={() => setLogProgressModalOpen(true)}
               />
             ) : (
               <ProfessionalPathView
                 quickLinks={quickLinksRow}
                 onViewGoal={openGoalSummary}
                 onAddSavingsGoal={() => setSavingsGoalModalOpen(true)}
+                onLogSavingsProgress={() => setLogProgressModalOpen(true)}
               />
             )}
 
@@ -306,6 +311,12 @@ export default function Dashboard() {
         onSave={handleSaveSavingsGoal}
         onRemove={handleRemoveSavingsGoal}
         editingGoal={savingsGoal ?? null}
+      />
+      <LogSavingsProgressModal
+        visible={logProgressModalOpen}
+        onClose={() => setLogProgressModalOpen(false)}
+        goal={savingsGoal ?? null}
+        onLogProgress={handleSaveSavingsGoal}
       />
       <GoalSummaryModal
         visible={goalSummaryOpen}

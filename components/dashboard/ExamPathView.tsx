@@ -25,9 +25,10 @@ interface ExamPathViewProps {
   quickLinks: ReactNode;
   onAddExam: () => void;
   onAddSavingsGoal: () => void;
+  onLogSavingsProgress: () => void;
 }
 
-export function ExamPathView({ quickLinks, onAddExam, onAddSavingsGoal }: ExamPathViewProps) {
+export function ExamPathView({ quickLinks, onAddExam, onAddSavingsGoal, onLogSavingsProgress }: ExamPathViewProps) {
   const router = useRouter();
   const { examPlan, toggleExamTopic } = usePlan();
   const { tasks } = useTasks();
@@ -212,6 +213,7 @@ export function ExamPathView({ quickLinks, onAddExam, onAddSavingsGoal }: ExamPa
         goal={savingsGoal}
         emptySubtitle="Budget for exam & prep-course fees"
         onPress={onAddSavingsGoal}
+        onLogProgress={onLogSavingsProgress}
       />
     </>
   );
