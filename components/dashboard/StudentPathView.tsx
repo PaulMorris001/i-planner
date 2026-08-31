@@ -8,6 +8,7 @@ import { ViewAllRow } from '@/components/ui/ViewAllRow';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SectionCardHeader } from '@/components/ui/SectionCardHeader';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { SavingsGoalCard } from '@/components/dashboard/SavingsGoalCard';
 import { COURSE_COLORS } from '@/constants/classColors';
 import { Routes } from '@/constants/routes';
 import { TaskCategories, TaskPriorities, type TaskCategoryId, type TaskPriorityId } from '@/constants/taskMeta';
@@ -16,6 +17,7 @@ import { usePlan } from '@/hooks/usePlan';
 import { useTasks } from '@/hooks/useTasks';
 import { useGoals } from '@/hooks/useGoals';
 import { useSyllabi } from '@/hooks/useSyllabi';
+import { useSettings } from '@/hooks/useSettings';
 import type { Goal } from '@/types/goal.types';
 import type { Task } from '@/types/task.types';
 import {
@@ -52,14 +54,22 @@ interface StudentPathViewProps {
   onAddClass: () => void;
   onAddSyllabus: () => void;
   onViewGoal: (goal: Goal) => void;
+  onAddSavingsGoal: () => void;
 }
 
-export function StudentPathView({ quickLinks, onAddClass, onAddSyllabus, onViewGoal }: StudentPathViewProps) {
+export function StudentPathView({
+  quickLinks,
+  onAddClass,
+  onAddSyllabus,
+  onViewGoal,
+  onAddSavingsGoal,
+}: StudentPathViewProps) {
   const router = useRouter();
   const { plan } = usePlan();
   const { tasks } = useTasks();
   const { goals } = useGoals();
   const { syllabi } = useSyllabi();
+  const { savingsGoal } = useSettings();
 
   const taskStreak = computeTaskStreak(tasks);
   const thisWeeksGoals = goals.filter((g) => g.targetDate && isThisWeek(g.targetDate));
@@ -320,6 +330,12 @@ export function StudentPathView({ quickLinks, onAddClass, onAddSyllabus, onViewG
           </View>
         ))}
       </View>
+
+      <SavingsGoalCard
+        goal={savingsGoal}
+        emptySubtitle="Budget for tuition, books & living costs"
+        onPress={onAddSavingsGoal}
+      />
     </>
   );
 }

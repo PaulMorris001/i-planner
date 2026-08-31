@@ -8,11 +8,13 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { SectionCardHeader } from '@/components/ui/SectionCardHeader';
 import { StatCard } from '@/components/ui/StatCard';
 import { ViewAllRow } from '@/components/ui/ViewAllRow';
+import { SavingsGoalCard } from '@/components/dashboard/SavingsGoalCard';
 import { Routes } from '@/constants/routes';
 import { TaskCategories } from '@/constants/taskMeta';
 import { Colors } from '@/constants/theme';
 import { usePlan } from '@/hooks/usePlan';
 import { useTasks } from '@/hooks/useTasks';
+import { useSettings } from '@/hooks/useSettings';
 import { localMidnight, computeTaskStreak, parseISODateLocal, isTaskDoneOnDate, nextTaskOccurrence, toDateKey, formatShortDate } from '@/utils/date';
 import { currentExamWeek } from './dashboardHelpers';
 import { dashboardStyles as styles } from './dashboardStyles';
@@ -22,12 +24,14 @@ interface ExamPathViewProps {
   // Passed in rather than rebuilt here so it doesn't remount on re-render.
   quickLinks: ReactNode;
   onAddExam: () => void;
+  onAddSavingsGoal: () => void;
 }
 
-export function ExamPathView({ quickLinks, onAddExam }: ExamPathViewProps) {
+export function ExamPathView({ quickLinks, onAddExam, onAddSavingsGoal }: ExamPathViewProps) {
   const router = useRouter();
   const { examPlan, toggleExamTopic } = usePlan();
   const { tasks } = useTasks();
+  const { savingsGoal } = useSettings();
 
   const taskStreak = computeTaskStreak(tasks);
 
@@ -203,6 +207,12 @@ export function ExamPathView({ quickLinks, onAddExam }: ExamPathViewProps) {
           )}
         </StatCard>
       </View>
+
+      <SavingsGoalCard
+        goal={savingsGoal}
+        emptySubtitle="Budget for exam & prep-course fees"
+        onPress={onAddSavingsGoal}
+      />
     </>
   );
 }

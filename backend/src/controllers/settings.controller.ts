@@ -19,9 +19,10 @@ export async function updateSettings(req: AuthedRequest, res: Response) {
   const {
     appleCalendarConnected, calendarGateDismissed, remindersEnabled, timeZone,
     aiAccessTasks, aiAccessGoals, aiAccessCalendar, aiDisclosureAcknowledged,
+    savingsDisclosureAcknowledged, savingsGoal,
   } = req.body ?? {};
 
-  const update: Record<string, boolean | string> = {};
+  const update: Record<string, unknown> = {};
   if (appleCalendarConnected !== undefined) update.appleCalendarConnected = !!appleCalendarConnected;
   if (calendarGateDismissed !== undefined) update.calendarGateDismissed = !!calendarGateDismissed;
   if (remindersEnabled !== undefined) update.remindersEnabled = !!remindersEnabled;
@@ -30,10 +31,33 @@ export async function updateSettings(req: AuthedRequest, res: Response) {
   if (aiAccessGoals !== undefined) update.aiAccessGoals = !!aiAccessGoals;
   if (aiAccessCalendar !== undefined) update.aiAccessCalendar = !!aiAccessCalendar;
   if (aiDisclosureAcknowledged !== undefined) update.aiDisclosureAcknowledged = !!aiDisclosureAcknowledged;
+  if (savingsDisclosureAcknowledged !== undefined) update.savingsDisclosureAcknowledged = !!savingsDisclosureAcknowledged;
+
+  // savingsGoal: null means "remove" ($unset), an object means "set", undefined
+  // (key absent) means "leave untouched" — same three-state convention Google
+  // Calendar's disconnect handler already uses for its own token fields below.
+  let unset: Record<string, ''> | undefined;
+  if (savingsGoal === null) {
+    unset = { savingsGoal: '' };
+  } else if (
+    savingsGoal &&
+    typeof savingsGoal === 'object' &&
+    typeof savingsGoal.name === 'string' &&
+    typeof savingsGoal.targetAmount === 'number' &&
+    typeof savingsGoal.savedAmount === 'number' &&
+    typeof savingsGoal.targetDate === 'string'
+  ) {
+    update.savingsGoal = {
+      name: savingsGoal.name,
+      targetAmount: savingsGoal.targetAmount,
+      savedAmount: savingsGoal.savedAmount,
+      targetDate: savingsGoal.targetDate,
+    };
+  }
 
   const settings = await Settings.findOneAndUpdate(
     { firebaseUid: req.userId },
-    { $set: update },
+    unset ? { $set: update, $unset: unset } : { $set: update },
     { upsert: true, new: true }
   );
 

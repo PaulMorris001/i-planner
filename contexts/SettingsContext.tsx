@@ -13,7 +13,7 @@ import {
   scheduleClassNotifications,
   cancelNotifications,
 } from '@/utils/notifications';
-import type { Settings } from '@/types/settings.types';
+import type { Settings, SavingsGoal } from '@/types/settings.types';
 import type { StudentPlan, ClassItem } from '@/types/plan.types';
 
 // Applies per-class patches (appleEventIds/notificationIds) from the backfill
@@ -131,6 +131,7 @@ const DEFAULT_SETTINGS: Settings = {
   aiAccessGoals: true,
   aiAccessCalendar: true,
   aiDisclosureAcknowledged: false,
+  savingsDisclosureAcknowledged: false,
 };
 
 type AiAccessKey = 'aiAccessTasks' | 'aiAccessGoals' | 'aiAccessCalendar';
@@ -146,6 +147,9 @@ interface SettingsContextValue extends Settings {
   disableReminders: () => Promise<void>;
   setAiAccess: (key: AiAccessKey, value: boolean) => Promise<void>;
   acknowledgeAiDisclosure: () => Promise<boolean>;
+  acknowledgeSavingsDisclosure: () => Promise<boolean>;
+  saveSavingsGoal: (goal: SavingsGoal) => Promise<void>;
+  removeSavingsGoal: () => Promise<void>;
 }
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
@@ -307,6 +311,41 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const acknowledgeSavingsDisclosure = async (): Promise<boolean> => {
+    const prevSettings = settings;
+    setSettings((s) => ({ ...s, savingsDisclosureAcknowledged: true }));
+    try {
+      setSettings(await settingsService.patch({ savingsDisclosureAcknowledged: true }));
+      return true;
+    } catch (err) {
+      setSettings(prevSettings);
+      console.error('[SettingsProvider] failed to acknowledge savings disclosure', err);
+      return false;
+    }
+  };
+
+  const saveSavingsGoal = async (goal: SavingsGoal): Promise<void> => {
+    const prevSettings = settings;
+    setSettings((s) => ({ ...s, savingsGoal: goal }));
+    try {
+      setSettings(await settingsService.patch({ savingsGoal: goal }));
+    } catch (err) {
+      setSettings(prevSettings);
+      throw err;
+    }
+  };
+
+  const removeSavingsGoal = async (): Promise<void> => {
+    const prevSettings = settings;
+    setSettings((s) => ({ ...s, savingsGoal: undefined }));
+    try {
+      setSettings(await settingsService.patch({ savingsGoal: null }));
+    } catch (err) {
+      setSettings(prevSettings);
+      throw err;
+    }
+  };
+
   return (
     <SettingsContext.Provider
       value={{
@@ -321,6 +360,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         disableReminders,
         setAiAccess,
         acknowledgeAiDisclosure,
+        acknowledgeSavingsDisclosure,
+        saveSavingsGoal,
+        removeSavingsGoal,
       }}
     >
       {children}

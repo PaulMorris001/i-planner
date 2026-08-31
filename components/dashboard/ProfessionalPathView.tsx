@@ -6,10 +6,12 @@ import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { StatCard } from '@/components/ui/StatCard';
+import { SavingsGoalCard } from '@/components/dashboard/SavingsGoalCard';
 import { Routes } from '@/constants/routes';
 import { Colors } from '@/constants/theme';
 import { useGoals } from '@/hooks/useGoals';
 import { useTasks } from '@/hooks/useTasks';
+import { useSettings } from '@/hooks/useSettings';
 import type { Goal } from '@/types/goal.types';
 import { taskOccursOnDay, weekdayIndexMonday, formatMonthYear, isTaskDoneOnDate } from '@/utils/date';
 import { dashboardStyles as styles } from './dashboardStyles';
@@ -18,12 +20,14 @@ interface ProfessionalPathViewProps {
   // Passed in rather than rebuilt here so it doesn't remount on re-render.
   quickLinks: ReactNode;
   onViewGoal: (goal: Goal | null) => void;
+  onAddSavingsGoal: () => void;
 }
 
-export function ProfessionalPathView({ quickLinks, onViewGoal }: ProfessionalPathViewProps) {
+export function ProfessionalPathView({ quickLinks, onViewGoal, onAddSavingsGoal }: ProfessionalPathViewProps) {
   const router = useRouter();
   const { tasks } = useTasks();
   const { goals } = useGoals();
+  const { savingsGoal } = useSettings();
 
   const careerGoal = goals.find((g) => g.type === 'career');
   const careerMilestonesDone = careerGoal?.milestones.filter((m) => m.done).length ?? 0;
@@ -114,6 +118,12 @@ export function ProfessionalPathView({ quickLinks, onViewGoal }: ProfessionalPat
           </>
         )}
       </Card>
+
+      <SavingsGoalCard
+        goal={savingsGoal}
+        emptySubtitle="Budget for courses, certifications & career growth"
+        onPress={onAddSavingsGoal}
+      />
     </>
   );
 }

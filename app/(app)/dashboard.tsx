@@ -2,6 +2,7 @@ import { GoalSummaryModal } from "@/components/goal/GoalSummaryModal";
 import { ScreenWrapper } from "@/components/layout/ScreenWrapper";
 import { AddClassModal } from "@/components/plan/AddClassModal";
 import { AddExamModal } from "@/components/plan/AddExamModal";
+import { SavingsGoalModal } from "@/components/plan/SavingsGoalModal";
 import { SyllabusUploadModal } from "@/components/plan/SyllabusUploadModal";
 import { ProfileInfoModal } from "@/components/profile/ProfileInfoModal";
 import { DashboardSkeleton } from "@/components/ui/DashboardSkeleton";
@@ -22,6 +23,7 @@ import { useTasks } from "@/hooks/useTasks";
 import { useSyllabi } from "@/hooks/useSyllabi";
 import type { ClassItem, Exam } from "@/types/plan.types";
 import type { Goal } from "@/types/goal.types";
+import type { SavingsGoal } from "@/types/settings.types";
 import { syncClassToAppleCalendar } from "@/utils/appleCalendarSync";
 import { scheduleClassNotifications } from "@/utils/notifications";
 import { isDueTodayOrLater, localMidnight, parseISODateLocal, isTaskDoneOnDate } from "@/utils/date";
@@ -75,7 +77,7 @@ export default function Dashboard() {
     loading: planLoading,
   } = usePlan();
   const { focusProfile } = useOnboarding();
-  const { appleCalendarConnected, remindersEnabled } = useSettings();
+  const { appleCalendarConnected, remindersEnabled, savingsGoal, saveSavingsGoal, removeSavingsGoal } = useSettings();
   const { habits, loading: habitsLoading, refetch: refetchHabits } = useHabits();
   const { tasks, loading: tasksLoading, refetch: refetchTasks } = useTasks();
   const { loading: goalsLoading, refetch: refetchGoals } = useGoals();
@@ -95,6 +97,7 @@ export default function Dashboard() {
 
   const [classModalOpen, setClassModalOpen] = useState(false);
   const [examModalOpen, setExamModalOpen] = useState(false);
+  const [savingsGoalModalOpen, setSavingsGoalModalOpen] = useState(false);
   const [syllabusModalOpen, setSyllabusModalOpen] = useState(false);
   const [goalSummaryOpen, setGoalSummaryOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
@@ -137,6 +140,24 @@ export default function Dashboard() {
         "Couldn't save your exam",
         "Check your connection and try again.",
       );
+    }
+  };
+
+  const handleSaveSavingsGoal = async (goal: SavingsGoal) => {
+    try {
+      await saveSavingsGoal(goal);
+    } catch (err) {
+      console.error("[Dashboard] failed to save savings goal", err);
+      Alert.alert("Couldn't save your savings goal", "Check your connection and try again.");
+    }
+  };
+
+  const handleRemoveSavingsGoal = async () => {
+    try {
+      await removeSavingsGoal();
+    } catch (err) {
+      console.error("[Dashboard] failed to remove savings goal", err);
+      Alert.alert("Couldn't remove your savings goal", "Check your connection and try again.");
     }
   };
 
@@ -205,11 +226,20 @@ export default function Dashboard() {
                 onAddClass={() => setClassModalOpen(true)}
                 onAddSyllabus={() => setSyllabusModalOpen(true)}
                 onViewGoal={openGoalSummary}
+                onAddSavingsGoal={() => setSavingsGoalModalOpen(true)}
               />
             ) : pathKey === "exam" ? (
-              <ExamPathView quickLinks={quickLinksRow} onAddExam={() => setExamModalOpen(true)} />
+              <ExamPathView
+                quickLinks={quickLinksRow}
+                onAddExam={() => setExamModalOpen(true)}
+                onAddSavingsGoal={() => setSavingsGoalModalOpen(true)}
+              />
             ) : (
-              <ProfessionalPathView quickLinks={quickLinksRow} onViewGoal={openGoalSummary} />
+              <ProfessionalPathView
+                quickLinks={quickLinksRow}
+                onViewGoal={openGoalSummary}
+                onAddSavingsGoal={() => setSavingsGoalModalOpen(true)}
+              />
             )}
 
             {/* AI Coach */}
@@ -269,6 +299,13 @@ export default function Dashboard() {
         onClose={() => setExamModalOpen(false)}
         onAdd={handleAddExam}
         hasExistingExams={examPlan.exams.length > 0}
+      />
+      <SavingsGoalModal
+        visible={savingsGoalModalOpen}
+        onClose={() => setSavingsGoalModalOpen(false)}
+        onSave={handleSaveSavingsGoal}
+        onRemove={handleRemoveSavingsGoal}
+        editingGoal={savingsGoal ?? null}
       />
       <GoalSummaryModal
         visible={goalSummaryOpen}

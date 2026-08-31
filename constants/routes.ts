@@ -16,6 +16,7 @@ export const Routes = {
   GOALS:      '/goals',
   HABITS:     '/habits',
   NOTES:      '/notes',
+  NOTE_EDITOR: '/note-editor',
   PLANS:      '/plans',
   CERT_TRACKER: '/cert-tracker',
   CLASSES:    '/classes',

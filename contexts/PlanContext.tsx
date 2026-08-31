@@ -118,19 +118,22 @@ export function PlanProvider({ children }: { children: ReactNode }) {
 
   // Computes inside the setExamPlan updater so back-to-back calls (e.g. checking
   // off several topics quickly) don't revert each other. Rolls back and rethrows
-  // on save failure so the UI never shows an unpersisted change.
+  // on save failure so the UI never shows an unpersisted change. Saves the whole
+  // plan (not just `exams`) — the backend's save fully overwrites `Plan.data`
+  // with no merge, so saving `{ exams }` alone would silently wipe any other
+  // ExamPlan field (e.g. savingsGoal) on every topic-toggle/practice-log/etc.
   const updateExamPlan = async (updater: (exams: ExamPlan['exams']) => ExamPlan['exams']) => {
-    let prevExams: ExamPlan['exams'] = [];
-    let nextExams: ExamPlan['exams'] = [];
+    let prevPlan: ExamPlan = EMPTY_EXAM_PLAN;
+    let nextPlan: ExamPlan = EMPTY_EXAM_PLAN;
     setExamPlan((prev) => {
-      prevExams = prev.exams;
-      nextExams = updater(prev.exams);
-      return { exams: nextExams };
+      prevPlan = prev;
+      nextPlan = { ...prev, exams: updater(prev.exams) };
+      return nextPlan;
     });
     try {
-      await planService.save('exam', { exams: nextExams });
+      await planService.save('exam', nextPlan);
     } catch (err) {
-      setExamPlan((prev) => ({ ...prev, exams: prevExams }));
+      setExamPlan(prevPlan);
       throw err;
     }
   };
