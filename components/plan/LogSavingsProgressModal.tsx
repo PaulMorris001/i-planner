@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
 import { BottomSheetModal } from '@/components/ui/BottomSheetModal';
 import { Colors, Radius } from '@/constants/theme';
-import { formatCurrency } from '@/utils/currency';
-import type { SavingsGoal } from '@/types/settings.types';
+import type { SavingsGoal } from '@/types/savingsGoal.types';
 
 const ADD_STEP = 50;
+const ADD_MIN = 0;
 const DEFAULT_ADD = 100;
 
 interface LogSavingsProgressModalProps {
@@ -21,11 +21,35 @@ interface LogSavingsProgressModalProps {
 // single quick action (bump savedAmount), not editing the whole goal.
 export function LogSavingsProgressModal({ visible, onClose, goal, onLogProgress }: LogSavingsProgressModalProps) {
   const [amount, setAmount] = useState(DEFAULT_ADD);
+  // Raw text mirror of `amount` for the typeable field below — kept separate
+  // so a mid-typing state like "" or a leading-zero string doesn't get
+  // clobbered by re-deriving it from the numeric value on every keystroke.
+  const [amountText, setAmountText] = useState(String(DEFAULT_ADD));
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (visible) setAmount(DEFAULT_ADD);
+    if (visible) {
+      setAmount(DEFAULT_ADD);
+      setAmountText(String(DEFAULT_ADD));
+    }
   }, [visible]);
+
+  // Shared by both stepper buttons — keeps amountText in sync so the typed
+  // field always reflects the current value after a +/- tap.
+  const applyAmount = (next: number) => {
+    const clamped = Math.max(ADD_MIN, next);
+    setAmount(clamped);
+    setAmountText(String(clamped));
+  };
+
+  const handleAmountChange = (text: string) => {
+    const digits = text.replace(/[^0-9]/g, '');
+    setAmountText(digits);
+    setAmount(digits === '' ? ADD_MIN : Math.max(ADD_MIN, Number(digits)));
+  };
+
+  // On blur, drop a stray "" or leading zeros back to the clean numeric value.
+  const handleAmountBlur = () => setAmountText(String(amount));
 
   const handleAdd = async () => {
     if (!goal || amount <= 0) return;
@@ -48,11 +72,22 @@ export function LogSavingsProgressModal({ visible, onClose, goal, onLogProgress 
       <Text style={styles.subtitle}>How much did you add this time?</Text>
 
       <View style={styles.stepperRow}>
-        <Pressable style={styles.stepperBtn} onPress={() => setAmount((a) => Math.max(0, a - ADD_STEP))}>
+        <Pressable style={styles.stepperBtn} onPress={() => applyAmount(amount - ADD_STEP)}>
           <Text style={styles.stepperBtnText}>−</Text>
         </Pressable>
-        <Text style={styles.amountText}>{formatCurrency(amount)}</Text>
-        <Pressable style={styles.stepperBtn} onPress={() => setAmount((a) => a + ADD_STEP)}>
+        <View style={styles.amountInputRow}>
+          <Text style={styles.amountPrefix}>$</Text>
+          <TextInput
+            value={amountText}
+            onChangeText={handleAmountChange}
+            onBlur={handleAmountBlur}
+            keyboardType="number-pad"
+            placeholder="0"
+            placeholderTextColor={Colors.textMuted}
+            style={styles.amountInput}
+          />
+        </View>
+        <Pressable style={styles.stepperBtn} onPress={() => applyAmount(amount + ADD_STEP)}>
           <Text style={styles.stepperBtnText}>+</Text>
         </Pressable>
       </View>
@@ -109,10 +144,22 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     lineHeight: 22,
   },
-  amountText: {
+  amountInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  amountPrefix: {
     fontSize: 24,
     fontWeight: '800',
     color: Colors.textPrimary,
+  },
+  amountInput: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+    padding: 0,
+    minWidth: 50,
+    textAlign: 'center',
   },
   addBtn: {
     alignItems: 'center',

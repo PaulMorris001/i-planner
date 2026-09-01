@@ -7,19 +7,20 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { StatCard } from '@/components/ui/StatCard';
 import { ItemActionSheet } from '@/components/ui/ItemActionSheet';
-import { SavingsGoalCard } from '@/components/dashboard/SavingsGoalCard';
+import { SavingsGoalsSection } from '@/components/dashboard/SavingsGoalsSection';
 import { BillRemindersSection } from '@/components/dashboard/BillRemindersSection';
 import { AddBillModal } from '@/components/plan/AddBillModal';
 import { Routes } from '@/constants/routes';
 import { Colors } from '@/constants/theme';
 import { useGoals } from '@/hooks/useGoals';
 import { useTasks } from '@/hooks/useTasks';
-import { useSettings } from '@/hooks/useSettings';
 import { useBills } from '@/hooks/useBills';
+import { useSavingsGoals } from '@/hooks/useSavingsGoals';
 import { useEditableSheet } from '@/hooks/useEditableSheet';
 import { confirmDelete } from '@/utils/confirmDelete';
 import type { Goal } from '@/types/goal.types';
 import type { Bill } from '@/types/bill.types';
+import type { SavingsGoal } from '@/types/savingsGoal.types';
 import { taskOccursOnDay, weekdayIndexMonday, formatMonthYear, isTaskDoneOnDate } from '@/utils/date';
 import { dashboardStyles as styles } from './dashboardStyles';
 
@@ -28,19 +29,21 @@ interface ProfessionalPathViewProps {
   quickLinks: ReactNode;
   onViewGoal: (goal: Goal | null) => void;
   onAddSavingsGoal: () => void;
-  onLogSavingsProgress: () => void;
+  onEditSavingsGoal: (goal: SavingsGoal) => void;
+  onLogSavingsProgress: (goal: SavingsGoal) => void;
 }
 
 export function ProfessionalPathView({
   quickLinks,
   onViewGoal,
   onAddSavingsGoal,
+  onEditSavingsGoal,
   onLogSavingsProgress,
 }: ProfessionalPathViewProps) {
   const router = useRouter();
   const { tasks } = useTasks();
   const { goals } = useGoals();
-  const { savingsGoal } = useSettings();
+  const { goals: savingsGoals } = useSavingsGoals();
   const { bills, createBill, updateBill, deleteBill } = useBills();
   const billSheet = useEditableSheet<Bill>();
 
@@ -158,10 +161,11 @@ export function ProfessionalPathView({
         onLongPressBill={billSheet.setActionTarget}
       />
 
-      <SavingsGoalCard
-        goal={savingsGoal}
+      <SavingsGoalsSection
+        goals={savingsGoals}
         emptySubtitle="Budget for courses, certifications & career growth"
-        onPress={onAddSavingsGoal}
+        onAdd={onAddSavingsGoal}
+        onEditGoal={onEditSavingsGoal}
         onLogProgress={onLogSavingsProgress}
       />
 

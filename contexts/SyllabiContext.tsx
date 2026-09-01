@@ -8,6 +8,8 @@ interface SyllabiContextValue {
   syllabi: Syllabus[];
   loading: boolean;
   createSyllabus: (input: { fileName: string; courseName: string; classId?: string }) => Promise<void>;
+  updateSyllabus: (id: string, patch: { courseName?: string }) => Promise<void>;
+  deleteSyllabus: (id: string) => Promise<void>;
   refetch: () => Promise<void>;
 }
 
@@ -44,8 +46,33 @@ export function SyllabiProvider({ children }: { children: ReactNode }) {
     setSyllabi((prev) => [created, ...prev]);
   };
 
+  const updateSyllabus = async (id: string, patch: { courseName?: string }) => {
+    const prevSyllabi = syllabi;
+    setSyllabi((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+    try {
+      const updated = await syllabusService.update(id, patch);
+      setSyllabi((prev) => prev.map((s) => (s.id === id ? updated : s)));
+    } catch (err) {
+      setSyllabi(prevSyllabi);
+      throw err;
+    }
+  };
+
+  const deleteSyllabus = async (id: string) => {
+    const prevSyllabi = syllabi;
+    setSyllabi((prev) => prev.filter((s) => s.id !== id));
+    try {
+      await syllabusService.remove(id);
+    } catch (err) {
+      setSyllabi(prevSyllabi);
+      console.error('[SyllabiProvider] failed to delete syllabus', err);
+    }
+  };
+
   return (
-    <SyllabiContext.Provider value={{ syllabi, loading, createSyllabus, refetch: fetchSyllabi }}>
+    <SyllabiContext.Provider
+      value={{ syllabi, loading, createSyllabus, updateSyllabus, deleteSyllabus, refetch: fetchSyllabi }}
+    >
       {children}
     </SyllabiContext.Provider>
   );

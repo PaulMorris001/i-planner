@@ -18,13 +18,16 @@ import { Colors } from "@/constants/theme";
 import { useGoals } from "@/hooks/useGoals";
 import { useHabits } from "@/hooks/useHabits";
 import { useOnboarding } from "@/hooks/useOnboarding";
+import { toPathKey, type PathKey } from "@/hooks/usePathKey";
 import { usePlan } from "@/hooks/usePlan";
 import { useSettings } from "@/hooks/useSettings";
+import { useSavingsGoals } from "@/hooks/useSavingsGoals";
+import { useEditableSheet } from "@/hooks/useEditableSheet";
 import { useTasks } from "@/hooks/useTasks";
 import { useSyllabi } from "@/hooks/useSyllabi";
 import type { ClassItem, Exam } from "@/types/plan.types";
 import type { Goal } from "@/types/goal.types";
-import type { SavingsGoal } from "@/types/settings.types";
+import type { SavingsGoal } from "@/types/savingsGoal.types";
 import { syncClassToAppleCalendar } from "@/utils/appleCalendarSync";
 import { scheduleClassNotifications } from "@/utils/notifications";
 import { isDueTodayOrLater, localMidnight, parseISODateLocal, isTaskDoneOnDate } from "@/utils/date";
@@ -32,14 +35,6 @@ import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Alert, Pressable, Text, View } from "react-native";
-
-type PathKey = "student" | "exam" | "professional";
-
-function toPathKey(focusProfile: string | null): PathKey {
-  if (focusProfile === "student") return "student";
-  if (focusProfile === "exam_candidate") return "exam";
-  return "professional";
-}
 
 // Shown when there's no real upcoming task to reference.
 const AI_TIP_FALLBACK: Record<PathKey, string> = {
@@ -78,7 +73,13 @@ export default function Dashboard() {
     loading: planLoading,
   } = usePlan();
   const { focusProfile } = useOnboarding();
-  const { appleCalendarConnected, remindersEnabled, savingsGoal, saveSavingsGoal, removeSavingsGoal } = useSettings();
+  const { appleCalendarConnected, remindersEnabled } = useSettings();
+  // Goal list itself is read directly by each path view via useSavingsGoals() —
+  // only the mutators and the shared add/edit sheet state live here, since the
+  // modals are rendered once and shared across all three dashboards.
+  const { createGoal, updateGoal, deleteGoal } = useSavingsGoals();
+  const goalSheet = useEditableSheet<SavingsGoal>();
+  const [logProgressTarget, setLogProgressTarget] = useState<SavingsGoal | null>(null);
   const { habits, loading: habitsLoading, refetch: refetchHabits } = useHabits();
   const { tasks, loading: tasksLoading, refetch: refetchTasks } = useTasks();
   const { loading: goalsLoading, refetch: refetchGoals } = useGoals();
@@ -98,8 +99,6 @@ export default function Dashboard() {
 
   const [classModalOpen, setClassModalOpen] = useState(false);
   const [examModalOpen, setExamModalOpen] = useState(false);
-  const [savingsGoalModalOpen, setSavingsGoalModalOpen] = useState(false);
-  const [logProgressModalOpen, setLogProgressModalOpen] = useState(false);
   const [syllabusModalOpen, setSyllabusModalOpen] = useState(false);
   const [goalSummaryOpen, setGoalSummaryOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
@@ -145,22 +144,16 @@ export default function Dashboard() {
     }
   };
 
-  const handleSaveSavingsGoal = async (goal: SavingsGoal) => {
-    try {
-      await saveSavingsGoal(goal);
-    } catch (err) {
-      console.error("[Dashboard] failed to save savings goal", err);
-      Alert.alert("Couldn't save your savings goal", "Check your connection and try again.");
+  const handleSaveGoal = async (input: Parameters<typeof createGoal>[0]) => {
+    if (goalSheet.editing) {
+      await updateGoal(goalSheet.editing.id, input);
+    } else {
+      await createGoal(input);
     }
   };
 
-  const handleRemoveSavingsGoal = async () => {
-    try {
-      await removeSavingsGoal();
-    } catch (err) {
-      console.error("[Dashboard] failed to remove savings goal", err);
-      Alert.alert("Couldn't remove your savings goal", "Check your connection and try again.");
-    }
+  const handleLogProgress = async (goal: SavingsGoal) => {
+    await updateGoal(goal.id, { savedAmount: goal.savedAmount });
   };
 
   // Plain JSX value, not its own component, so it doesn't remount every
@@ -228,22 +221,25 @@ export default function Dashboard() {
                 onAddClass={() => setClassModalOpen(true)}
                 onAddSyllabus={() => setSyllabusModalOpen(true)}
                 onViewGoal={openGoalSummary}
-                onAddSavingsGoal={() => setSavingsGoalModalOpen(true)}
-                onLogSavingsProgress={() => setLogProgressModalOpen(true)}
+                onAddSavingsGoal={() => goalSheet.openNew()}
+                onEditSavingsGoal={goalSheet.openEdit}
+                onLogSavingsProgress={setLogProgressTarget}
               />
             ) : pathKey === "exam" ? (
               <ExamPathView
                 quickLinks={quickLinksRow}
                 onAddExam={() => setExamModalOpen(true)}
-                onAddSavingsGoal={() => setSavingsGoalModalOpen(true)}
-                onLogSavingsProgress={() => setLogProgressModalOpen(true)}
+                onAddSavingsGoal={() => goalSheet.openNew()}
+                onEditSavingsGoal={goalSheet.openEdit}
+                onLogSavingsProgress={setLogProgressTarget}
               />
             ) : (
               <ProfessionalPathView
                 quickLinks={quickLinksRow}
                 onViewGoal={openGoalSummary}
-                onAddSavingsGoal={() => setSavingsGoalModalOpen(true)}
-                onLogSavingsProgress={() => setLogProgressModalOpen(true)}
+                onAddSavingsGoal={() => goalSheet.openNew()}
+                onEditSavingsGoal={goalSheet.openEdit}
+                onLogSavingsProgress={setLogProgressTarget}
               />
             )}
 
@@ -306,17 +302,17 @@ export default function Dashboard() {
         hasExistingExams={examPlan.exams.length > 0}
       />
       <SavingsGoalModal
-        visible={savingsGoalModalOpen}
-        onClose={() => setSavingsGoalModalOpen(false)}
-        onSave={handleSaveSavingsGoal}
-        onRemove={handleRemoveSavingsGoal}
-        editingGoal={savingsGoal ?? null}
+        visible={goalSheet.open}
+        onClose={goalSheet.close}
+        onSave={handleSaveGoal}
+        onRemove={goalSheet.editing ? () => deleteGoal(goalSheet.editing!.id) : undefined}
+        editingGoal={goalSheet.editing}
       />
       <LogSavingsProgressModal
-        visible={logProgressModalOpen}
-        onClose={() => setLogProgressModalOpen(false)}
-        goal={savingsGoal ?? null}
-        onLogProgress={handleSaveSavingsGoal}
+        visible={!!logProgressTarget}
+        onClose={() => setLogProgressTarget(null)}
+        goal={logProgressTarget}
+        onLogProgress={handleLogProgress}
       />
       <GoalSummaryModal
         visible={goalSummaryOpen}

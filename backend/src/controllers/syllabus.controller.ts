@@ -6,6 +6,7 @@ import { ApiError } from '../utils/ApiError';
 import { extractSyllabus } from '../services/syllabusExtraction';
 import { FEATURE_MIN_TIER, hasTier } from '../constants/featureTiers';
 import { checkAndConsumeQuery } from '../services/aiUsageLimiter';
+import { findOwnedOrThrow } from '../utils/ownedDoc';
 
 export async function listSyllabi(req: AuthedRequest, res: Response) {
   const syllabi = await Syllabus.find({ firebaseUid: req.userId }).sort({ createdAt: -1 });
@@ -68,4 +69,25 @@ export async function createSyllabus(req: AuthedRequest, res: Response) {
   });
 
   res.status(201).json(toPublicSyllabus(syllabus));
+}
+
+export async function updateSyllabus(req: AuthedRequest, res: Response) {
+  const syllabus = await findOwnedOrThrow(Syllabus, req.params.id, req.userId!);
+
+  const { courseName } = req.body ?? {};
+  if (courseName !== undefined) {
+    if (!courseName || typeof courseName !== 'string' || !courseName.trim()) {
+      throw new ApiError(400, 'Course name is required.', 'general');
+    }
+    syllabus.courseName = courseName.trim();
+  }
+
+  await syllabus.save();
+  res.json(toPublicSyllabus(syllabus));
+}
+
+export async function deleteSyllabus(req: AuthedRequest, res: Response) {
+  const syllabus = await findOwnedOrThrow(Syllabus, req.params.id, req.userId!);
+  await syllabus.deleteOne();
+  res.status(204).send();
 }

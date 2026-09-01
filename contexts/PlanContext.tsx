@@ -121,7 +121,7 @@ export function PlanProvider({ children }: { children: ReactNode }) {
   // on save failure so the UI never shows an unpersisted change. Saves the whole
   // plan (not just `exams`) — the backend's save fully overwrites `Plan.data`
   // with no merge, so saving `{ exams }` alone would silently wipe any other
-  // ExamPlan field (e.g. savingsGoal) on every topic-toggle/practice-log/etc.
+  // ExamPlan field on every topic-toggle/practice-log/etc.
   const updateExamPlan = async (updater: (exams: ExamPlan['exams']) => ExamPlan['exams']) => {
     let prevPlan: ExamPlan = EMPTY_EXAM_PLAN;
     let nextPlan: ExamPlan = EMPTY_EXAM_PLAN;

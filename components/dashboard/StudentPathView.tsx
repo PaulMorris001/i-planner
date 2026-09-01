@@ -8,7 +8,7 @@ import { ViewAllRow } from '@/components/ui/ViewAllRow';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SectionCardHeader } from '@/components/ui/SectionCardHeader';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { SavingsGoalCard } from '@/components/dashboard/SavingsGoalCard';
+import { SavingsGoalsSection } from '@/components/dashboard/SavingsGoalsSection';
 import { COURSE_COLORS } from '@/constants/classColors';
 import { Routes } from '@/constants/routes';
 import { TaskCategories, TaskPriorities, type TaskCategoryId, type TaskPriorityId } from '@/constants/taskMeta';
@@ -17,9 +17,10 @@ import { usePlan } from '@/hooks/usePlan';
 import { useTasks } from '@/hooks/useTasks';
 import { useGoals } from '@/hooks/useGoals';
 import { useSyllabi } from '@/hooks/useSyllabi';
-import { useSettings } from '@/hooks/useSettings';
+import { useSavingsGoals } from '@/hooks/useSavingsGoals';
 import type { Goal } from '@/types/goal.types';
 import type { Task } from '@/types/task.types';
+import type { SavingsGoal } from '@/types/savingsGoal.types';
 import {
   computeTaskStreak,
   weekdayIndexMonday,
@@ -55,7 +56,8 @@ interface StudentPathViewProps {
   onAddSyllabus: () => void;
   onViewGoal: (goal: Goal) => void;
   onAddSavingsGoal: () => void;
-  onLogSavingsProgress: () => void;
+  onEditSavingsGoal: (goal: SavingsGoal) => void;
+  onLogSavingsProgress: (goal: SavingsGoal) => void;
 }
 
 export function StudentPathView({
@@ -64,6 +66,7 @@ export function StudentPathView({
   onAddSyllabus,
   onViewGoal,
   onAddSavingsGoal,
+  onEditSavingsGoal,
   onLogSavingsProgress,
 }: StudentPathViewProps) {
   const router = useRouter();
@@ -71,7 +74,7 @@ export function StudentPathView({
   const { tasks } = useTasks();
   const { goals } = useGoals();
   const { syllabi } = useSyllabi();
-  const { savingsGoal } = useSettings();
+  const { goals: savingsGoals } = useSavingsGoals();
 
   const taskStreak = computeTaskStreak(tasks);
   const thisWeeksGoals = goals.filter((g) => g.targetDate && isThisWeek(g.targetDate));
@@ -208,12 +211,18 @@ export function StudentPathView({
                 </View>
               );
             })}
-            {plan.classes.length > 3 && (
-              <ViewAllRow
-                label={`View all ${plan.classes.length} classes`}
-                onPress={() => router.push(Routes.CLASSES)}
-              />
-            )}
+            {/* Always shown once at least one class exists — it's the only path
+                to the Classes screen where edit/delete live. */}
+            <ViewAllRow
+              label={
+                plan.classes.length > 3
+                  ? `View all ${plan.classes.length} classes`
+                  : plan.classes.length === 1
+                  ? 'Manage class'
+                  : 'Manage classes'
+              }
+              onPress={() => router.push(Routes.CLASSES)}
+            />
           </View>
         ) : (
           <Text style={[styles.noClassText, { marginTop: 10 }]}>No classes added yet.</Text>
@@ -240,12 +249,18 @@ export function StudentPathView({
                 </View>
               </View>
             ))}
-            {syllabi.length > 3 && (
-              <ViewAllRow
-                label={`View all ${syllabi.length} syllabi`}
-                onPress={() => router.push(Routes.SYLLABI)}
-              />
-            )}
+            {/* Always shown once at least one syllabus exists — it's the only
+                path to the Syllabi screen where edit/delete live. */}
+            <ViewAllRow
+              label={
+                syllabi.length > 3
+                  ? `View all ${syllabi.length} syllabi`
+                  : syllabi.length === 1
+                  ? 'Manage syllabus'
+                  : 'Manage syllabi'
+              }
+              onPress={() => router.push(Routes.SYLLABI)}
+            />
           </View>
         ) : (
           <Text style={[styles.noClassText, { marginTop: 10 }]}>No syllabi yet.</Text>
@@ -333,10 +348,11 @@ export function StudentPathView({
         ))}
       </View>
 
-      <SavingsGoalCard
-        goal={savingsGoal}
+      <SavingsGoalsSection
+        goals={savingsGoals}
         emptySubtitle="Budget for tuition, books & living costs"
-        onPress={onAddSavingsGoal}
+        onAdd={onAddSavingsGoal}
+        onEditGoal={onEditSavingsGoal}
         onLogProgress={onLogSavingsProgress}
       />
     </>

@@ -11,6 +11,8 @@ import { SegmentedToggle } from '@/components/ui/SegmentedToggle';
 import { MonthCalendarView } from '@/components/planner/MonthCalendarView';
 import { ViewMoreToggle } from '@/components/ui/ViewMoreToggle';
 import { AddClassModal } from '@/components/plan/AddClassModal';
+import { AddBillModal } from '@/components/plan/AddBillModal';
+import { BillRemindersSection } from '@/components/dashboard/BillRemindersSection';
 import { Colors, Spacing } from '@/constants/theme';
 import { TaskCategories, TaskPriorities, TaskPriorityId } from '@/constants/taskMeta';
 import { COURSE_COLORS, COURSE_SOFT_COLORS } from '@/constants/classColors';
@@ -18,14 +20,17 @@ import { useTasks } from '@/hooks/useTasks';
 import { usePlan } from '@/hooks/usePlan';
 import { useSettings } from '@/hooks/useSettings';
 import { useOnboarding } from '@/hooks/useOnboarding';
+import { toPathKey } from '@/hooks/usePathKey';
 import { useNewTaskModal } from '@/contexts/NewTaskModalContext';
 import { useEditableSheet } from '@/hooks/useEditableSheet';
 import { useClassActions } from '@/hooks/useClassActions';
+import { useBills } from '@/hooks/useBills';
 import { confirmDelete } from '@/utils/confirmDelete';
 import { weekdayIndexMonday, taskOccursOnDay, isTaskDoneOnDate, DAY_FULL, formatClassDays } from '@/utils/date';
 import { parseTimeToMinutes } from '@/utils/time';
 import type { Task } from '@/types/task.types';
 import type { ClassItem } from '@/types/plan.types';
+import type { Bill } from '@/types/bill.types';
 
 const VIEW_OPTIONS: { key: 'day' | 'week' | 'month'; label: string }[] = [
   { key: 'day', label: 'Day' },
@@ -62,11 +67,17 @@ export default function Planner() {
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [dayExpanded, setDayExpanded] = useState(false);
   const classSheet = useEditableSheet<ClassItem>();
+  const billSheet = useEditableSheet<Bill>();
   const { saveClass, deleteClass } = useClassActions();
   const { tasks, toggleDone, removeTask } = useTasks();
   const { plan } = usePlan();
   const { openForEdit } = useNewTaskModal();
   const { focusProfile } = useOnboarding();
+  const pathKey = toPathKey(focusProfile);
+  // Bill Reminders is Professional-path-only (same scope as the Dashboard's
+  // copy of this section) — the hook itself is called unconditionally per
+  // Rules of Hooks, only the section/modal rendering below is path-gated.
+  const { bills, createBill, updateBill, deleteBill } = useBills();
   const {
     appleCalendarConnected,
     googleCalendarConnected,
@@ -81,6 +92,23 @@ export default function Planner() {
     confirmDelete(task.title, () => {
       removeTask(task.id).catch((err) => {
         console.error('[Planner] failed to delete task', err);
+      });
+    });
+  };
+
+  const handleSaveBill = async (input: Parameters<typeof createBill>[0]) => {
+    if (billSheet.editing) {
+      await updateBill(billSheet.editing.id, input);
+    } else {
+      await createBill(input);
+    }
+  };
+
+  const handleDeleteBill = () => {
+    if (!billSheet.actionTarget) return;
+    confirmDelete(billSheet.actionTarget.name, () => {
+      deleteBill(billSheet.actionTarget!.id).catch((err) => {
+        console.error('[Planner] failed to delete bill', err);
       });
     });
   };
@@ -329,6 +357,17 @@ export default function Planner() {
                 hiddenCount={Math.max(0, dayItems.length - DAY_PREVIEW_COUNT)}
               />
             </View>
+
+            {pathKey === 'professional' && (
+              <View style={styles.billSection}>
+                <BillRemindersSection
+                  bills={bills}
+                  onAddBill={billSheet.openNew}
+                  onEditBill={billSheet.openEdit}
+                  onLongPressBill={billSheet.setActionTarget}
+                />
+              </View>
+            )}
           </>
         ) : (
           <View style={styles.weekList}>
@@ -423,6 +462,21 @@ export default function Planner() {
         onDelete={() => classSheet.actionTarget && deleteClass(classSheet.actionTarget)}
       />
 
+      <AddBillModal
+        visible={billSheet.open}
+        onClose={billSheet.close}
+        onSave={handleSaveBill}
+        onRemove={billSheet.editing ? () => deleteBill(billSheet.editing!.id) : undefined}
+        editingBill={billSheet.editing}
+      />
+
+      <ItemActionSheet
+        visible={!!billSheet.actionTarget}
+        onClose={() => billSheet.setActionTarget(null)}
+        onEdit={() => billSheet.actionTarget && billSheet.openEdit(billSheet.actionTarget)}
+        onDelete={handleDeleteBill}
+      />
+
       <ProfileInfoModal
         visible={profileModalOpen}
         onClose={() => setProfileModalOpen(false)}
@@ -494,6 +548,9 @@ const styles = StyleSheet.create({
   taskList: {
     marginTop: 12,
     gap: 8,
+  },
+  billSection: {
+    marginTop: 22,
   },
   taskRow: {
     flexDirection: 'row',

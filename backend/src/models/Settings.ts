@@ -31,14 +31,6 @@ export interface SettingsDocument extends Document {
   // same reasoning as aiDisclosureAcknowledged but with no backend enforcement
   // (a plain data field, not a paid/compliance-sensitive API call).
   savingsDisclosureAcknowledged?: boolean;
-  // Shared across all three dashboards, not tied to a path/plan document —
-  // set/cleared via settings.controller.ts's updateSettings, not a separate model.
-  savingsGoal?: {
-    name: string;
-    targetAmount: number;
-    savedAmount: number;
-    targetDate: string;
-  };
 }
 
 const settingsSchema = new Schema<SettingsDocument>({
@@ -57,18 +49,6 @@ const settingsSchema = new Schema<SettingsDocument>({
   aiAccessCalendar: { type: Boolean, default: true },
   aiDisclosureAcknowledged: { type: Boolean, default: false },
   savingsDisclosureAcknowledged: { type: Boolean, default: false },
-  savingsGoal: {
-    type: new Schema(
-      {
-        name: { type: String, required: true },
-        targetAmount: { type: Number, required: true },
-        savedAmount: { type: Number, required: true },
-        targetDate: { type: String, required: true },
-      },
-      { _id: false }
-    ),
-    required: false,
-  },
 });
 
 export function toPublicSettings(doc: SettingsDocument | null) {
@@ -82,14 +62,6 @@ export function toPublicSettings(doc: SettingsDocument | null) {
     aiAccessCalendar: doc?.aiAccessCalendar ?? true,
     aiDisclosureAcknowledged: doc?.aiDisclosureAcknowledged ?? false,
     savingsDisclosureAcknowledged: doc?.savingsDisclosureAcknowledged ?? false,
-    savingsGoal: doc?.savingsGoal
-      ? {
-          name: doc.savingsGoal.name,
-          targetAmount: doc.savingsGoal.targetAmount,
-          savedAmount: doc.savingsGoal.savedAmount,
-          targetDate: doc.savingsGoal.targetDate,
-        }
-      : undefined,
   };
 }
 

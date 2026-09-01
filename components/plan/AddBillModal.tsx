@@ -6,7 +6,6 @@ import { Chip } from '@/components/ui/Chip';
 import { InlineDateTimePicker } from '@/components/ui/InlineDateTimePicker';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors, Spacing, Radius } from '@/constants/theme';
-import { formatCurrency } from '@/utils/currency';
 import { formatDatePickerLabel, parseISODateLocal, toDateKey } from '@/utils/date';
 import { confirmDelete } from '@/utils/confirmDelete';
 import type { Bill, BillCategory, NewBillInput } from '@/types/bill.types';
@@ -35,6 +34,10 @@ interface AddBillModalProps {
 export function AddBillModal({ visible, onClose, onSave, onRemove, editingBill }: AddBillModalProps) {
   const [name, setName] = useState('');
   const [amount, setAmount] = useState(DEFAULT_AMOUNT);
+  // Raw text mirror of `amount` for the typeable field below — kept separate
+  // so a mid-typing state like "" or a leading-zero string doesn't get
+  // clobbered by re-deriving it from the numeric value on every keystroke.
+  const [amountText, setAmountText] = useState(String(DEFAULT_AMOUNT));
   const [dueDate, setDueDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [recurring, setRecurring] = useState(false);
@@ -44,16 +47,35 @@ export function AddBillModal({ visible, onClose, onSave, onRemove, editingBill }
   const reset = () => {
     setName('');
     setAmount(DEFAULT_AMOUNT);
+    setAmountText(String(DEFAULT_AMOUNT));
     setDueDate(new Date());
     setRecurring(false);
     setCategory('other');
   };
+
+  // Shared by both stepper buttons — keeps amountText in sync so the typed
+  // field always reflects the current value after a +/- tap.
+  const applyAmount = (next: number) => {
+    const clamped = Math.max(AMOUNT_MIN, next);
+    setAmount(clamped);
+    setAmountText(String(clamped));
+  };
+
+  const handleAmountChange = (text: string) => {
+    const digits = text.replace(/[^0-9]/g, '');
+    setAmountText(digits);
+    setAmount(digits === '' ? AMOUNT_MIN : Math.max(AMOUNT_MIN, Number(digits)));
+  };
+
+  // On blur, drop a stray "" or leading zeros back to the clean numeric value.
+  const handleAmountBlur = () => setAmountText(String(amount));
 
   useEffect(() => {
     if (!visible) return;
     if (editingBill) {
       setName(editingBill.name);
       setAmount(editingBill.amount);
+      setAmountText(String(editingBill.amount));
       setDueDate(parseISODateLocal(editingBill.dueDate));
       setRecurring(editingBill.recurring);
       setCategory(editingBill.category);
@@ -110,15 +132,23 @@ export function AddBillModal({ visible, onClose, onSave, onRemove, editingBill }
         <View style={styles.stepperBox}>
           <Text style={styles.stepperLabel}>Amount</Text>
           <View style={styles.stepperValueRow}>
-            <Text style={styles.stepperAmount}>{formatCurrency(amount)}</Text>
+            <View style={styles.amountInputRow}>
+              <Text style={styles.amountPrefix}>$</Text>
+              <TextInput
+                value={amountText}
+                onChangeText={handleAmountChange}
+                onBlur={handleAmountBlur}
+                keyboardType="number-pad"
+                placeholder="0"
+                placeholderTextColor={Colors.textMuted}
+                style={styles.amountInput}
+              />
+            </View>
             <View style={styles.stepper}>
-              <Pressable
-                style={styles.stepperBtn}
-                onPress={() => setAmount(Math.max(AMOUNT_MIN, amount - AMOUNT_STEP))}
-              >
+              <Pressable style={styles.stepperBtn} onPress={() => applyAmount(amount - AMOUNT_STEP)}>
                 <Text style={styles.stepperBtnText}>−</Text>
               </Pressable>
-              <Pressable style={styles.stepperBtn} onPress={() => setAmount(amount + AMOUNT_STEP)}>
+              <Pressable style={styles.stepperBtn} onPress={() => applyAmount(amount + AMOUNT_STEP)}>
                 <Text style={styles.stepperBtnText}>+</Text>
               </Pressable>
             </View>
@@ -244,10 +274,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  stepperAmount: {
+  amountInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  amountPrefix: {
     fontSize: 19,
     fontWeight: '800',
     color: Colors.textPrimary,
+  },
+  amountInput: {
+    fontSize: 19,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+    padding: 0,
+    minWidth: 40,
   },
   stepper: {
     flexDirection: 'row',

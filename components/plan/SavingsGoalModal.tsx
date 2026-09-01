@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
-import { View, Text, TextInput, Pressable, Alert, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Pressable, Alert, ScrollView, StyleSheet } from 'react-native';
 import { BottomSheetModal } from '@/components/ui/BottomSheetModal';
 import { ModalCloseButton } from '@/components/ui/ModalCloseButton';
+import { InlineDateTimePicker } from '@/components/ui/InlineDateTimePicker';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors, Spacing, Radius } from '@/constants/theme';
 import { useSettings } from '@/hooks/useSettings';
 import { formatCurrency, monthlySavingsAmount } from '@/utils/currency';
 import { confirmDelete } from '@/utils/confirmDelete';
-import type { SavingsGoal } from '@/types/settings.types';
+import { formatDatePickerLabel, parseISODateLocal, toDateKey } from '@/utils/date';
+import type { SavingsGoal, NewSavingsGoalInput } from '@/types/savingsGoal.types';
 
 const TARGET_STEP = 100;
 const SAVED_STEP = 50;
@@ -19,7 +21,7 @@ type Step = 'disclaimer' | 'form';
 interface SavingsGoalModalProps {
   visible: boolean;
   onClose: () => void;
-  onSave: (goal: SavingsGoal) => Promise<void>;
+  onSave: (input: NewSavingsGoalInput) => Promise<void>;
   onRemove?: () => Promise<void>;
   editingGoal: SavingsGoal | null;
 }
@@ -31,15 +33,49 @@ export function SavingsGoalModal({ visible, onClose, onSave, onRemove, editingGo
   const [name, setName] = useState('');
   const [targetAmount, setTargetAmount] = useState(DEFAULT_TARGET);
   const [savedAmount, setSavedAmount] = useState(0);
-  const [targetDate, setTargetDate] = useState('');
+  // Raw text mirrors of the two amounts, for the typeable fields below — kept
+  // separate so a mid-typing state like "" or a leading-zero string doesn't
+  // get clobbered by re-deriving it from the numeric value on every keystroke.
+  const [targetAmountText, setTargetAmountText] = useState(String(DEFAULT_TARGET));
+  const [savedAmountText, setSavedAmountText] = useState('0');
+  const [targetDate, setTargetDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const reset = () => {
     setName('');
     setTargetAmount(DEFAULT_TARGET);
     setSavedAmount(0);
-    setTargetDate('');
+    setTargetAmountText(String(DEFAULT_TARGET));
+    setSavedAmountText('0');
+    setTargetDate(new Date());
   };
+
+  // Shared by both the stepper buttons and the typed field for each amount —
+  // keeps the two in sync so each always reflects the other's latest edit.
+  const applyTargetAmount = (next: number) => {
+    const clamped = Math.max(AMOUNT_MIN, next);
+    setTargetAmount(clamped);
+    setTargetAmountText(String(clamped));
+  };
+  const applySavedAmount = (next: number) => {
+    const clamped = Math.max(AMOUNT_MIN, next);
+    setSavedAmount(clamped);
+    setSavedAmountText(String(clamped));
+  };
+  const handleTargetAmountChange = (text: string) => {
+    const digits = text.replace(/[^0-9]/g, '');
+    setTargetAmountText(digits);
+    setTargetAmount(digits === '' ? AMOUNT_MIN : Math.max(AMOUNT_MIN, Number(digits)));
+  };
+  const handleSavedAmountChange = (text: string) => {
+    const digits = text.replace(/[^0-9]/g, '');
+    setSavedAmountText(digits);
+    setSavedAmount(digits === '' ? AMOUNT_MIN : Math.max(AMOUNT_MIN, Number(digits)));
+  };
+  // On blur, drop a stray "" or leading zeros back to the clean numeric value.
+  const handleTargetAmountBlur = () => setTargetAmountText(String(targetAmount));
+  const handleSavedAmountBlur = () => setSavedAmountText(String(savedAmount));
 
   useEffect(() => {
     if (!visible) return;
@@ -48,7 +84,9 @@ export function SavingsGoalModal({ visible, onClose, onSave, onRemove, editingGo
       setName(editingGoal.name);
       setTargetAmount(editingGoal.targetAmount);
       setSavedAmount(editingGoal.savedAmount);
-      setTargetDate(editingGoal.targetDate);
+      setTargetAmountText(String(editingGoal.targetAmount));
+      setSavedAmountText(String(editingGoal.savedAmount));
+      setTargetDate(editingGoal.targetDate ? parseISODateLocal(editingGoal.targetDate) : new Date());
     } else {
       reset();
     }
@@ -72,13 +110,13 @@ export function SavingsGoalModal({ visible, onClose, onSave, onRemove, editingGo
   };
 
   const canSave = name.trim().length > 0 && targetAmount > 0 && !submitting;
-  const monthlyAmount = monthlySavingsAmount(targetAmount, savedAmount, targetDate);
+  const monthlyAmount = monthlySavingsAmount(targetAmount, savedAmount, toDateKey(targetDate));
 
   const handleSave = async () => {
     if (!canSave) return;
     setSubmitting(true);
     try {
-      await onSave({ name: name.trim(), targetAmount, savedAmount, targetDate: targetDate.trim() });
+      await onSave({ name: name.trim(), targetAmount, savedAmount, targetDate: toDateKey(targetDate) });
       handleClose();
     } catch (err) {
       console.error('[SavingsGoalModal] failed to save savings goal', err);
@@ -130,15 +168,23 @@ export function SavingsGoalModal({ visible, onClose, onSave, onRemove, editingGo
           <View style={styles.stepperBox}>
             <Text style={styles.stepperLabel}>Target amount</Text>
             <View style={styles.stepperValueRow}>
-              <Text style={styles.stepperAmount}>{formatCurrency(targetAmount)}</Text>
+              <View style={styles.amountInputRow}>
+                <Text style={styles.amountPrefix}>$</Text>
+                <TextInput
+                  value={targetAmountText}
+                  onChangeText={handleTargetAmountChange}
+                  onBlur={handleTargetAmountBlur}
+                  keyboardType="number-pad"
+                  placeholder="0"
+                  placeholderTextColor={Colors.textMuted}
+                  style={styles.amountInput}
+                />
+              </View>
               <View style={styles.stepper}>
-                <Pressable
-                  style={styles.stepperBtn}
-                  onPress={() => setTargetAmount(Math.max(AMOUNT_MIN, targetAmount - TARGET_STEP))}
-                >
+                <Pressable style={styles.stepperBtn} onPress={() => applyTargetAmount(targetAmount - TARGET_STEP)}>
                   <Text style={styles.stepperBtnText}>−</Text>
                 </Pressable>
-                <Pressable style={styles.stepperBtn} onPress={() => setTargetAmount(targetAmount + TARGET_STEP)}>
+                <Pressable style={styles.stepperBtn} onPress={() => applyTargetAmount(targetAmount + TARGET_STEP)}>
                   <Text style={styles.stepperBtnText}>+</Text>
                 </Pressable>
               </View>
@@ -148,27 +194,40 @@ export function SavingsGoalModal({ visible, onClose, onSave, onRemove, editingGo
           <View style={styles.stepperBox}>
             <Text style={styles.stepperLabel}>Already saved</Text>
             <View style={styles.stepperValueRow}>
-              <Text style={styles.stepperAmount}>{formatCurrency(savedAmount)}</Text>
+              <View style={styles.amountInputRow}>
+                <Text style={styles.amountPrefix}>$</Text>
+                <TextInput
+                  value={savedAmountText}
+                  onChangeText={handleSavedAmountChange}
+                  onBlur={handleSavedAmountBlur}
+                  keyboardType="number-pad"
+                  placeholder="0"
+                  placeholderTextColor={Colors.textMuted}
+                  style={styles.amountInput}
+                />
+              </View>
               <View style={styles.stepper}>
-                <Pressable
-                  style={styles.stepperBtn}
-                  onPress={() => setSavedAmount(Math.max(AMOUNT_MIN, savedAmount - SAVED_STEP))}
-                >
+                <Pressable style={styles.stepperBtn} onPress={() => applySavedAmount(savedAmount - SAVED_STEP)}>
                   <Text style={styles.stepperBtnText}>−</Text>
                 </Pressable>
-                <Pressable style={styles.stepperBtn} onPress={() => setSavedAmount(savedAmount + SAVED_STEP)}>
+                <Pressable style={styles.stepperBtn} onPress={() => applySavedAmount(savedAmount + SAVED_STEP)}>
                   <Text style={styles.stepperBtnText}>+</Text>
                 </Pressable>
               </View>
             </View>
           </View>
 
-          <TextInput
+          <Text style={styles.sheetEyebrow}>Target date</Text>
+          <TouchableOpacity style={styles.datePicker} onPress={() => setShowDatePicker(true)} activeOpacity={0.8}>
+            <Text style={styles.datePickerIcon}>📅</Text>
+            <Text style={styles.datePickerText}>{formatDatePickerLabel(targetDate)}</Text>
+          </TouchableOpacity>
+          <InlineDateTimePicker
+            visible={showDatePicker}
             value={targetDate}
-            onChangeText={setTargetDate}
-            placeholder="Target date (e.g. Jun 2027)"
-            placeholderTextColor={Colors.textMuted}
-            style={styles.input}
+            mode="date"
+            onChange={setTargetDate}
+            onDismiss={() => setShowDatePicker(false)}
           />
 
           {monthlyAmount !== null && (
@@ -256,6 +315,28 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     backgroundColor: Colors.white,
   },
+  sheetEyebrow: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 16,
+    marginBottom: 9,
+  },
+  datePicker: {
+    height: 48,
+    borderRadius: 13,
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
+    backgroundColor: Colors.white,
+    paddingHorizontal: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  datePickerIcon: { fontSize: 16 },
+  datePickerText: { flex: 1, fontSize: 15, color: '#000000', fontWeight: '600' },
   stepperBox: {
     marginTop: 14,
     borderWidth: 1.5,
@@ -277,10 +358,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  stepperAmount: {
+  amountInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  amountPrefix: {
     fontSize: 19,
     fontWeight: '800',
     color: Colors.textPrimary,
+  },
+  amountInput: {
+    fontSize: 19,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+    padding: 0,
+    minWidth: 40,
   },
   stepper: {
     flexDirection: 'row',
@@ -322,12 +414,14 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   primaryBtn: {
+    alignSelf: 'stretch',
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 20,
     backgroundColor: Colors.primary,
     borderRadius: 14,
     paddingVertical: 15,
+    paddingHorizontal: 24,
   },
   primaryBtnDisabled: {
     backgroundColor: Colors.border,

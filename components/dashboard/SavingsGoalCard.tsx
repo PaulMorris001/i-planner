@@ -4,8 +4,9 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { AnimatedProgressBar } from '@/components/ui/AnimatedProgressBar';
 import { Colors, Radius } from '@/constants/theme';
 import { formatCurrency, monthlySavingsAmount } from '@/utils/currency';
+import { formatMonthYear } from '@/utils/date';
 import { dashboardStyles as styles } from './dashboardStyles';
-import type { SavingsGoal } from '@/types/settings.types';
+import type { SavingsGoal } from '@/types/savingsGoal.types';
 
 interface SavingsGoalCardProps {
   goal: SavingsGoal | null | undefined;
@@ -37,7 +38,7 @@ export function SavingsGoalCard({ goal, emptySubtitle, onPress, onLogProgress }:
               <Text style={localStyles.amountMuted}>
                 {' '}
                 of {formatCurrency(goal.targetAmount)}
-                {goal.targetDate ? ` · by ${goal.targetDate}` : ''}
+                {goal.targetDate ? ` · by ${formatMonthYear(goal.targetDate)}` : ''}
               </Text>
             </Text>
             <View style={localStyles.progressTrack}>

@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { Modal, View, Pressable, Animated, StyleSheet } from 'react-native';
+import { Modal, View, Pressable, Animated, StyleSheet, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useKeyboardOffset } from '@/hooks/useKeyboardOffset';
 import { Colors, Spacing } from '@/constants/theme';
@@ -21,6 +21,22 @@ interface BottomSheetModalProps {
 export function BottomSheetModal({ visible, onClose, children, maxHeightPct = 90 }: BottomSheetModalProps) {
   const insets = useSafeAreaInsets();
   const keyboardOffset = useKeyboardOffset();
+  const { height: windowHeight } = useWindowDimensions();
+
+  // `marginBottom: keyboardOffset` below shifts the whole sheet up by the
+  // keyboard's height to keep it clear of the keyboard — but maxHeight was a
+  // flat percentage of the full screen, so on a tall keyboard (sheet height +
+  // keyboard height > screen height) the top of the sheet got pushed above
+  // the status bar. Shrinking maxHeight by the same keyboardOffset cancels
+  // the upward shift exactly, so the sheet's top edge stays put and it just
+  // gets shorter as the keyboard grows, instead of floating off-screen.
+  // Clamped to [0, maxHeightPx] so it can't go negative on an extreme keyboard.
+  const maxHeightPx = (maxHeightPct / 100) * windowHeight;
+  const keyboardAdjustedMaxHeight = Animated.subtract(maxHeightPx, keyboardOffset).interpolate({
+    inputRange: [0, maxHeightPx],
+    outputRange: [0, maxHeightPx],
+    extrapolate: 'clamp',
+  });
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -30,7 +46,7 @@ export function BottomSheetModal({ visible, onClose, children, maxHeightPct = 90
           <Animated.View
             style={[
               styles.sheet,
-              { maxHeight: `${maxHeightPct}%`, paddingBottom: insets.bottom + 24, marginBottom: keyboardOffset },
+              { maxHeight: keyboardAdjustedMaxHeight, paddingBottom: insets.bottom + 24, marginBottom: keyboardOffset },
             ]}
           >
             <View style={styles.handle} />

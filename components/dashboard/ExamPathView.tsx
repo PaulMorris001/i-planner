@@ -8,31 +8,39 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { SectionCardHeader } from '@/components/ui/SectionCardHeader';
 import { StatCard } from '@/components/ui/StatCard';
 import { ViewAllRow } from '@/components/ui/ViewAllRow';
-import { SavingsGoalCard } from '@/components/dashboard/SavingsGoalCard';
+import { SavingsGoalsSection } from '@/components/dashboard/SavingsGoalsSection';
 import { Routes } from '@/constants/routes';
 import { TaskCategories } from '@/constants/taskMeta';
 import { Colors } from '@/constants/theme';
 import { usePlan } from '@/hooks/usePlan';
 import { useTasks } from '@/hooks/useTasks';
-import { useSettings } from '@/hooks/useSettings';
+import { useSavingsGoals } from '@/hooks/useSavingsGoals';
 import { localMidnight, computeTaskStreak, parseISODateLocal, isTaskDoneOnDate, nextTaskOccurrence, toDateKey, formatShortDate } from '@/utils/date';
 import { currentExamWeek } from './dashboardHelpers';
 import { dashboardStyles as styles } from './dashboardStyles';
 import type { Task } from '@/types/task.types';
+import type { SavingsGoal } from '@/types/savingsGoal.types';
 
 interface ExamPathViewProps {
   // Passed in rather than rebuilt here so it doesn't remount on re-render.
   quickLinks: ReactNode;
   onAddExam: () => void;
   onAddSavingsGoal: () => void;
-  onLogSavingsProgress: () => void;
+  onEditSavingsGoal: (goal: SavingsGoal) => void;
+  onLogSavingsProgress: (goal: SavingsGoal) => void;
 }
 
-export function ExamPathView({ quickLinks, onAddExam, onAddSavingsGoal, onLogSavingsProgress }: ExamPathViewProps) {
+export function ExamPathView({
+  quickLinks,
+  onAddExam,
+  onAddSavingsGoal,
+  onEditSavingsGoal,
+  onLogSavingsProgress,
+}: ExamPathViewProps) {
   const router = useRouter();
   const { examPlan, toggleExamTopic } = usePlan();
   const { tasks } = useTasks();
-  const { savingsGoal } = useSettings();
+  const { goals: savingsGoals } = useSavingsGoals();
 
   const taskStreak = computeTaskStreak(tasks);
 
@@ -209,10 +217,11 @@ export function ExamPathView({ quickLinks, onAddExam, onAddSavingsGoal, onLogSav
         </StatCard>
       </View>
 
-      <SavingsGoalCard
-        goal={savingsGoal}
+      <SavingsGoalsSection
+        goals={savingsGoals}
         emptySubtitle="Budget for exam & prep-course fees"
-        onPress={onAddSavingsGoal}
+        onAdd={onAddSavingsGoal}
+        onEditGoal={onEditSavingsGoal}
         onLogProgress={onLogSavingsProgress}
       />
     </>
