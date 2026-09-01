@@ -12,7 +12,10 @@ import type { Bill } from '@/types/bill.types';
 interface BillRemindersSectionProps {
   bills: Bill[];
   onAddBill: () => void;
-  onEditBill: (bill: Bill) => void;
+  // Tapping a row — the caller decides what that means (opens the "Mark as
+  // paid?" prompt), and gets the already-computed current cycle's date-key
+  // alongside the bill so it doesn't have to recompute nextRecurringDueDate.
+  onPressBill: (bill: Bill, cycleDueDateKey: string) => void;
   onLongPressBill: (bill: Bill) => void;
 }
 
@@ -26,17 +29,18 @@ function dueLabel(days: number): string {
   return `due in ${days} days`;
 }
 
-export function BillRemindersSection({ bills, onAddBill, onEditBill, onLongPressBill }: BillRemindersSectionProps) {
+export function BillRemindersSection({ bills, onAddBill, onPressBill, onLongPressBill }: BillRemindersSectionProps) {
   const [expanded, setExpanded] = useState(false);
 
   // A recurring bill's stored dueDate never advances — only its day-of-month
   // matters, so the actual next occurrence is computed for both sorting and
   // display (same bug class already fixed for recurring tasks this session).
   const allUpcoming = bills
-    .map((bill) => ({
-      bill,
-      dueDate: bill.recurring ? nextRecurringDueDate(bill.dueDate) : parseISODateLocal(bill.dueDate),
-    }))
+    .map((bill) => {
+      const dueDate = bill.recurring ? nextRecurringDueDate(bill.dueDate) : parseISODateLocal(bill.dueDate);
+      const cycleDateKey = toDateKey(dueDate);
+      return { bill, dueDate, cycleDateKey, paid: bill.lastPaidCycle === cycleDateKey };
+    })
     .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
   const upcoming = expanded ? allUpcoming : allUpcoming.slice(0, PREVIEW_COUNT);
 
@@ -58,11 +62,13 @@ export function BillRemindersSection({ bills, onAddBill, onEditBill, onLongPress
         />
       ) : (
         <View style={{ gap: 8, marginTop: 11 }}>
-          {upcoming.map(({ bill, dueDate }) => {
+          {upcoming.map(({ bill, dueDate, cycleDateKey, paid }) => {
             const days = daysUntil(dueDate);
-            const overdue = days < 0;
-            const dueSoon = days >= 0 && days <= LEAD_DAYS;
-            const tint = overdue
+            const overdue = !paid && days < 0;
+            const dueSoon = !paid && days >= 0 && days <= LEAD_DAYS;
+            const tint = paid
+              ? { bg: Colors.white, fg: Colors.textMuted }
+              : overdue
               ? { bg: Colors.errorBg, fg: Colors.error }
               : dueSoon
               ? { bg: Colors.warningSoft, fg: Colors.warning }
@@ -72,17 +78,19 @@ export function BillRemindersSection({ bills, onAddBill, onEditBill, onLongPress
               <Pressable
                 key={bill.id}
                 style={[localStyles.billRow, { backgroundColor: tint.bg }]}
-                onPress={() => onEditBill(bill)}
+                onPress={() => onPressBill(bill, cycleDateKey)}
                 onLongPress={() => onLongPressBill(bill)}
               >
                 <View style={localStyles.iconBadge}>
-                  <IconSymbol name="bell.fill" color={tint.fg} size={16} />
+                  <IconSymbol name={paid ? 'checkmark' : 'bell.fill'} color={tint.fg} size={16} />
                 </View>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={[localStyles.billTitle, { color: tint.fg }]} numberOfLines={1}>
-                    {bill.name} {dueLabel(days)}
+                    {bill.name} {paid ? '· Paid' : dueLabel(days)}
                   </Text>
-                  <Text style={localStyles.billSub}>Heads up · {formatShortDate(toDateKey(dueDate))}</Text>
+                  <Text style={localStyles.billSub}>
+                    {paid ? 'Paid for' : 'Heads up ·'} {formatShortDate(toDateKey(dueDate))}
+                  </Text>
                 </View>
                 <Text style={localStyles.billAmount}>{formatCurrency(bill.amount)}</Text>
                 <Pressable

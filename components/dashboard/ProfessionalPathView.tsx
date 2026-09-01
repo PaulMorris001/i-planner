@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { useState } from 'react';
 import { View, Text, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { AnimatedProgressBar } from '@/components/ui/AnimatedProgressBar';
@@ -10,6 +11,7 @@ import { ItemActionSheet } from '@/components/ui/ItemActionSheet';
 import { SavingsGoalsSection } from '@/components/dashboard/SavingsGoalsSection';
 import { BillRemindersSection } from '@/components/dashboard/BillRemindersSection';
 import { AddBillModal } from '@/components/plan/AddBillModal';
+import { MarkBillPaidModal } from '@/components/plan/MarkBillPaidModal';
 import { Routes } from '@/constants/routes';
 import { Colors } from '@/constants/theme';
 import { useGoals } from '@/hooks/useGoals';
@@ -44,8 +46,9 @@ export function ProfessionalPathView({
   const { tasks } = useTasks();
   const { goals } = useGoals();
   const { goals: savingsGoals } = useSavingsGoals();
-  const { bills, createBill, updateBill, deleteBill } = useBills();
+  const { bills, createBill, updateBill, deleteBill, markBillPaidCycle } = useBills();
   const billSheet = useEditableSheet<Bill>();
+  const [markPaidTarget, setMarkPaidTarget] = useState<{ bill: Bill; cycleDueDateKey: string } | null>(null);
 
   const handleSaveBill = async (input: Parameters<typeof createBill>[0]) => {
     if (billSheet.editing) {
@@ -62,6 +65,20 @@ export function ProfessionalPathView({
         console.error('[ProfessionalPathView] failed to delete bill', err);
       });
     });
+  };
+
+  // One-time bill: paying it means there's nothing left to track, so it's
+  // simply removed (same as deleting it). Recurring bill: can't delete the
+  // whole thing just because this cycle's paid — instead records which cycle
+  // was paid, so it stops showing as due/overdue until next month's due date.
+  const handleMarkBillPaid = async () => {
+    if (!markPaidTarget) return;
+    const { bill, cycleDueDateKey } = markPaidTarget;
+    if (bill.recurring) {
+      await markBillPaidCycle(bill.id, cycleDueDateKey);
+    } else {
+      await deleteBill(bill.id);
+    }
   };
 
   const careerGoal = goals.find((g) => g.type === 'career');
@@ -157,7 +174,7 @@ export function ProfessionalPathView({
       <BillRemindersSection
         bills={bills}
         onAddBill={billSheet.openNew}
-        onEditBill={billSheet.openEdit}
+        onPressBill={(bill, cycleDueDateKey) => setMarkPaidTarget({ bill, cycleDueDateKey })}
         onLongPressBill={billSheet.setActionTarget}
       />
 
@@ -182,6 +199,15 @@ export function ProfessionalPathView({
         onClose={() => billSheet.setActionTarget(null)}
         onEdit={() => billSheet.actionTarget && billSheet.openEdit(billSheet.actionTarget)}
         onDelete={handleDeleteBill}
+      />
+
+      <MarkBillPaidModal
+        visible={!!markPaidTarget}
+        onClose={() => setMarkPaidTarget(null)}
+        bill={markPaidTarget?.bill ?? null}
+        cycleDueDateKey={markPaidTarget?.cycleDueDateKey ?? null}
+        onMarkPaid={handleMarkBillPaid}
+        onEdit={() => markPaidTarget && billSheet.openEdit(markPaidTarget.bill)}
       />
     </>
   );

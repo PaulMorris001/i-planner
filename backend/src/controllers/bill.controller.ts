@@ -42,7 +42,7 @@ export async function createBill(req: AuthedRequest, res: Response) {
 export async function updateBill(req: AuthedRequest, res: Response) {
   const bill = await findOwnedOrThrow(Bill, req.params.id, req.userId!);
 
-  const { name, amount, dueDate, recurring, category, notificationIds } = req.body ?? {};
+  const { name, amount, dueDate, recurring, category, notificationIds, lastPaidCycle } = req.body ?? {};
   if (name !== undefined) {
     if (!name || typeof name !== 'string' || !name.trim()) {
       throw new ApiError(400, 'Bill name is required.', 'general');
@@ -55,16 +55,28 @@ export async function updateBill(req: AuthedRequest, res: Response) {
     }
     bill.amount = amount;
   }
+  // A schedule change invalidates whatever cycle was marked paid under the old
+  // schedule — clear it unless this same request also sets a fresh value.
+  let scheduleChanged = false;
   if (dueDate !== undefined) {
     if (!dueDate || typeof dueDate !== 'string') {
       throw new ApiError(400, 'Due date is required.', 'general');
     }
+    if (dueDate !== bill.dueDate) scheduleChanged = true;
     bill.dueDate = dueDate;
   }
-  if (recurring !== undefined) bill.recurring = !!recurring;
+  if (recurring !== undefined) {
+    if (!!recurring !== bill.recurring) scheduleChanged = true;
+    bill.recurring = !!recurring;
+  }
   if (isValidCategory(category)) bill.category = category;
   if (notificationIds !== undefined) {
     bill.notificationIds = Array.isArray(notificationIds) ? notificationIds : undefined;
+  }
+  if (lastPaidCycle !== undefined) {
+    bill.lastPaidCycle = typeof lastPaidCycle === 'string' && lastPaidCycle ? lastPaidCycle : undefined;
+  } else if (scheduleChanged) {
+    bill.lastPaidCycle = undefined;
   }
 
   await bill.save();

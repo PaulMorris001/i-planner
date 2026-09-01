@@ -13,6 +13,12 @@ export interface BillDocument extends Document {
   // Local expo-notifications reminder ids — one lead (3 days before) + one on the
   // due date, same pairing as scheduleTaskNotifications/scheduleClassNotifications.
   notificationIds?: string[];
+  // "YYYY-MM-DD" date-key of the cycle last marked paid (for a recurring bill,
+  // that cycle's computed due date via nextRecurringDueDate — for a one-time
+  // bill this never applies, since paying it deletes the record instead).
+  // Naturally "resets" every month: once the computed current cycle's date-key
+  // no longer matches, the bill reads as unpaid again — no cleanup needed.
+  lastPaidCycle?: string;
 }
 
 const billSchema = new Schema<BillDocument>({
@@ -23,6 +29,7 @@ const billSchema = new Schema<BillDocument>({
   recurring: { type: Boolean, default: false },
   category: { type: String, enum: BILL_CATEGORIES, default: 'other' },
   notificationIds: { type: [String] },
+  lastPaidCycle: { type: String },
 });
 
 export function toPublicBill(doc: BillDocument) {
@@ -34,6 +41,7 @@ export function toPublicBill(doc: BillDocument) {
     recurring: doc.recurring,
     category: doc.category,
     notificationIds: doc.notificationIds,
+    lastPaidCycle: doc.lastPaidCycle,
   };
 }
 

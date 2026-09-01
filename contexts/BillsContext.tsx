@@ -12,6 +12,7 @@ interface BillsContextValue {
   createBill: (input: NewBillInput) => Promise<void>;
   updateBill: (id: string, patch: Partial<NewBillInput>) => Promise<void>;
   deleteBill: (id: string) => Promise<void>;
+  markBillPaidCycle: (id: string, cycleDateKey: string) => Promise<void>;
   refetch: () => Promise<void>;
 }
 
@@ -90,6 +91,22 @@ export function BillsProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Deliberately bypasses updateBill's unconditional cancel+reschedule dance —
+  // this only flips a display flag, it doesn't touch the schedule, and a
+  // recurring bill's notification is one native MONTHLY trigger that can't be
+  // silenced for a single cycle anyway (see scheduleBillNotifications).
+  const markBillPaidCycle = async (id: string, cycleDateKey: string) => {
+    const prevBills = bills;
+    setBills((prev) => prev.map((b) => (b.id === id ? { ...b, lastPaidCycle: cycleDateKey } : b)));
+    try {
+      const updated = await billService.update(id, { lastPaidCycle: cycleDateKey });
+      setBills((prev) => sortByDueDate(prev.map((b) => (b.id === id ? updated : b))));
+    } catch (err) {
+      setBills(prevBills);
+      throw err;
+    }
+  };
+
   const deleteBill = async (id: string) => {
     const prevBills = bills;
     const target = bills.find((b) => b.id === id);
@@ -106,7 +123,9 @@ export function BillsProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <BillsContext.Provider value={{ bills, loading, createBill, updateBill, deleteBill, refetch: fetchBills }}>
+    <BillsContext.Provider
+      value={{ bills, loading, createBill, updateBill, deleteBill, markBillPaidCycle, refetch: fetchBills }}
+    >
       {children}
     </BillsContext.Provider>
   );

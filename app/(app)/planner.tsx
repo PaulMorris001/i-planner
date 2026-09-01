@@ -12,6 +12,7 @@ import { MonthCalendarView } from '@/components/planner/MonthCalendarView';
 import { ViewMoreToggle } from '@/components/ui/ViewMoreToggle';
 import { AddClassModal } from '@/components/plan/AddClassModal';
 import { AddBillModal } from '@/components/plan/AddBillModal';
+import { MarkBillPaidModal } from '@/components/plan/MarkBillPaidModal';
 import { BillRemindersSection } from '@/components/dashboard/BillRemindersSection';
 import { Colors, Spacing } from '@/constants/theme';
 import { TaskCategories, TaskPriorities, TaskPriorityId } from '@/constants/taskMeta';
@@ -77,7 +78,8 @@ export default function Planner() {
   // Bill Reminders is Professional-path-only (same scope as the Dashboard's
   // copy of this section) — the hook itself is called unconditionally per
   // Rules of Hooks, only the section/modal rendering below is path-gated.
-  const { bills, createBill, updateBill, deleteBill } = useBills();
+  const { bills, createBill, updateBill, deleteBill, markBillPaidCycle } = useBills();
+  const [markPaidTarget, setMarkPaidTarget] = useState<{ bill: Bill; cycleDueDateKey: string } | null>(null);
   const {
     appleCalendarConnected,
     googleCalendarConnected,
@@ -111,6 +113,20 @@ export default function Planner() {
         console.error('[Planner] failed to delete bill', err);
       });
     });
+  };
+
+  // One-time bill: paying it means there's nothing left to track, so it's
+  // simply removed (same as deleting it). Recurring bill: can't delete the
+  // whole thing just because this cycle's paid — instead records which cycle
+  // was paid, so it stops showing as due/overdue until next month's due date.
+  const handleMarkBillPaid = async () => {
+    if (!markPaidTarget) return;
+    const { bill, cycleDueDateKey } = markPaidTarget;
+    if (bill.recurring) {
+      await markBillPaidCycle(bill.id, cycleDueDateKey);
+    } else {
+      await deleteBill(bill.id);
+    }
   };
 
   const today = new Date();
@@ -363,7 +379,7 @@ export default function Planner() {
                 <BillRemindersSection
                   bills={bills}
                   onAddBill={billSheet.openNew}
-                  onEditBill={billSheet.openEdit}
+                  onPressBill={(bill, cycleDueDateKey) => setMarkPaidTarget({ bill, cycleDueDateKey })}
                   onLongPressBill={billSheet.setActionTarget}
                 />
               </View>
@@ -475,6 +491,15 @@ export default function Planner() {
         onClose={() => billSheet.setActionTarget(null)}
         onEdit={() => billSheet.actionTarget && billSheet.openEdit(billSheet.actionTarget)}
         onDelete={handleDeleteBill}
+      />
+
+      <MarkBillPaidModal
+        visible={!!markPaidTarget}
+        onClose={() => setMarkPaidTarget(null)}
+        bill={markPaidTarget?.bill ?? null}
+        cycleDueDateKey={markPaidTarget?.cycleDueDateKey ?? null}
+        onMarkPaid={handleMarkBillPaid}
+        onEdit={() => markPaidTarget && billSheet.openEdit(markPaidTarget.bill)}
       />
 
       <ProfileInfoModal
