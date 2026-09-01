@@ -212,8 +212,20 @@ export async function scheduleClassNotifications(item: {
 
 // Bills have no time-of-day field (the form only has a date picker) — fire at a
 // fixed, reasonable morning time for every bill reminder.
+const BILL_WEEK_LEAD_DAYS = 7;
 const BILL_LEAD_DAYS = 3;
 const BILL_TIME = '9:00 AM';
+
+// Whether a one-off lead reminder's ideal fire moment (due date/time minus
+// leadMinutes) has already passed as of right now — mirrors the same
+// due/idealFireAt math scheduleOccurrence's one-off branch does internally,
+// so a bill's week/3-day lead can be checked *before* ever calling it.
+function leadAlreadyPassed(dueDateIso: string, time: string, leadMinutes: number): boolean {
+  const minutes = parseTimeToMinutes(time);
+  const due = parseISODateLocal(dueDateIso);
+  due.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
+  return due.getTime() - leadMinutes * 60_000 <= Date.now();
+}
 
 export async function scheduleBillNotifications(bill: {
   name: string;
@@ -221,27 +233,29 @@ export async function scheduleBillNotifications(bill: {
   dueDate: string;
   recurring: boolean;
 }): Promise<string[]> {
-  // Static: always accurate for a recurring bill (the native monthly trigger fires
-  // at exactly that lead distance every month, no early-fire fallback exists for it)
-  // and for the due-date notification either way (scheduleOccurrence's one-off path
-  // guarantees leadMinutes=0 never hits the "already passed" fallback below).
-  const staticLeadBody = () => `${bill.name} is due in ${BILL_LEAD_DAYS} days — $${bill.amount}`;
+  // "in 1 week" reads better than "in 7 days"; everything else stays a plain
+  // day count. Shared by both lead reminders — which nominal lead scheduled it
+  // only matters for the days-remaining number this produces.
+  const daysAwayBody = (days: number) => {
+    if (days <= 0) return `${bill.name} is due today — $${bill.amount}`;
+    if (days >= 6) return `${bill.name} is due in 1 week — $${bill.amount}`;
+    return `${bill.name} is due in ${days} day${days === 1 ? '' : 's'} — $${bill.amount}`;
+  };
   const dueBodyText = () => `${bill.name} is due today — $${bill.amount}`;
 
   if (!bill.recurring) {
     // scheduleOccurrence's one-off path already operates on full Date timestamps,
     // so a day-based lead is just leadMinutes = days * 24 * 60 — no changes needed
-    // there. Its "already passed" fallback can fire the lead notification almost
-    // immediately for a bill due soon (e.g. tomorrow) — bodyForMinutes gets the
-    // real remaining time in that case, not the nominal lead, so the message must
-    // derive from it (a static "due in 3 days" would be wrong when it actually
-    // fires for something due tomorrow).
-    const oneOffLeadBody = (minutesUntil: number) => {
-      const days = Math.round(minutesUntil / (24 * 60));
-      return days >= 1
-        ? `${bill.name} is due in ${days} day${days === 1 ? '' : 's'} — $${bill.amount}`
-        : `${bill.name} is due today — $${bill.amount}`;
-    };
+    // there. Its own "already passed" fallback fires almost immediately instead of
+    // skipping — the right call for a 15-minute task reminder, but not for a
+    // week/3-day-before bill reminder (getting one seconds after creating a bill
+    // due tomorrow reads as noise, not a heads-up) — so each lead is checked with
+    // leadAlreadyPassed *before* calling scheduleOccurrence, and simply skipped
+    // (never scheduled) rather than falling into that fallback. The due-date
+    // notification is scheduled as its own independent call either way — it never
+    // depends on whether a lead applied, so it always fires correctly even when
+    // both leads are skipped for a bill due very soon.
+    const oneOffLeadBody = (minutesUntil: number) => daysAwayBody(Math.round(minutesUntil / (24 * 60)));
     const spec = (leadMinutes: number, bodyForMinutes: (minutesUntil: number) => string): OccurrenceSpec => ({
       title: `Bill: ${bill.name}`,
       bodyForMinutes,
@@ -250,46 +264,71 @@ export async function scheduleBillNotifications(bill: {
       recurring: false,
       leadMinutes,
     });
-    const [lead, due] = await Promise.all([
-      scheduleOccurrence(spec(BILL_LEAD_DAYS * 24 * 60, oneOffLeadBody)),
+    const scheduleLead = (days: number) => {
+      const leadMinutes = days * 24 * 60;
+      if (leadAlreadyPassed(bill.dueDate, BILL_TIME, leadMinutes)) return Promise.resolve([]);
+      return scheduleOccurrence(spec(leadMinutes, oneOffLeadBody));
+    };
+    const [weekLead, threeDayLead, due] = await Promise.all([
+      scheduleLead(BILL_WEEK_LEAD_DAYS),
+      scheduleLead(BILL_LEAD_DAYS),
       scheduleOccurrence(spec(0, dueBodyText)),
     ]);
-    return [...lead, ...due];
+    return [...weekLead, ...threeDayLead, ...due];
   }
 
   // Recurring monthly. The due-date reminder reuses the exact day-of-month
-  // unmodified. A perfectly accurate "N days before this recurring day, every
-  // month" isn't expressible as one native MONTHLY trigger (months vary in
-  // length), so the lead reminder uses a synthetic dateIso with its day shifted
-  // back by BILL_LEAD_DAYS (clamped to 1) — scheduleOccurrence's monthly path
-  // only reads the day-of-month out of dateIso, so this reuses it unmodified.
-  // Same class of approximation as monthsUntil's 30.44-day average month
-  // elsewhere in this app — good enough for a reminder, not exact every month.
+  // unmodified — a native MONTHLY trigger always resolves to its next real
+  // occurrence (this month or, if that day already passed, next month), so it
+  // fires correctly regardless of how soon the next due date is; no "already
+  // passed" check applies to it. A perfectly accurate "N days before this
+  // recurring day, every month" isn't expressible as one native MONTHLY trigger
+  // either (months vary in length), so each lead reminder uses a synthetic
+  // dateIso with its day shifted back by N days (clamped to 1) —
+  // scheduleOccurrence's monthly path only reads the day-of-month out of
+  // dateIso, so this reuses it unmodified. Same class of approximation as
+  // monthsUntil's 30.44-day average month elsewhere in this app — good enough
+  // for a reminder, not exact every month. If a shifted lead day happens to
+  // land on/after today it just fires this month like normal; if it's already
+  // this month's past, the native trigger rolls it to next month on its own —
+  // either way nothing here needs to special-case a "too soon to lead" bill.
   const due = parseISODateLocal(bill.dueDate);
-  const leadDay = Math.max(1, due.getDate() - BILL_LEAD_DAYS);
-  const leadDateIso = `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, '0')}-${String(leadDay).padStart(2, '0')}`;
+  const dueDay = due.getDate();
+  const dateIsoForDay = (day: number) =>
+    `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  const monthlySpec = (dateIso: string, bodyForMinutes: () => string): OccurrenceSpec => ({
+    title: `Bill: ${bill.name}`,
+    bodyForMinutes,
+    dateIso,
+    time: BILL_TIME,
+    recurring: true,
+    freq: 'monthly',
+    leadMinutes: 0,
+  });
 
-  const [lead, dueIds] = await Promise.all([
-    scheduleOccurrence({
-      title: `Bill: ${bill.name}`,
-      bodyForMinutes: staticLeadBody,
-      dateIso: leadDateIso,
-      time: BILL_TIME,
-      recurring: true,
-      freq: 'monthly',
-      leadMinutes: 0,
-    }),
-    scheduleOccurrence({
-      title: `Bill: ${bill.name}`,
-      bodyForMinutes: dueBodyText,
-      dateIso: bill.dueDate,
-      time: BILL_TIME,
-      recurring: true,
-      freq: 'monthly',
-      leadMinutes: 0,
-    }),
+  // A bill due early in the month leaves no room for a full week/3-day lead
+  // before day 1 — the Math.max clamp above pushes the trigger day forward
+  // instead, which can land it on the due day itself, or put both leads on the
+  // same day as each other. Naively keeping the nominal "in 7 days"/"in 3
+  // days" text in that case would be wrong (the real gap could be much
+  // shorter), and firing two same-day duplicates is just noise — so each
+  // lead's message is built from its *actual* day gap after clamping, and
+  // it's dropped entirely once that gap no longer exceeds a shorter lead
+  // already covers (minGapDays): the 3-day lead needs at least 1 real day of
+  // lead time to mean anything, and the week lead is only worth keeping
+  // alongside the 3-day one if it's genuinely further out.
+  const scheduleLead = (leadDay: number, minGapDays: number) => {
+    const actualGapDays = dueDay - leadDay;
+    if (actualGapDays <= minGapDays) return Promise.resolve<string[]>([]);
+    return scheduleOccurrence(monthlySpec(dateIsoForDay(leadDay), () => daysAwayBody(actualGapDays)));
+  };
+
+  const [weekLead, threeDayLead, dueIds] = await Promise.all([
+    scheduleLead(Math.max(1, dueDay - BILL_WEEK_LEAD_DAYS), BILL_LEAD_DAYS),
+    scheduleLead(Math.max(1, dueDay - BILL_LEAD_DAYS), 0),
+    scheduleOccurrence(monthlySpec(bill.dueDate, dueBodyText)),
   ]);
-  return [...lead, ...dueIds];
+  return [...weekLead, ...threeDayLead, ...dueIds];
 }
 
 export async function cancelNotifications(notificationIds: string[] | undefined): Promise<void> {

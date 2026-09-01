@@ -7,6 +7,27 @@ const openai = new OpenAI({ apiKey: env.openaiApiKey });
 // (reading a PDF's layout/tables), not just short generation from a prompt.
 const OPENAI_MODEL = 'gpt-5.4';
 
+// Extension -> MIME type for every file type the upload picker offers (see
+// SyllabusUploadModal.tsx's matching list). The Responses API branches on
+// this: PDFs get real page-image + text extraction via `input_file`, other
+// documents get text-only via the same `input_file` type, and photos need
+// the separate `input_image` content type entirely (see extractSyllabus).
+export const SYLLABUS_MIME_BY_EXT: Record<string, string> = {
+  pdf: 'application/pdf',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+};
+
+// Filename -> MIME type, or null if its extension isn't one of the supported
+// types above (the controller turns null into a clean 400).
+export function mimeTypeForFilename(filename: string): string | null {
+  const ext = filename.split('.').pop()?.toLowerCase();
+  return ext ? SYLLABUS_MIME_BY_EXT[ext] ?? null : null;
+}
+
 export interface SyllabusDeadline {
   title: string;
   date: string; // ISO 8601, YYYY-MM-DD
@@ -61,14 +82,29 @@ const SYLLABUS_SCHEMA = {
   additionalProperties: false,
 };
 
-// Sent directly to OpenAI as a file input (base64) — no separate OCR/parsing step.
-// Throws on failure, unlike goalMilestones/examTopics — no sensible canned
+// Sent directly to OpenAI as a file/image input (base64) — no separate OCR/parsing
+// step. Throws on failure, unlike goalMilestones/examTopics — no sensible canned
 // fallback for a real document's content; the controller maps it to a clean error.
 export async function extractSyllabus(input: {
   fileBase64: string;
   filename: string;
+  mimeType: string;
 }): Promise<SyllabusExtractionResult> {
   const today = new Date().toISOString().slice(0, 10);
+
+  // Photos (a snapped picture of a printed/whiteboard syllabus) go through the
+  // Responses API's separate vision content type — `input_file`'s `file_data`
+  // is for documents (PDF/DOCX/PPTX get either real page-image+text or
+  // text-only extraction depending on type), not a plain image.
+  const fileContentPart = input.mimeType.startsWith('image/')
+    ? {
+        type: 'input_image' as const,
+        image_url: `data:${input.mimeType};base64,${input.fileBase64}`,
+        // High detail — a syllabus photo needs to be read for small print, not
+        // just recognized at a glance.
+        detail: 'high' as const,
+      }
+    : { type: 'input_file' as const, filename: input.filename, file_data: `data:${input.mimeType};base64,${input.fileBase64}` };
 
   const response = await openai.responses.create({
     model: OPENAI_MODEL,
@@ -93,11 +129,7 @@ export async function extractSyllabus(input: {
               'this is the one part of the extraction that should almost never come back empty.\n\n' +
               'If no course name is stated explicitly, use the most likely course title based on the content.',
           },
-          {
-            type: 'input_file',
-            filename: input.filename,
-            file_data: `data:application/pdf;base64,${input.fileBase64}`,
-          },
+          fileContentPart,
         ],
       },
     ],

@@ -16,6 +16,18 @@ import { useSyllabi } from '@/hooks/useSyllabi';
 import { weekdayIndexMonday, parseISODateLocal, formatDatePickerLabel } from '@/utils/date';
 import type { ClassItem } from '@/types/plan.types';
 
+// Matches backend/src/services/syllabusExtraction.ts's SYLLABUS_MIME_BY_EXT —
+// the backend derives the actual MIME type from the filename itself (safer
+// than trusting the OS-reported one), so this list only needs to keep the
+// native file picker's own filter in sync with what the server will accept.
+const SUPPORTED_SYLLABUS_TYPES = [
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation', // .pptx
+  'image/jpeg',
+  'image/png',
+];
+
 interface DraftDeadline {
   key: string;
   title: string;
@@ -78,7 +90,7 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
 
   const handlePick = async () => {
     const result = await DocumentPicker.getDocumentAsync({
-      type: 'application/pdf',
+      type: SUPPORTED_SYLLABUS_TYPES,
       copyToCacheDirectory: true,
     });
     if (result.canceled) return;
@@ -208,10 +220,11 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
         <>
           <Text style={styles.title}>Upload syllabus</Text>
           <Text style={styles.sub}>
-            Upload a PDF syllabus and AI will pull out the course name and every deadline.
+            Upload a syllabus — PDF, Word, PowerPoint, or a photo — and AI will pull out the course name and
+            every deadline.
           </Text>
           <Pressable style={styles.pickButton} onPress={handlePick}>
-            <Text style={styles.pickButtonText}>Choose PDF</Text>
+            <Text style={styles.pickButtonText}>Choose file</Text>
           </Pressable>
         </>
       )}

@@ -9,8 +9,11 @@ export function createApp() {
   const app = express();
 
   app.use(cors({ origin: env.corsOrigin }));
-  // Default 100kb limit is too small for a base64-encoded syllabus PDF (base64 inflates size ~33%).
-  app.use(express.json({ limit: '15mb' }));
+  // Default 100kb limit is too small for a base64-encoded syllabus upload (base64
+  // inflates size ~33%) — sized for more than a text-heavy PDF now that the syllabus
+  // picker also accepts a full-resolution phone camera photo, which can run well
+  // into the 10-20MB range before encoding.
+  app.use(express.json({ limit: '30mb' }));
 
   // Legal pages for paywall / App Store Connect / Play Console.
   // Uses cwd (not __dirname) since src/ and dist/ differ in depth but both run with cwd = backend/.

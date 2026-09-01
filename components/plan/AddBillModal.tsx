@@ -196,7 +196,7 @@ export function AddBillModal({ visible, onClose, onSave, onRemove, editingBill }
 
         <View style={styles.hintBox}>
           <IconSymbol name="bell.fill" color={Colors.warning} size={14} />
-          <Text style={styles.hintText}>You&apos;ll be reminded 3 days before and on the due date.</Text>
+          <Text style={styles.hintText}>You&apos;ll be reminded 1 week before, 3 days before, and on the due date.</Text>
         </View>
 
         <Pressable

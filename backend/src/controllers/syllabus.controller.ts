@@ -3,7 +3,7 @@ import { Syllabus, toPublicSyllabus } from '../models/Syllabus';
 import { Subscription } from '../models/Subscription';
 import { AuthedRequest } from '../middleware/requireAuth';
 import { ApiError } from '../utils/ApiError';
-import { extractSyllabus } from '../services/syllabusExtraction';
+import { extractSyllabus, mimeTypeForFilename } from '../services/syllabusExtraction';
 import { FEATURE_MIN_TIER, hasTier } from '../constants/featureTiers';
 import { checkAndConsumeQuery } from '../services/aiUsageLimiter';
 import { findOwnedOrThrow } from '../utils/ownedDoc';
@@ -19,7 +19,20 @@ export async function listSyllabi(req: AuthedRequest, res: Response) {
 export async function extractSyllabusHandler(req: AuthedRequest, res: Response) {
   const { fileBase64, filename } = req.body ?? {};
   if (!fileBase64 || typeof fileBase64 !== 'string') {
-    throw new ApiError(400, 'A PDF file is required.', 'general');
+    throw new ApiError(400, 'A file is required.', 'general');
+  }
+  // filename isn't just a display label here — mimeTypeForFilename derives the
+  // actual MIME type from it, which decides how the file bytes get sent to
+  // OpenAI (input_file vs input_image). A missing filename used to silently
+  // default to "syllabus.pdf" back when the MIME type was hardcoded to PDF
+  // regardless; now that would mislabel whatever was actually uploaded, so a
+  // real filename is required instead.
+  if (!filename || typeof filename !== 'string') {
+    throw new ApiError(400, 'A file is required.', 'general');
+  }
+  const mimeType = mimeTypeForFilename(filename);
+  if (!mimeType) {
+    throw new ApiError(400, 'Upload a PDF, Word/PowerPoint document, or a photo (JPG/PNG).', 'general');
   }
 
   // First-ever syllabus is free (onboarding shares this endpoint with the in-app
@@ -40,7 +53,7 @@ export async function extractSyllabusHandler(req: AuthedRequest, res: Response) 
   }
 
   try {
-    const result = await extractSyllabus({ fileBase64, filename: filename || 'syllabus.pdf' });
+    const result = await extractSyllabus({ fileBase64, filename, mimeType });
     res.json(result);
   } catch (err) {
     console.error('[syllabus.controller] extraction failed', err);
