@@ -31,6 +31,11 @@ export interface SettingsDocument extends Document {
   // same reasoning as aiDisclosureAcknowledged but with no backend enforcement
   // (a plain data field, not a paid/compliance-sensitive API call).
   savingsDisclosureAcknowledged?: boolean;
+  // Chosen on the Focus onboarding screen ('student' | 'exam_candidate' |
+  // 'professional') — synced here (not just AsyncStorage) so logging in on a
+  // fresh install/new device can restore the user's real path instead of
+  // silently defaulting to "professional" and skipping onboarding entirely.
+  focusProfile?: string;
 }
 
 const settingsSchema = new Schema<SettingsDocument>({
@@ -49,6 +54,7 @@ const settingsSchema = new Schema<SettingsDocument>({
   aiAccessCalendar: { type: Boolean, default: true },
   aiDisclosureAcknowledged: { type: Boolean, default: false },
   savingsDisclosureAcknowledged: { type: Boolean, default: false },
+  focusProfile: { type: String },
 });
 
 export function toPublicSettings(doc: SettingsDocument | null) {
@@ -62,6 +68,7 @@ export function toPublicSettings(doc: SettingsDocument | null) {
     aiAccessCalendar: doc?.aiAccessCalendar ?? true,
     aiDisclosureAcknowledged: doc?.aiDisclosureAcknowledged ?? false,
     savingsDisclosureAcknowledged: doc?.savingsDisclosureAcknowledged ?? false,
+    focusProfile: doc?.focusProfile,
   };
 }
 

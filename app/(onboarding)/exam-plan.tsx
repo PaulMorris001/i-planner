@@ -38,7 +38,9 @@ export default function ExamPlan() {
   const [adding, setAdding] = useState(true);
   const [loading, setLoading] = useState(false);
 
-  const PROGRESS = 0.66;
+  // This is the last onboarding screen (Continue always lands on Dashboard,
+  // never a 3rd step) — matches focus.tsx's now-corrected 2-step total.
+  const PROGRESS = 1;
 
   const resetDraft = () => {
     setExamName("");
@@ -112,7 +114,7 @@ export default function ExamPlan() {
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.offWhite }}>
-      <OnboardingStepHeader stepLabel="Step 2 of 3" progress={PROGRESS} />
+      <OnboardingStepHeader stepLabel="Step 2 of 2" progress={PROGRESS} />
 
       <ScrollView
         contentContainerStyle={[

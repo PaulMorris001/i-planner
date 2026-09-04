@@ -9,12 +9,13 @@ import { AuthHeader } from '@/components/onboarding/AuthHeader';
 import { FormErrorBanner } from '@/components/onboarding/FormErrorBanner';
 import { useAuth } from '@/hooks/useAuth';
 import { useOnboarding } from '@/hooks/useOnboarding';
+import { settingsService } from '@/services/settings.service';
 import { Colors, Spacing, Typography } from '@/constants/theme';
 import { Routes } from '@/constants/routes';
 
 export default function Login() {
   const { login, loading } = useAuth();
-  const { completeOnboarding } = useOnboarding();
+  const { completeOnboarding, setFocusProfile } = useOnboarding();
 
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
@@ -32,8 +33,20 @@ export default function Login() {
     if (!validate()) return;
     try {
       await login({ email, password });
-      await completeOnboarding();
-      router.replace(Routes.DASHBOARD);
+      // The Login screen is only ever reached with no local onboarding state
+      // (a fresh install, reinstall, or new device) — focusProfile lives in
+      // AsyncStorage, so without this check a returning user would silently
+      // default to "professional" and never see Focus again. Restore it from
+      // Settings if this account already chose one; otherwise this really is
+      // a first-time-here device, so send them through Focus like Register does.
+      const settings = await settingsService.get();
+      if (settings.focusProfile) {
+        await setFocusProfile(settings.focusProfile);
+        await completeOnboarding();
+        router.replace(Routes.DASHBOARD);
+      } else {
+        router.replace(Routes.FOCUS);
+      }
     } catch (e: any) {
       setErrors({ general: e.message });
     }

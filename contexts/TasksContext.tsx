@@ -10,7 +10,7 @@ import type { Task, NewTaskInput } from '@/types/task.types';
 
 // Fields that affect scheduling — shared between Apple Calendar sync and reminder
 // notifications; an unnecessary notes-only reschedule is harmless.
-const SYNC_RELEVANT_FIELDS = ['title', 'dueDate', 'time', 'notes', 'recurring', 'freq', 'dayIdxs'] as const;
+const SYNC_RELEVANT_FIELDS = ['title', 'dueDate', 'time', 'notes', 'recurring', 'freq', 'dayIdxs', 'alarmEnabled'] as const;
 
 interface TasksContextValue {
   tasks: Task[];

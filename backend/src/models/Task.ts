@@ -31,6 +31,10 @@ export interface TaskDocument extends Document {
   // When true, edits must never delete/recreate that event, only the app's own
   // copy of the details (see task.controller.ts's updateTask).
   calendarLinkExternal?: boolean;
+  // When true, the due-time notification (not the 15-min lead) rings as a
+  // louder alarm — custom sound, bypasses Do Not Disturb — instead of a
+  // normal notification. See utils/notifications.ts's scheduleTaskNotifications.
+  alarmEnabled?: boolean;
 }
 
 const taskSchema = new Schema<TaskDocument>({
@@ -57,6 +61,7 @@ const taskSchema = new Schema<TaskDocument>({
   googleEventId: { type: String },
   notificationIds: { type: [String] },
   calendarLinkExternal: { type: Boolean, default: false },
+  alarmEnabled: { type: Boolean, default: false },
 });
 
 export function toPublicTask(doc: TaskDocument) {
@@ -79,6 +84,7 @@ export function toPublicTask(doc: TaskDocument) {
     googleEventId: doc.googleEventId,
     notificationIds: doc.notificationIds,
     calendarLinkExternal: doc.calendarLinkExternal,
+    alarmEnabled: doc.alarmEnabled,
   };
 }
 

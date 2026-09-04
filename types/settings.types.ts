@@ -8,4 +8,7 @@ export interface Settings {
   aiAccessCalendar: boolean;
   aiDisclosureAcknowledged: boolean;
   savingsDisclosureAcknowledged: boolean;
+  // Chosen on the Focus onboarding screen — synced so Login can restore it on
+  // a fresh install instead of silently defaulting to "professional".
+  focusProfile?: string;
 }

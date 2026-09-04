@@ -9,6 +9,7 @@ import { AuthHeader } from '@/components/onboarding/AuthHeader';
 import { FormErrorBanner } from '@/components/onboarding/FormErrorBanner';
 import { authService } from '@/services/auth.service';
 import { Colors, Spacing, Typography } from '@/constants/theme';
+import { Routes } from '@/constants/routes';
 
 export default function ForgotPassword() {
   const [email, setEmail]     = useState('');
@@ -44,7 +45,7 @@ export default function ForgotPassword() {
           </Text>
           <Button
             label="Back to sign in"
-            onPress={() => router.replace('/(onboarding)/login')}
+            onPress={() => router.replace(Routes.LOGIN)}
             style={styles.sentBtn}
           />
         </View>

@@ -268,19 +268,25 @@ export function StudentPathView({
       </Card>
 
       {/* This week's goal(s) */}
-      <View style={{ gap: 9 }}>
-        <Text style={styles.eyebrowMuted}>
-          {thisWeeksGoals.length > 1 ? "THIS WEEK'S GOALS" : "THIS WEEK'S GOAL"}
-        </Text>
-        {thisWeeksGoals.length === 0 ? (
+      {thisWeeksGoals.length === 0 ? (
+        // Bordered white-card shell, matching every other empty dashboard
+        // section — a bare EmptyState floating on the page background reads
+        // as crumpled against the boxed sections above and below it.
+        <Card style={[styles.card, { marginTop: 6 }]}>
+          <Text style={styles.eyebrowMuted}>{"THIS WEEK'S GOAL"}</Text>
           <EmptyState
             icon="target"
             title="No goals due this week"
             subtitle="Set a due date on a goal to see it here."
             onPress={() => router.push(Routes.GOALS)}
           />
-        ) : (
-          thisWeeksGoals.map((goal) => (
+        </Card>
+      ) : (
+        <View style={{ gap: 9, marginTop: 6 }}>
+          <Text style={styles.eyebrowMuted}>
+            {thisWeeksGoals.length > 1 ? "THIS WEEK'S GOALS" : "THIS WEEK'S GOAL"}
+          </Text>
+          {thisWeeksGoals.map((goal) => (
             <Card key={goal.id} style={styles.card}>
               <View style={styles.rowBetween}>
                 <Text style={styles.weekGoalTitle} numberOfLines={1}>
@@ -298,55 +304,59 @@ export function StudentPathView({
                 <Text style={styles.viewButtonText}>View</Text>
               </Pressable>
             </Card>
-          ))
-        )}
-      </View>
+          ))}
+        </View>
+      )}
 
       {/* Upcoming */}
-      <View style={{ gap: 9 }}>
-        <Text style={styles.eyebrowMuted}>UPCOMING</Text>
-        {studentUpcoming.length === 0 && (
-          <Text style={styles.noClassText}>
+      {studentUpcoming.length === 0 ? (
+        <Card style={[styles.card, { marginTop: 6 }]}>
+          <Text style={styles.eyebrowMuted}>UPCOMING</Text>
+          <Text style={[styles.noClassText, { marginTop: 10 }]}>
             Nothing coming up — add recruitment tasks or other items from onboarding.
           </Text>
-        )}
-        {studentUpcoming.map((item) => (
-          <View key={`${item.title}-${item.date}`} style={styles.upcomingRow}>
-            <View style={[styles.upcomingDot, { backgroundColor: item.dotColor }]} />
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={styles.upcomingTitle} numberOfLines={1}>
-                {item.title}
-              </Text>
-              {(item.category || item.priority || item.time) && (
-                <View style={styles.upcomingMetaRow}>
-                  {item.category && (
-                    <Text
-                      style={[
-                        styles.upcomingMetaChip,
-                        { color: TaskCategories[item.category].color, backgroundColor: TaskCategories[item.category].soft },
-                      ]}
-                    >
-                      {TaskCategories[item.category].label}
-                    </Text>
-                  )}
-                  {item.priority && (
-                    <Text
-                      style={[
-                        styles.upcomingMetaChip,
-                        { color: TaskPriorities[item.priority].color, backgroundColor: TaskPriorities[item.priority].soft },
-                      ]}
-                    >
-                      {TaskPriorities[item.priority].label}
-                    </Text>
-                  )}
-                  {!!item.time && <Text style={styles.upcomingMetaTime}>{item.time}</Text>}
-                </View>
-              )}
+        </Card>
+      ) : (
+        <View style={{ gap: 9, marginTop: 6 }}>
+          <Text style={styles.eyebrowMuted}>UPCOMING</Text>
+          {studentUpcoming.map((item) => (
+            <View key={`${item.title}-${item.date}`} style={styles.upcomingRow}>
+              <View style={[styles.upcomingDot, { backgroundColor: item.dotColor }]} />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.upcomingTitle} numberOfLines={1}>
+                  {item.title}
+                </Text>
+                {(item.category || item.priority || item.time) && (
+                  <View style={styles.upcomingMetaRow}>
+                    {item.category && (
+                      <Text
+                        style={[
+                          styles.upcomingMetaChip,
+                          { color: TaskCategories[item.category].color, backgroundColor: TaskCategories[item.category].soft },
+                        ]}
+                      >
+                        {TaskCategories[item.category].label}
+                      </Text>
+                    )}
+                    {item.priority && (
+                      <Text
+                        style={[
+                          styles.upcomingMetaChip,
+                          { color: TaskPriorities[item.priority].color, backgroundColor: TaskPriorities[item.priority].soft },
+                        ]}
+                      >
+                        {TaskPriorities[item.priority].label}
+                      </Text>
+                    )}
+                    {!!item.time && <Text style={styles.upcomingMetaTime}>{item.time}</Text>}
+                  </View>
+                )}
+              </View>
+              <Text style={styles.upcomingDate}>{formatShortDate(item.date)}</Text>
             </View>
-            <Text style={styles.upcomingDate}>{formatShortDate(item.date)}</Text>
-          </View>
-        ))}
-      </View>
+          ))}
+        </View>
+      )}
 
       <SavingsGoalsSection
         goals={savingsGoals}

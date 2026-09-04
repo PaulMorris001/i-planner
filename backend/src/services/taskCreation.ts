@@ -24,6 +24,7 @@ export interface CreateTaskInput {
   // point at that event, not get a brand new one created for it.
   googleEventId?: string;
   calendarLinkExternal?: boolean;
+  alarmEnabled?: boolean;
 }
 
 export async function syncTaskToGoogle(
@@ -75,6 +76,7 @@ export async function createTaskDoc(firebaseUid: string, input: CreateTaskInput)
     notificationIds: input.notificationIds,
     googleEventId: input.googleEventId,
     calendarLinkExternal: input.calendarLinkExternal,
+    alarmEnabled: !!input.alarmEnabled,
   });
 
   // Already pointing at an existing event (converted from an imported

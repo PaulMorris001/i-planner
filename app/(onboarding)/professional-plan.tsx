@@ -81,7 +81,9 @@ export default function ProfessionalPlan() {
   // Cert form state
   const [certInput, setCertInput]               = useState('');
 
-  const PROGRESS = 0.66;
+  // This is the last onboarding screen (Continue always lands on Dashboard,
+  // never a 3rd step) — matches focus.tsx's now-corrected 2-step total.
+  const PROGRESS = 1;
 
   const toggleSection = (key: Section) => {
     setExpanded(prev => (prev === key ? null : key));
@@ -185,7 +187,7 @@ export default function ProfessionalPlan() {
   return (
     <View style={{ flex: 1, backgroundColor: Colors.offWhite }}>
 
-      <OnboardingStepHeader stepLabel="Step 2 of 3" progress={PROGRESS} />
+      <OnboardingStepHeader stepLabel="Step 2 of 2" progress={PROGRESS} />
 
       <ScrollView
         contentContainerStyle={[

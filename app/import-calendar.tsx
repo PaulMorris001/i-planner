@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, Alert } from 'react-native';
+import { View, Text, Pressable, ActivityIndicator, StyleSheet, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { BackButton } from '@/components/ui/BackButton';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors, Spacing } from '@/constants/theme';
 import { useSettings } from '@/hooks/useSettings';
@@ -51,13 +50,29 @@ export default function ImportCalendar() {
     wasTaskModalOpen.current = taskModalOpen;
   }, [taskModalOpen, fetchList]);
 
+  // Both endpoints return the full current list (an upsert merge), not a
+  // delta — so "how many are new this time" is computed by diffing the count
+  // before/after, and reported via Alert so tapping Import always visibly
+  // resolves to something instead of just a spinner that quietly finishes.
+  const reportImportResult = (addedCount: number) => {
+    Alert.alert(
+      addedCount > 0 ? 'Import complete' : 'Nothing new',
+      addedCount > 0
+        ? `Added ${addedCount} new event${addedCount === 1 ? '' : 's'} to review below.`
+        : "No new events found — you're all caught up."
+    );
+  };
+
   const handleImportApple = async () => {
     setImportingApple(true);
     try {
       const start = new Date();
       const end = new Date(start.getTime() + IMPORT_WINDOW_DAYS * 24 * 60 * 60 * 1000);
       const localEvents = await readAppleCalendarEvents(start, end);
-      setEvents(await calendarImportService.importApple(localEvents));
+      const beforeCount = events.length;
+      const updated = await calendarImportService.importApple(localEvents);
+      setEvents(updated);
+      reportImportResult(Math.max(0, updated.length - beforeCount));
     } catch (err) {
       console.error('[ImportCalendar] Apple import failed', err);
       Alert.alert("Couldn't import", 'Check your connection and try again.');
@@ -69,7 +84,10 @@ export default function ImportCalendar() {
   const handleImportGoogle = async () => {
     setImportingGoogle(true);
     try {
-      setEvents(await calendarImportService.importGoogle());
+      const beforeCount = events.length;
+      const updated = await calendarImportService.importGoogle();
+      setEvents(updated);
+      reportImportResult(Math.max(0, updated.length - beforeCount));
     } catch (err) {
       console.error('[ImportCalendar] Google import failed', err);
       Alert.alert("Couldn't import", 'Check your connection and try again.');
@@ -120,22 +138,38 @@ export default function ImportCalendar() {
       ) : (
         <View style={styles.importRow}>
           {appleCalendarConnected && (
-            <Button
-              label="Import from Apple"
-              variant="secondary"
-              loading={importingApple}
+            <Pressable
+              style={[styles.importCard, importingApple && styles.importCardBusy]}
               onPress={handleImportApple}
-              style={styles.importButton}
-            />
+              disabled={importingApple}
+            >
+              <View style={styles.importIconBoxApple}>
+                <IconSymbol name="calendar" color={Colors.textPrimary} size={17} />
+              </View>
+              <Text style={styles.importLabel} numberOfLines={1}>Apple</Text>
+              {importingApple ? (
+                <ActivityIndicator color={Colors.textMuted} size="small" />
+              ) : (
+                <Text style={styles.importSub}>Import events</Text>
+              )}
+            </Pressable>
           )}
           {googleCalendarConnected && (
-            <Button
-              label="Import from Google"
-              variant="secondary"
-              loading={importingGoogle}
+            <Pressable
+              style={[styles.importCard, importingGoogle && styles.importCardBusy]}
               onPress={handleImportGoogle}
-              style={styles.importButton}
-            />
+              disabled={importingGoogle}
+            >
+              <View style={styles.importIconBoxGoogle}>
+                <Text style={styles.importGoogleG}>G</Text>
+              </View>
+              <Text style={styles.importLabel} numberOfLines={1}>Google</Text>
+              {importingGoogle ? (
+                <ActivityIndicator color={Colors.textMuted} size="small" />
+              ) : (
+                <Text style={styles.importSub}>Import events</Text>
+              )}
+            </Pressable>
           )}
         </View>
       )}
@@ -197,9 +231,53 @@ const styles = StyleSheet.create({
     marginTop: 18,
     paddingHorizontal: Spacing.md,
   },
-  importButton: {
+  importCard: {
     flex: 1,
-    height: 46,
+    alignItems: 'center',
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 15,
+    paddingVertical: 16,
+    paddingHorizontal: 10,
+    gap: 3,
+  },
+  importCardBusy: {
+    opacity: 0.6,
+  },
+  importIconBoxApple: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    backgroundColor: Colors.offWhite,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 5,
+  },
+  importIconBoxGoogle: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    backgroundColor: Colors.infoSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 5,
+  },
+  importGoogleG: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#4285F4',
+  },
+  importLabel: {
+    fontSize: 14.5,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  importSub: {
+    fontSize: 11.5,
+    color: Colors.textMuted,
   },
   list: {
     marginTop: 20,

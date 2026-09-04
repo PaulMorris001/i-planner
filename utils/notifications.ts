@@ -8,6 +8,11 @@ import { parseISODateLocal } from '@/utils/date';
 // REMINDER_LEAD_MINUTES before, one exactly at the due/start time.
 const REMINDER_LEAD_MINUTES = 15;
 const ANDROID_CHANNEL_ID = 'planner-reminders';
+// Separate channel, not a change to the one above — Android channel settings
+// are effectively fixed once created, and this must not retroactively change
+// behavior for every existing non-alarm task/class/bill reminder already
+// relying on 'planner-reminders'.
+const ANDROID_ALARM_CHANNEL_ID = 'planner-alarms';
 
 let handlerRegistered = false;
 
@@ -36,8 +41,24 @@ async function ensureAndroidChannel(): Promise<void> {
   });
 }
 
+// Louder/harder-to-miss variant for a task's Alarm toggle — MAX importance
+// plus bypassDnd, which Android allows an app to request without special
+// permission (the user can still turn it off per-app in system settings).
+async function ensureAndroidAlarmChannel(): Promise<void> {
+  if (Platform.OS !== 'android') return;
+  await Notifications.setNotificationChannelAsync(ANDROID_ALARM_CHANNEL_ID, {
+    name: 'Alarms',
+    importance: Notifications.AndroidImportance.MAX,
+    bypassDnd: true,
+    // 'default' for now — swap for a bundled custom alarm tone (via the
+    // expo-notifications plugin's `sounds` config) once one exists.
+    sound: 'default',
+  });
+}
+
 export async function requestNotificationPermission(): Promise<boolean> {
   await ensureAndroidChannel();
+  await ensureAndroidAlarmChannel();
   const existing = await Notifications.getPermissionsAsync();
   if (existing.granted) return true;
   const result = await Notifications.requestPermissionsAsync({
@@ -77,6 +98,11 @@ interface OccurrenceSpec {
   freq?: RecurFreq;
   dayIdxs?: number[];
   leadMinutes: number;
+  // Louder/harder-to-miss delivery — custom sound, bypasses Do Not Disturb
+  // (Android channel) / breaks through Focus modes (iOS timeSensitive).
+  // Not a full lock-screen takeover (that needs Apple's restricted Critical
+  // Alerts entitlement, not used here).
+  isAlarm?: boolean;
 }
 
 // Schedules a single lead-time notification (0 minutes = exactly at the due/
@@ -90,13 +116,20 @@ async function scheduleOccurrence(spec: OccurrenceSpec): Promise<string[]> {
   if (parseTimeToMinutes(spec.time) >= 24 * 60) return []; // unparseable time string
   if (!(await hasPermission())) return [];
 
-  const channelId = Platform.OS === 'android' ? ANDROID_CHANNEL_ID : undefined;
+  const channelId = Platform.OS === 'android'
+    ? (spec.isAlarm ? ANDROID_ALARM_CHANNEL_ID : ANDROID_CHANNEL_ID)
+    : undefined;
+  // iOS-only fields; harmless no-ops on Android (channelId above is what
+  // actually controls Android's sound/DND behavior, via the channel itself).
+  const alarmContentExtras = spec.isAlarm
+    ? { sound: true as const, interruptionLevel: 'timeSensitive' as const }
+    : {};
 
   try {
     if (spec.recurring && spec.freq === 'daily') {
       const { hour, minute } = leadHourMinute(spec.time, spec.leadMinutes);
       const id = await Notifications.scheduleNotificationAsync({
-        content: { title: spec.title, body: spec.bodyForMinutes(spec.leadMinutes) },
+        content: { title: spec.title, body: spec.bodyForMinutes(spec.leadMinutes), ...alarmContentExtras },
         trigger: { type: Notifications.SchedulableTriggerInputTypes.DAILY, hour, minute, channelId },
       });
       return [id];
@@ -109,7 +142,7 @@ async function scheduleOccurrence(spec: OccurrenceSpec): Promise<string[]> {
         const weekday = toExpoWeekday((dayIdx + dayShift + 7) % 7);
         ids.push(
           await Notifications.scheduleNotificationAsync({
-            content: { title: spec.title, body: spec.bodyForMinutes(spec.leadMinutes) },
+            content: { title: spec.title, body: spec.bodyForMinutes(spec.leadMinutes), ...alarmContentExtras },
             trigger: { type: Notifications.SchedulableTriggerInputTypes.WEEKLY, weekday, hour, minute, channelId },
           })
         );
@@ -121,7 +154,7 @@ async function scheduleOccurrence(spec: OccurrenceSpec): Promise<string[]> {
       const { hour, minute } = leadHourMinute(spec.time, spec.leadMinutes);
       const day = parseISODateLocal(spec.dateIso).getDate();
       const id = await Notifications.scheduleNotificationAsync({
-        content: { title: spec.title, body: spec.bodyForMinutes(spec.leadMinutes) },
+        content: { title: spec.title, body: spec.bodyForMinutes(spec.leadMinutes), ...alarmContentExtras },
         trigger: { type: Notifications.SchedulableTriggerInputTypes.MONTHLY, day, hour, minute, channelId },
       });
       return [id];
@@ -142,7 +175,7 @@ async function scheduleOccurrence(spec: OccurrenceSpec): Promise<string[]> {
     const minutesUntil = Math.round((due.getTime() - fireAt.getTime()) / 60_000);
 
     const id = await Notifications.scheduleNotificationAsync({
-      content: { title: spec.title, body: spec.bodyForMinutes(minutesUntil) },
+      content: { title: spec.title, body: spec.bodyForMinutes(minutesUntil), ...alarmContentExtras },
       trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: fireAt, channelId },
     });
     return [id];
@@ -167,8 +200,12 @@ export async function scheduleTaskNotifications(task: {
   recurring: boolean;
   freq?: 'weekly' | 'weekdays' | 'daily';
   dayIdxs?: number[];
+  alarmEnabled?: boolean;
 }): Promise<string[]> {
-  const spec = (leadMinutes: number): OccurrenceSpec => ({
+  // Only the due-time notification (leadMinutes: 0) ever gets isAlarm — the
+  // 15-min lead stays a normal, gentle heads-up either way, regardless of
+  // the Alarm toggle. Set per-call below, not in this shared spec factory.
+  const spec = (leadMinutes: number, isAlarm?: boolean): OccurrenceSpec => ({
     title: `Task: ${task.title}`,
     bodyForMinutes: dueBody,
     dateIso: task.dueDate,
@@ -177,10 +214,11 @@ export async function scheduleTaskNotifications(task: {
     freq: task.freq,
     dayIdxs: task.dayIdxs,
     leadMinutes,
+    isAlarm,
   });
   const [lead, exact] = await Promise.all([
     scheduleOccurrence(spec(REMINDER_LEAD_MINUTES)),
-    scheduleOccurrence(spec(0)),
+    scheduleOccurrence(spec(0, task.alarmEnabled)),
   ]);
   return [...lead, ...exact];
 }

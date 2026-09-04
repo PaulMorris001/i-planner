@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ViewMoreToggle } from '@/components/ui/ViewMoreToggle';
 import { SavingsGoalCard } from '@/components/dashboard/SavingsGoalCard';
@@ -29,35 +30,42 @@ export function SavingsGoalsSection({ goals, emptySubtitle, onAdd, onEditGoal, o
   const [expanded, setExpanded] = useState(false);
   const visible = expanded ? goals : goals.slice(0, PREVIEW_COUNT);
 
-  return (
-    <View>
-      <View style={localStyles.headerRow}>
-        <Text style={[styles.eyebrowMuted, localStyles.eyebrowWarning]}>SAVINGS GOALS</Text>
-        <Pressable style={localStyles.addBtn} onPress={onAdd}>
-          <Text style={localStyles.addBtnText}>+ Add goal</Text>
-        </Pressable>
-      </View>
+  const headerRow = (
+    <View style={localStyles.headerRow}>
+      <Text style={[styles.eyebrowMuted, localStyles.eyebrowWarning]}>SAVINGS GOALS</Text>
+      <Pressable style={localStyles.addBtn} onPress={onAdd}>
+        <Text style={localStyles.addBtnText}>+ Add goal</Text>
+      </Pressable>
+    </View>
+  );
 
-      {goals.length === 0 ? (
-        <EmptyState
-          icon="plus"
-          title="Set a savings goal"
-          subtitle={emptySubtitle}
-          onPress={onAdd}
-        />
-      ) : (
-        <View style={{ gap: 12, marginTop: 11 }}>
-          {visible.map((goal) => (
-            <SavingsGoalCard
-              key={goal.id}
-              goal={goal}
-              emptySubtitle={emptySubtitle}
-              onPress={() => onEditGoal(goal)}
-              onLogProgress={() => onLogProgress(goal)}
-            />
-          ))}
-        </View>
-      )}
+  if (goals.length === 0) {
+    // Same bordered-white-card shell as the Career Goal card above it, instead
+    // of floating loose against the page background — keeps every dashboard
+    // section reading as its own distinct block regardless of empty/filled state.
+    return (
+      <Card style={[styles.card, localStyles.section]}>
+        {headerRow}
+        <EmptyState icon="plus" title="Set a savings goal" subtitle={emptySubtitle} onPress={onAdd} />
+      </Card>
+    );
+  }
+
+  return (
+    <View style={localStyles.section}>
+      {headerRow}
+
+      <View style={{ gap: 12, marginTop: 11 }}>
+        {visible.map((goal) => (
+          <SavingsGoalCard
+            key={goal.id}
+            goal={goal}
+            emptySubtitle={emptySubtitle}
+            onPress={() => onEditGoal(goal)}
+            onLogProgress={() => onLogProgress(goal)}
+          />
+        ))}
+      </View>
 
       <ViewMoreToggle
         expanded={expanded}
@@ -69,6 +77,13 @@ export function SavingsGoalsSection({ goals, emptySubtitle, onAdd, onEditGoal, o
 }
 
 const localStyles = StyleSheet.create({
+  // A little extra room on top of the dashboard stack's own gap between
+  // sections — Bill Reminders/Savings Goals/AI Coach otherwise read as
+  // crowded against each other since none of the section headers carry any
+  // spacing of their own the way a bordered Card's padding naturally would.
+  section: {
+    marginTop: 6,
+  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',

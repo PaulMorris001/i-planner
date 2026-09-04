@@ -45,6 +45,10 @@ export interface Task {
   // that event on edit or delete — only the app's own copy of the task
   // details changes, the user's actual calendar entry is left alone.
   calendarLinkExternal?: boolean;
+  // When true, the due-time notification (not the 15-min lead) rings as a
+  // louder alarm — custom sound, bypasses Do Not Disturb — instead of a
+  // normal notification. See utils/notifications.ts's scheduleTaskNotifications.
+  alarmEnabled?: boolean;
 }
 
 export type NewTaskInput = Omit<Task, 'id' | 'done'>;

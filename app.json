@@ -2,16 +2,21 @@
   "expo": {
     "name": "i-planner",
     "slug": "i-planner",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "iplanner",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/4c0b5e29-c1f0-44af-82f5-cefef59425b9"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.obitoventures.iplanner",
-      "deploymentTarget": "15.0",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -63,7 +68,8 @@
         "expo-build-properties",
         {
           "ios": {
-            "buildReactNativeFromSource": true
+            "buildReactNativeFromSource": true,
+            "deploymentTarget": "15.1"
           }
         }
       ],

@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { settingsService } from '@/services/settings.service';
 
 const ONBOARDING_KEY = '@iplanner_onboarded';
 const FOCUS_KEY = '@iplanner_focus_profile';
@@ -43,6 +44,14 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
   const setFocusProfile = async (profile: string) => {
     await AsyncStorage.setItem(FOCUS_KEY, profile);
     setFocusProfileState(profile);
+    // Best-effort — the local write above is what the app actually runs on;
+    // this just lets a future login on a different/reinstalled device restore
+    // the same path instead of silently defaulting to "professional".
+    try {
+      await settingsService.patch({ focusProfile: profile });
+    } catch (err) {
+      console.error('[OnboardingProvider] failed to sync focus profile', err);
+    }
   };
 
   const resetOnboarding = async () => {

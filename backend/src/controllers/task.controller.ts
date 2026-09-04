@@ -13,7 +13,7 @@ export async function listTasks(req: AuthedRequest, res: Response) {
 export async function createTask(req: AuthedRequest, res: Response) {
   const {
     title, category, priority, day, hour, time, dueDate, recurring, freq, dayIdxs, notes,
-    appleEventIds, notificationIds, googleEventId, calendarLinkExternal,
+    appleEventIds, notificationIds, googleEventId, calendarLinkExternal, alarmEnabled,
   } = req.body ?? {};
 
   if (!title || typeof title !== 'string' || !title.trim()) {
@@ -43,6 +43,7 @@ export async function createTask(req: AuthedRequest, res: Response) {
     // its own Google sync when this is present.
     googleEventId: typeof googleEventId === 'string' && googleEventId ? googleEventId : undefined,
     calendarLinkExternal: !!calendarLinkExternal,
+    alarmEnabled: !!alarmEnabled,
   });
 
   res.status(201).json(toPublicTask(task));
@@ -53,7 +54,7 @@ export async function updateTask(req: AuthedRequest, res: Response) {
 
   const {
     title, category, priority, day, hour, time, dueDate, done, recurring, freq, dayIdxs, notes, appleEventIds,
-    notificationIds, completedDates,
+    notificationIds, completedDates, alarmEnabled,
   } = req.body ?? {};
   // Google sync only cares about fields that actually affect the calendar event —
   // a bare { done } toggle or an { appleEventIds } id-persist patch shouldn't touch it.
@@ -75,6 +76,7 @@ export async function updateTask(req: AuthedRequest, res: Response) {
   if (appleEventIds !== undefined) task.appleEventIds = Array.isArray(appleEventIds) ? appleEventIds : undefined;
   if (notificationIds !== undefined) task.notificationIds = Array.isArray(notificationIds) ? notificationIds : undefined;
   if (completedDates !== undefined) task.completedDates = Array.isArray(completedDates) ? completedDates : undefined;
+  if (alarmEnabled !== undefined) task.alarmEnabled = !!alarmEnabled;
 
   // calendarLinkExternal is never read from the body — it's creation-time-only
   // (see createTask). A converted task points at an event the app doesn't own,

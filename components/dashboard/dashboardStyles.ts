@@ -292,6 +292,9 @@ export const dashboardStyles = StyleSheet.create({
     backgroundColor: Colors.textPrimary,
     borderRadius: 17,
     padding: 16,
+    // A little extra room on top of the shared stack's own gap — matches the
+    // same bump given to Bill Reminders/Savings Goals' section wrappers.
+    marginTop: 6,
   },
   coachIconBox: {
     width: 38,

@@ -2,6 +2,7 @@ import {
   KeyboardAvoidingView,
   RefreshControl,
   ScrollView,
+  View,
   Platform,
   StyleSheet,
   ViewStyle,
@@ -67,9 +68,12 @@ export function ScreenWrapper({
             {children}
           </ScrollView>
         ) : (
-          <SafeAreaView style={[styles.flex, style]} edges={edges}>
-            {children}
-          </SafeAreaView>
+          // Plain View, not another SafeAreaView — the outer SafeAreaView above
+          // already applies padding for `edges`, and react-native-safe-area-context
+          // doesn't treat that as "consumed": a second SafeAreaView requesting the
+          // same edges here would apply that same inset a second time, doubling
+          // the gap (most visible as excess top padding on any non-scrolling screen).
+          <View style={[styles.flex, style]}>{children}</View>
         )}
       </KeyboardAvoidingView>
     </SafeAreaView>

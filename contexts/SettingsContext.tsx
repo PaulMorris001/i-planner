@@ -6,11 +6,13 @@ import { auth } from '@/config/firebase';
 import { settingsService } from '@/services/settings.service';
 import { planService } from '@/services/plan.service';
 import { taskService } from '@/services/task.service';
+import { billService } from '@/services/bill.service';
 import { syncClassToAppleCalendar, syncTaskToAppleCalendar } from '@/utils/appleCalendarSync';
 import {
   requestNotificationPermission,
   scheduleTaskNotifications,
   scheduleClassNotifications,
+  scheduleBillNotifications,
   cancelNotifications,
 } from '@/utils/notifications';
 import type { Settings } from '@/types/settings.types';
@@ -63,12 +65,13 @@ async function backfillAppleCalendar() {
 }
 
 // Same fetch-directly-via-services reasoning as backfillAppleCalendar above —
-// SettingsProvider is mounted above TasksProvider, so useTasks() isn't in scope.
+// SettingsProvider is mounted above TasksProvider, so useTasks()/useBills() aren't in scope.
 async function backfillReminders() {
   try {
-    const [plan, tasks] = await Promise.all([
+    const [plan, tasks, bills] = await Promise.all([
       planService.get<StudentPlan>('student'),
       taskService.list(),
+      billService.list(),
     ]);
 
     if (plan?.classes?.length) {
@@ -88,6 +91,12 @@ async function backfillReminders() {
       const notificationIds = await scheduleTaskNotifications(task);
       if (notificationIds.length) await taskService.update(task.id, { notificationIds });
     }
+
+    for (const bill of bills) {
+      if (bill.notificationIds?.length) continue;
+      const notificationIds = await scheduleBillNotifications(bill);
+      if (notificationIds.length) await billService.update(bill.id, { notificationIds });
+    }
   } catch (err) {
     console.error('[SettingsProvider] reminder backfill failed', err);
   }
@@ -95,9 +104,10 @@ async function backfillReminders() {
 
 async function cancelAllReminders() {
   try {
-    const [plan, tasks] = await Promise.all([
+    const [plan, tasks, bills] = await Promise.all([
       planService.get<StudentPlan>('student'),
       taskService.list(),
+      billService.list(),
     ]);
 
     if (plan?.classes?.length) {
@@ -116,6 +126,12 @@ async function cancelAllReminders() {
       if (!task.notificationIds?.length) continue;
       await cancelNotifications(task.notificationIds);
       await taskService.update(task.id, { notificationIds: [] });
+    }
+
+    for (const bill of bills) {
+      if (!bill.notificationIds?.length) continue;
+      await cancelNotifications(bill.notificationIds);
+      await billService.update(bill.id, { notificationIds: [] });
     }
   } catch (err) {
     console.error('[SettingsProvider] failed to cancel reminders', err);

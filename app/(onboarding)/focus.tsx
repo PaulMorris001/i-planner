@@ -54,7 +54,9 @@ export default function Focus() {
     }
   };
 
-  const totalSteps = 3;
+  // Onboarding is Focus -> one path-specific plan screen -> Dashboard, so this
+  // is step 1 of 2, not 3 (the plan screens are each step 2 of 2, never a 3rd).
+  const totalSteps = 2;
   const currentStep = 0;
   const progressValue = Math.round(((currentStep + 1) / totalSteps) * 100);
 

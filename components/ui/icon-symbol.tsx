@@ -46,6 +46,7 @@ const MAPPING = {
   'info.circle': 'info',
   'doc.on.doc': 'content-copy',
   'note.text': 'notes',
+  'photo.fill': 'image',
 } as IconMapping;
 
 /**

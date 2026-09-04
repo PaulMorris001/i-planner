@@ -14,6 +14,8 @@ import { SettingsProvider } from '@/contexts/SettingsContext';
 import { GoalsProvider } from '@/contexts/GoalsContext';
 import { TasksProvider } from '@/contexts/TasksContext';
 import { SyllabiProvider } from '@/contexts/SyllabiContext';
+import { NewTaskModalProvider } from '@/contexts/NewTaskModalContext';
+import { NewTaskModal } from '@/components/task/NewTaskModal';
 import { initNotificationHandler } from '@/utils/notifications';
 
 // Catches render/startup errors and shows them on screen — used in production
@@ -60,8 +62,11 @@ export default function RootLayout() {
                       <GoalsProvider>
                         <TasksProvider>
                           <SyllabiProvider>
-                            <StatusBar style="dark" />
-                            <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }} />
+                            <NewTaskModalProvider>
+                              <StatusBar style="dark" />
+                              <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }} />
+                              <NewTaskModal />
+                            </NewTaskModalProvider>
                           </SyllabiProvider>
                         </TasksProvider>
                       </GoalsProvider>

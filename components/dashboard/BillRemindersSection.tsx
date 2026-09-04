@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { ViewMoreToggle } from '@/components/ui/ViewMoreToggle';
@@ -44,66 +45,78 @@ export function BillRemindersSection({ bills, onAddBill, onPressBill, onLongPres
     .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
   const upcoming = expanded ? allUpcoming : allUpcoming.slice(0, PREVIEW_COUNT);
 
-  return (
-    <View>
-      <View style={localStyles.headerRow}>
-        <Text style={[styles.eyebrowMuted, localStyles.eyebrowWarning]}>BILL REMINDERS</Text>
-        <Pressable style={localStyles.addBtn} onPress={onAddBill}>
-          <Text style={localStyles.addBtnText}>+ Add bill</Text>
-        </Pressable>
-      </View>
+  const headerRow = (
+    <View style={localStyles.headerRow}>
+      <Text style={[styles.eyebrowMuted, localStyles.eyebrowWarning]}>BILL REMINDERS</Text>
+      <Pressable style={localStyles.addBtn} onPress={onAddBill}>
+        <Text style={localStyles.addBtnText}>+ Add bill</Text>
+      </Pressable>
+    </View>
+  );
 
-      {upcoming.length === 0 ? (
+  if (upcoming.length === 0) {
+    // Same bordered-white-card shell as the Career Goal card above it, instead
+    // of floating loose against the page background — keeps every dashboard
+    // section reading as its own distinct block regardless of empty/filled state.
+    return (
+      <Card style={[styles.card, localStyles.section]}>
+        {headerRow}
         <EmptyState
           icon="bell.fill"
           title="No bills yet"
           subtitle="Add a bill to get reminded before it's due."
           onPress={onAddBill}
         />
-      ) : (
-        <View style={{ gap: 8, marginTop: 11 }}>
-          {upcoming.map(({ bill, dueDate, cycleDateKey, paid }) => {
-            const days = daysUntil(dueDate);
-            const overdue = !paid && days < 0;
-            const dueSoon = !paid && days >= 0 && days <= LEAD_DAYS;
-            const tint = paid
-              ? { bg: Colors.white, fg: Colors.textMuted }
-              : overdue
-              ? { bg: Colors.errorBg, fg: Colors.error }
-              : dueSoon
-              ? { bg: Colors.warningSoft, fg: Colors.warning }
-              : { bg: Colors.white, fg: Colors.textPrimary };
+      </Card>
+    );
+  }
 
-            return (
+  return (
+    <View style={localStyles.section}>
+      {headerRow}
+
+      <View style={{ gap: 8, marginTop: 11 }}>
+        {upcoming.map(({ bill, dueDate, cycleDateKey, paid }) => {
+          const days = daysUntil(dueDate);
+          const overdue = !paid && days < 0;
+          const dueSoon = !paid && days >= 0 && days <= LEAD_DAYS;
+          const tint = paid
+            ? { bg: Colors.white, fg: Colors.textMuted }
+            : overdue
+            ? { bg: Colors.errorBg, fg: Colors.error }
+            : dueSoon
+            ? { bg: Colors.warningSoft, fg: Colors.warning }
+            : { bg: Colors.white, fg: Colors.textPrimary };
+
+          return (
+            <Pressable
+              key={bill.id}
+              style={[localStyles.billRow, { backgroundColor: tint.bg }]}
+              onPress={() => onPressBill(bill, cycleDateKey)}
+              onLongPress={() => onLongPressBill(bill)}
+            >
+              <View style={localStyles.iconBadge}>
+                <IconSymbol name={paid ? 'checkmark' : 'bell.fill'} color={tint.fg} size={16} />
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={[localStyles.billTitle, { color: tint.fg }]} numberOfLines={1}>
+                  {bill.name} {paid ? '· Paid' : dueLabel(days)}
+                </Text>
+                <Text style={localStyles.billSub}>
+                  {paid ? 'Paid for' : 'Heads up ·'} {formatShortDate(toDateKey(dueDate))}
+                </Text>
+              </View>
+              <Text style={localStyles.billAmount}>{formatCurrency(bill.amount)}</Text>
               <Pressable
-                key={bill.id}
-                style={[localStyles.billRow, { backgroundColor: tint.bg }]}
-                onPress={() => onPressBill(bill, cycleDateKey)}
-                onLongPress={() => onLongPressBill(bill)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                onPress={() => onLongPressBill(bill)}
               >
-                <View style={localStyles.iconBadge}>
-                  <IconSymbol name={paid ? 'checkmark' : 'bell.fill'} color={tint.fg} size={16} />
-                </View>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={[localStyles.billTitle, { color: tint.fg }]} numberOfLines={1}>
-                    {bill.name} {paid ? '· Paid' : dueLabel(days)}
-                  </Text>
-                  <Text style={localStyles.billSub}>
-                    {paid ? 'Paid for' : 'Heads up ·'} {formatShortDate(toDateKey(dueDate))}
-                  </Text>
-                </View>
-                <Text style={localStyles.billAmount}>{formatCurrency(bill.amount)}</Text>
-                <Pressable
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  onPress={() => onLongPressBill(bill)}
-                >
-                  <IconSymbol name="ellipsis" color={Colors.textMuted} size={16} />
-                </Pressable>
+                <IconSymbol name="ellipsis" color={Colors.textMuted} size={16} />
               </Pressable>
-            );
-          })}
-        </View>
-      )}
+            </Pressable>
+          );
+        })}
+      </View>
 
       <ViewMoreToggle
         expanded={expanded}
@@ -115,6 +128,13 @@ export function BillRemindersSection({ bills, onAddBill, onPressBill, onLongPres
 }
 
 const localStyles = StyleSheet.create({
+  // A little extra room on top of the dashboard stack's own gap between
+  // sections — Bill Reminders/Savings Goals/AI Coach otherwise read as
+  // crowded against each other since none of the section headers carry any
+  // spacing of their own the way a bordered Card's padding naturally would.
+  section: {
+    marginTop: 6,
+  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',

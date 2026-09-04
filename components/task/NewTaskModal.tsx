@@ -45,6 +45,7 @@ export function NewTaskModal() {
   const [recurring, setRecurring] = useState(false);
   const [freq, setFreq] = useState<TaskFrequency>('weekly');
   const [selectedDays, setSelectedDays] = useState<number[]>([]);
+  const [alarmEnabled, setAlarmEnabled] = useState(false);
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -61,6 +62,7 @@ export function NewTaskModal() {
     setRecurring(false);
     setFreq('weekly');
     setSelectedDays([]);
+    setAlarmEnabled(false);
     setNotes('');
   };
 
@@ -75,6 +77,7 @@ export function NewTaskModal() {
       setRecurring(editingTask.recurring);
       setFreq(editingTask.freq ?? 'weekly');
       setSelectedDays(editingTask.freq === 'weekly' ? editingTask.dayIdxs ?? [] : []);
+      setAlarmEnabled(!!editingTask.alarmEnabled);
       setNotes(editingTask.notes);
     } else if (draft) {
       // Category/priority have no source on a draft (a converted calendar event) — left at defaults.
@@ -114,6 +117,9 @@ export function NewTaskModal() {
         recurring,
         freq: recurring ? freq : undefined,
         dayIdxs,
+        // Only meaningful with a real due date/time — the toggle itself is
+        // hidden until both are picked, so this is just belt-and-suspenders.
+        alarmEnabled: dueDate && dueTime ? alarmEnabled : false,
         notes: notes.trim(),
         // Points this task at the same calendar event the draft came from rather than creating a
         // new one. calendarLinkExternal marks it permanently so future edits/deletes never touch
@@ -239,6 +245,21 @@ export function NewTaskModal() {
             onChange={setDueTime}
             onDismiss={() => setShowTimePicker(false)}
           />
+
+          {!!dueDate && !!dueTime && (
+            <View style={styles.repeatRow}>
+              <View>
+                <Text style={styles.repeatTitle}>Alarm</Text>
+                <Text style={styles.repeatSub}>Ring loudly at the due time</Text>
+              </View>
+              <Switch
+                value={alarmEnabled}
+                onValueChange={setAlarmEnabled}
+                trackColor={{ false: Colors.border, true: Colors.primaryLight }}
+                thumbColor={Colors.white}
+              />
+            </View>
+          )}
 
           <View style={styles.repeatRow}>
             <View>

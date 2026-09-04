@@ -34,7 +34,16 @@ interface DraftDeadline {
   date: Date;
 }
 
-type Step = 'pick' | 'extracting' | 'review' | 'creating' | 'success';
+type Step = 'pick' | 'preview' | 'extracting' | 'review' | 'creating' | 'success';
+
+// Human-readable size, e.g. "2.4 MB" / "180 KB" — DocumentPickerAsset.size is
+// bytes, and a bare number reads as meaningless on the preview screen.
+function formatFileSize(bytes?: number): string | null {
+  if (!bytes) return null;
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 interface SyllabusUploadModalProps {
   visible: boolean;
@@ -58,6 +67,7 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
 
   const [step, setStep] = useState<Step>('pick');
   const [upgradeVisible, setUpgradeVisible] = useState(false);
+  const [pickedAsset, setPickedAsset] = useState<DocumentPicker.DocumentPickerAsset | null>(null);
   const [fileName, setFileName] = useState('');
   const [courseName, setCourseName] = useState('');
   const [deadlines, setDeadlines] = useState<DraftDeadline[]>([]);
@@ -70,6 +80,7 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
 
   const reset = () => {
     setStep('pick');
+    setPickedAsset(null);
     setFileName('');
     setCourseName('');
     setDeadlines([]);
@@ -88,13 +99,23 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
     reset();
   };
 
+  // Only picks a file and shows it back for confirmation — the actual AI call
+  // (and its tier/quota gating) happens in handleProcess once the user taps
+  // Continue, not the instant a file is chosen. Also reused as "choose a
+  // different file" from the preview step, so it can be called from either.
   const handlePick = async () => {
     const result = await DocumentPicker.getDocumentAsync({
       type: SUPPORTED_SYLLABUS_TYPES,
       copyToCacheDirectory: true,
     });
     if (result.canceled) return;
-    const asset = result.assets[0];
+    setPickedAsset(result.assets[0]);
+    setStep('preview');
+  };
+
+  const handleProcess = async () => {
+    if (!pickedAsset) return;
+    const asset = pickedAsset;
 
     if (syllabi.length > 0 && !hasTier(tier, FEATURE_MIN_TIER.syllabus_extraction)) {
       setUpgradeVisible(true);
@@ -135,14 +156,22 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
       console.error('[SyllabusUploadModal] extraction failed', err);
       // Defense in depth — covers `syllabi` being stale; the backend's
       // exemption check (syllabus.controller.ts) is the real source of truth.
+      const status = (err as { status?: number } | null)?.status;
       const field = (err as { field?: string } | null)?.field;
+      const message = (err as { message?: string } | null)?.message;
       if (field === 'tier') {
         setUpgradeVisible(true);
+      } else if (status === 429 && message) {
+        // Same title convention as Coach's identical quota-exceeded case —
+        // a distinct message from a generic parse failure, so the user knows
+        // it's their usage cap, not a bad file.
+        Alert.alert("You've hit your AI limit", message);
       } else {
-        const message = (err as { message?: string })?.message ?? "Couldn't read that syllabus. Try again.";
-        Alert.alert("Couldn't read syllabus", message);
+        Alert.alert("Couldn't read syllabus", message ?? "Couldn't read that syllabus. Try again.");
       }
-      setStep('pick');
+      // Back to preview (not pick) — the file is still chosen, no need to
+      // make them re-pick it just because e.g. a quota check failed.
+      setStep('preview');
     }
   };
 
@@ -225,6 +254,37 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
           </Text>
           <Pressable style={styles.pickButton} onPress={handlePick}>
             <Text style={styles.pickButtonText}>Choose file</Text>
+          </Pressable>
+        </>
+      )}
+
+      {step === 'preview' && pickedAsset && (
+        <>
+          <Text style={styles.title}>Ready to process</Text>
+          <Text style={styles.sub}>Confirm this is the right file before AI reads it.</Text>
+
+          <View style={styles.previewCard}>
+            <View style={styles.previewIconBox}>
+              <IconSymbol
+                name={pickedAsset.mimeType?.startsWith('image/') ? 'photo.fill' : 'doc.fill'}
+                color={Colors.primaryLight}
+                size={22}
+              />
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.previewFileName} numberOfLines={1}>{pickedAsset.name}</Text>
+              {!!formatFileSize(pickedAsset.size) && (
+                <Text style={styles.previewFileMeta}>{formatFileSize(pickedAsset.size)}</Text>
+              )}
+            </View>
+          </View>
+
+          <Pressable style={styles.chooseDifferentBtn} onPress={handlePick}>
+            <Text style={styles.chooseDifferentText}>Choose a different file</Text>
+          </Pressable>
+
+          <Pressable style={styles.pickButton} onPress={handleProcess}>
+            <Text style={styles.pickButtonText}>Continue</Text>
           </Pressable>
         </>
       )}
@@ -363,6 +423,46 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: Colors.white,
+  },
+  previewCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 20,
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.md,
+    padding: 14,
+  },
+  previewIconBox: {
+    width: 42,
+    height: 42,
+    borderRadius: 11,
+    backgroundColor: Colors.offWhite,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  previewFileName: {
+    fontSize: 14.5,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  previewFileMeta: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
+  chooseDifferentBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    marginTop: 10,
+  },
+  chooseDifferentText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.primaryLight,
   },
   centerBox: {
     alignItems: 'center',
