@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable, ActivityIndicator, Alert, ScrollView, StyleSheet } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 import { File } from 'expo-file-system';
 import { BottomSheetModal } from '@/components/ui/BottomSheetModal';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -19,14 +20,22 @@ import type { ClassItem } from '@/types/plan.types';
 // Matches backend/src/services/syllabusExtraction.ts's SYLLABUS_MIME_BY_EXT —
 // the backend derives the actual MIME type from the filename itself (safer
 // than trusting the OS-reported one), so this list only needs to keep the
-// native file picker's own filter in sync with what the server will accept.
-const SUPPORTED_SYLLABUS_TYPES = [
+// native document picker's own filter in sync with what the server will
+// accept. Images are deliberately NOT here — see handlePickPhoto below.
+const SUPPORTED_DOCUMENT_TYPES = [
   'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
   'application/vnd.openxmlformats-officedocument.presentationml.presentation', // .pptx
-  'image/jpeg',
-  'image/png',
 ];
+
+// Common shape both pickers normalize into, so the preview/process logic
+// below doesn't care which one was used.
+interface PickedFile {
+  uri: string;
+  name: string;
+  mimeType?: string;
+  size?: number;
+}
 
 interface DraftDeadline {
   key: string;
@@ -36,8 +45,8 @@ interface DraftDeadline {
 
 type Step = 'pick' | 'preview' | 'extracting' | 'review' | 'creating' | 'success';
 
-// Human-readable size, e.g. "2.4 MB" / "180 KB" — DocumentPickerAsset.size is
-// bytes, and a bare number reads as meaningless on the preview screen.
+// Human-readable size, e.g. "2.4 MB" / "180 KB" — a bare byte count reads as
+// meaningless on the preview screen.
 function formatFileSize(bytes?: number): string | null {
   if (!bytes) return null;
   if (bytes < 1024) return `${bytes} B`;
@@ -67,7 +76,7 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
 
   const [step, setStep] = useState<Step>('pick');
   const [upgradeVisible, setUpgradeVisible] = useState(false);
-  const [pickedAsset, setPickedAsset] = useState<DocumentPicker.DocumentPickerAsset | null>(null);
+  const [pickedAsset, setPickedAsset] = useState<PickedFile | null>(null);
   const [fileName, setFileName] = useState('');
   const [courseName, setCourseName] = useState('');
   const [deadlines, setDeadlines] = useState<DraftDeadline[]>([]);
@@ -101,20 +110,50 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
 
   // Only picks a file and shows it back for confirmation — the actual AI call
   // (and its tier/quota gating) happens in handleProcess once the user taps
-  // Continue, not the instant a file is chosen. Also reused as "choose a
-  // different file" from the preview step, so it can be called from either.
-  const handlePick = async () => {
+  // Continue, not the instant a file is chosen. Files (PDF/Word/PowerPoint)
+  // live in the Files-app-style document picker; photos don't — see
+  // handlePickPhoto for those, launched from a separate button.
+  const handlePickDocument = async () => {
     const result = await DocumentPicker.getDocumentAsync({
-      type: SUPPORTED_SYLLABUS_TYPES,
+      type: SUPPORTED_DOCUMENT_TYPES,
       copyToCacheDirectory: true,
     });
     if (result.canceled) return;
-    setPickedAsset(result.assets[0]);
+    const asset = result.assets[0];
+    setPickedAsset({ uri: asset.uri, name: asset.name, mimeType: asset.mimeType, size: asset.size });
+    setStep('preview');
+  };
+
+  // A syllabus photo naturally comes from the Camera Roll/Photos, not Files —
+  // expo-image-picker's library picker, not expo-document-picker.
+  const handlePickPhoto = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Photo access needed', 'Allow photo library access in Settings to choose a syllabus photo.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
+    if (result.canceled || !result.assets[0]) return;
+    const asset = result.assets[0];
+    const mimeType = asset.mimeType ?? 'image/jpeg';
+    // fileName can come back null with limited photo-library access — a
+    // syllabus.controller.ts-recognized extension is required either way,
+    // since the backend derives the real MIME type from the filename itself.
+    const name = asset.fileName ?? `syllabus-photo.${mimeType === 'image/png' ? 'png' : 'jpg'}`;
+    setPickedAsset({ uri: asset.uri, name, mimeType, size: asset.fileSize });
     setStep('preview');
   };
 
   const handleProcess = async () => {
-    if (!pickedAsset) return;
+    if (!pickedAsset) {
+      // Should be unreachable (this button only renders when pickedAsset is
+      // set) — surfaced loudly instead of silently doing nothing, so a stale-
+      // state bug is visible if it ever recurs rather than looking like a
+      // dead button.
+      Alert.alert("Couldn't process", 'No file was found — please choose your file again.');
+      setStep('pick');
+      return;
+    }
     const asset = pickedAsset;
 
     if (syllabi.length > 0 && !hasTier(tier, FEATURE_MIN_TIER.syllabus_extraction)) {
@@ -249,12 +288,25 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
         <>
           <Text style={styles.title}>Upload syllabus</Text>
           <Text style={styles.sub}>
-            Upload a syllabus — PDF, Word, PowerPoint, or a photo — and AI will pull out the course name and
-            every deadline.
+            Upload a syllabus and AI will pull out the course name and every deadline.
           </Text>
-          <Pressable style={styles.pickButton} onPress={handlePick}>
-            <Text style={styles.pickButtonText}>Choose file</Text>
-          </Pressable>
+
+          <View style={styles.pickTypeRow}>
+            <Pressable style={styles.pickTypeCard} onPress={handlePickDocument}>
+              <View style={styles.pickTypeIconBox}>
+                <IconSymbol name="doc.fill" color={Colors.primaryLight} size={20} />
+              </View>
+              <Text style={styles.pickTypeLabel}>Document</Text>
+              <Text style={styles.pickTypeSub}>PDF, Word, PowerPoint</Text>
+            </Pressable>
+            <Pressable style={styles.pickTypeCard} onPress={handlePickPhoto}>
+              <View style={styles.pickTypeIconBox}>
+                <IconSymbol name="photo.fill" color={Colors.primaryLight} size={20} />
+              </View>
+              <Text style={styles.pickTypeLabel}>Photo</Text>
+              <Text style={styles.pickTypeSub}>From your library</Text>
+            </Pressable>
+          </View>
         </>
       )}
 
@@ -279,7 +331,7 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
             </View>
           </View>
 
-          <Pressable style={styles.chooseDifferentBtn} onPress={handlePick}>
+          <Pressable style={styles.chooseDifferentBtn} onPress={() => setStep('pick')}>
             <Text style={styles.chooseDifferentText}>Choose a different file</Text>
           </Pressable>
 
@@ -418,6 +470,41 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primaryLight,
     borderRadius: 14,
     paddingVertical: 15,
+  },
+  pickTypeRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 20,
+  },
+  pickTypeCard: {
+    flex: 1,
+    alignItems: 'center',
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.md,
+    paddingVertical: 18,
+    paddingHorizontal: 10,
+  },
+  pickTypeIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: Colors.offWhite,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  pickTypeLabel: {
+    fontSize: 14.5,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  pickTypeSub: {
+    fontSize: 11.5,
+    color: Colors.textMuted,
+    marginTop: 2,
+    textAlign: 'center',
   },
   pickButtonText: {
     fontSize: 16,

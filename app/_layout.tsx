@@ -16,7 +16,7 @@ import { TasksProvider } from '@/contexts/TasksContext';
 import { SyllabiProvider } from '@/contexts/SyllabiContext';
 import { NewTaskModalProvider } from '@/contexts/NewTaskModalContext';
 import { NewTaskModal } from '@/components/task/NewTaskModal';
-import { initNotificationHandler } from '@/utils/notifications';
+import { initNotificationHandler, registerAlarmNotificationRouting } from '@/utils/notifications';
 
 // Catches render/startup errors and shows them on screen — used in production
 // too, where the default is a blank screen with no way to see what failed.
@@ -47,6 +47,7 @@ export default function RootLayout() {
   // utils/notifications.ts for why.
   useEffect(() => {
     initNotificationHandler();
+    return registerAlarmNotificationRouting();
   }, []);
 
   return (

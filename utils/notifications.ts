@@ -1,7 +1,9 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+import { router } from 'expo-router';
 import { parseTimeToMinutes } from '@/utils/time';
-import { parseISODateLocal } from '@/utils/date';
+import { parseISODateLocal, toDateKey, formatTimeLabel } from '@/utils/date';
+import { Routes } from '@/constants/routes';
 
 // Local, on-device scheduling via expo-notifications — no backend involvement.
 // Shared by Tasks and Classes: each gets two notifications per occurrence — one
@@ -31,6 +33,37 @@ export function initNotificationHandler(): void {
       shouldSetBadge: false,
     }),
   });
+}
+
+// Routes a tapped alarm-task notification to the in-app Alarm screen —
+// covers both cases expo-notifications distinguishes: the app already
+// running/backgrounded (the listener fires immediately) and a fully cold
+// start caused by the tap (nothing is listening yet, so the response has to
+// be read back once via getLastNotificationResponseAsync instead). Call once
+// from app/_layout.tsx's startup effect, alongside initNotificationHandler.
+export function registerAlarmNotificationRouting(): () => void {
+  const routeIfAlarm = (data: Record<string, unknown> | undefined) => {
+    if (data?.kind !== 'task-alarm') return;
+    router.push({
+      pathname: Routes.ALARM_RINGING,
+      params: { taskId: String(data.taskId ?? ''), title: String(data.title ?? '') },
+    });
+  };
+
+  Notifications.getLastNotificationResponseAsync()
+    .then((response) => {
+      if (!response) return;
+      routeIfAlarm(response.notification.request.content.data);
+      // Consumed — without this, reopening the app later (even from the home
+      // screen icon, not the notification) would re-trigger this same route.
+      Notifications.clearLastNotificationResponseAsync();
+    })
+    .catch((err) => console.error('[notifications] failed to read last response', err));
+
+  const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+    routeIfAlarm(response.notification.request.content.data);
+  });
+  return () => subscription.remove();
 }
 
 async function ensureAndroidChannel(): Promise<void> {
@@ -103,6 +136,10 @@ interface OccurrenceSpec {
   // Not a full lock-screen takeover (that needs Apple's restricted Critical
   // Alerts entitlement, not used here).
   isAlarm?: boolean;
+  // Read back in registerAlarmNotificationRouting when the user taps the
+  // notification — currently only set for alarm task notifications
+  // (kind: 'task-alarm'), routing to the in-app Alarm screen.
+  data?: Record<string, unknown>;
 }
 
 // Schedules a single lead-time notification (0 minutes = exactly at the due/
@@ -129,7 +166,7 @@ async function scheduleOccurrence(spec: OccurrenceSpec): Promise<string[]> {
     if (spec.recurring && spec.freq === 'daily') {
       const { hour, minute } = leadHourMinute(spec.time, spec.leadMinutes);
       const id = await Notifications.scheduleNotificationAsync({
-        content: { title: spec.title, body: spec.bodyForMinutes(spec.leadMinutes), ...alarmContentExtras },
+        content: { title: spec.title, body: spec.bodyForMinutes(spec.leadMinutes), ...alarmContentExtras, data: spec.data },
         trigger: { type: Notifications.SchedulableTriggerInputTypes.DAILY, hour, minute, channelId },
       });
       return [id];
@@ -142,7 +179,7 @@ async function scheduleOccurrence(spec: OccurrenceSpec): Promise<string[]> {
         const weekday = toExpoWeekday((dayIdx + dayShift + 7) % 7);
         ids.push(
           await Notifications.scheduleNotificationAsync({
-            content: { title: spec.title, body: spec.bodyForMinutes(spec.leadMinutes), ...alarmContentExtras },
+            content: { title: spec.title, body: spec.bodyForMinutes(spec.leadMinutes), ...alarmContentExtras, data: spec.data },
             trigger: { type: Notifications.SchedulableTriggerInputTypes.WEEKLY, weekday, hour, minute, channelId },
           })
         );
@@ -154,7 +191,7 @@ async function scheduleOccurrence(spec: OccurrenceSpec): Promise<string[]> {
       const { hour, minute } = leadHourMinute(spec.time, spec.leadMinutes);
       const day = parseISODateLocal(spec.dateIso).getDate();
       const id = await Notifications.scheduleNotificationAsync({
-        content: { title: spec.title, body: spec.bodyForMinutes(spec.leadMinutes), ...alarmContentExtras },
+        content: { title: spec.title, body: spec.bodyForMinutes(spec.leadMinutes), ...alarmContentExtras, data: spec.data },
         trigger: { type: Notifications.SchedulableTriggerInputTypes.MONTHLY, day, hour, minute, channelId },
       });
       return [id];
@@ -175,7 +212,7 @@ async function scheduleOccurrence(spec: OccurrenceSpec): Promise<string[]> {
     const minutesUntil = Math.round((due.getTime() - fireAt.getTime()) / 60_000);
 
     const id = await Notifications.scheduleNotificationAsync({
-      content: { title: spec.title, body: spec.bodyForMinutes(minutesUntil), ...alarmContentExtras },
+      content: { title: spec.title, body: spec.bodyForMinutes(minutesUntil), ...alarmContentExtras, data: spec.data },
       trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: fireAt, channelId },
     });
     return [id];
@@ -194,6 +231,14 @@ function startBody(minutesUntil: number): string {
 }
 
 export async function scheduleTaskNotifications(task: {
+  // Absent when scheduling for a brand-new task — TasksContext.createTask
+  // calls this before the backend assigns a real id (only a throwaway,
+  // never-persisted tempId exists at that point). When absent, the alarm
+  // notification's data simply omits taskId — the Alarm screen still shows
+  // and functions from the embedded title alone; a live task lookup starts
+  // working the first time this task is ever edited (updateTask always has
+  // the real id by then).
+  id?: string;
   title: string;
   dueDate: string;
   time: string;
@@ -215,12 +260,31 @@ export async function scheduleTaskNotifications(task: {
     dayIdxs: task.dayIdxs,
     leadMinutes,
     isAlarm,
+    data: isAlarm ? { kind: 'task-alarm', taskId: task.id, title: task.title } : undefined,
   });
   const [lead, exact] = await Promise.all([
     scheduleOccurrence(spec(REMINDER_LEAD_MINUTES)),
     scheduleOccurrence(spec(0, task.alarmEnabled)),
   ]);
   return [...lead, ...exact];
+}
+
+// Fired from the Alarm screen's "Snooze" button — a single one-off alarm
+// notification "minutes" from now. Not persisted onto the task's
+// notificationIds: it's short-lived and self-consuming, not worth a round
+// trip to track for cancellation the way the real due-time notification is.
+export async function snoozeTaskAlarm(task: { id?: string; title: string }, minutes: number): Promise<string[]> {
+  const fireAt = new Date(Date.now() + minutes * 60_000);
+  return scheduleOccurrence({
+    title: `Task: ${task.title}`,
+    bodyForMinutes: dueBody,
+    dateIso: toDateKey(fireAt),
+    time: formatTimeLabel(fireAt),
+    recurring: false,
+    leadMinutes: 0,
+    isAlarm: true,
+    data: { kind: 'task-alarm', taskId: task.id, title: task.title },
+  });
 }
 
 export async function scheduleClassNotifications(item: {

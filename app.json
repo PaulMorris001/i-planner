@@ -62,6 +62,12 @@
           "calendarPermission": "Allow $(PRODUCT_NAME) to access your calendar so it can plan around your schedule."
         }
       ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow $(PRODUCT_NAME) to access your photos so you can upload a syllabus photo."
+        }
+      ],
       "expo-notifications",
       "expo-secure-store",
       [
