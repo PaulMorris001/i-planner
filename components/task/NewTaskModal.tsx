@@ -126,6 +126,7 @@ export function NewTaskModal() {
         // that event (see TasksContext.updateTask/removeTask).
         ...(draft?.appleEventIds ? { appleEventIds: draft.appleEventIds } : {}),
         ...(draft?.googleEventId ? { googleEventId: draft.googleEventId } : {}),
+        ...(draft?.outlookEventId ? { outlookEventId: draft.outlookEventId } : {}),
         ...(draft?.draftSourceId ? { calendarLinkExternal: true } : {}),
       };
       if (editingTask) {

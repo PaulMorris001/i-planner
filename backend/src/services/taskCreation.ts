@@ -23,6 +23,9 @@ export interface CreateTaskInput {
   // event (see calendarImport's "convert to task" flow) — the task should
   // point at that event, not get a brand new one created for it.
   googleEventId?: string;
+  // Same "converted from an existing event" idea as googleEventId, but for
+  // Outlook — read-only, so there's no equivalent sync-skip to gate here.
+  outlookEventId?: string;
   calendarLinkExternal?: boolean;
   alarmEnabled?: boolean;
 }
@@ -75,6 +78,7 @@ export async function createTaskDoc(firebaseUid: string, input: CreateTaskInput)
     appleEventIds: input.appleEventIds,
     notificationIds: input.notificationIds,
     googleEventId: input.googleEventId,
+    outlookEventId: input.outlookEventId,
     calendarLinkExternal: input.calendarLinkExternal,
     alarmEnabled: !!input.alarmEnabled,
   });

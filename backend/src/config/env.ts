@@ -20,6 +20,13 @@ export const env = {
   googleOAuthClientId: required('GOOGLE_OAUTH_CLIENT_ID'),
   googleOAuthClientSecret: required('GOOGLE_OAUTH_CLIENT_SECRET'),
   googleOAuthStateSecret: required('GOOGLE_OAUTH_STATE_SECRET'),
+  // Outlook Calendar import (read-only) — same backend-relay shape as Google
+  // above, see routes/microsoftOAuth.routes.ts. Optional (unlike Google's),
+  // so deploying this code doesn't crash the running backend before the
+  // Azure app registration exists — startMicrosoftCalendarConnect throws a
+  // clean "not configured" error per-request instead when unset.
+  microsoftOAuthClientId: process.env.MICROSOFT_OAUTH_CLIENT_ID,
+  microsoftOAuthClientSecret: process.env.MICROSOFT_OAUTH_CLIENT_SECRET,
   backendPublicUrl: required('BACKEND_PUBLIC_URL'),
   openaiApiKey: required('OPENAI_API_KEY'),
   // AES-256 key (32 bytes, base64) encrypting Settings.googleAccessToken/googleRefreshToken

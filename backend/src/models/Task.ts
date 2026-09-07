@@ -23,6 +23,12 @@ export interface TaskDocument extends Document {
   notes: string;
   appleEventIds?: string[];
   googleEventId?: string;
+  // Set only when converted from an imported Outlook event (see
+  // calendarImport.controller.ts's importOutlookEvents) — unlike
+  // googleEventId/appleEventIds this never drives a write-sync (Outlook
+  // import is read-only), it exists purely so a re-import can exclude an
+  // event the user already converted, instead of resurrecting it every time.
+  outlookEventId?: string;
   // Client-scheduled expo-notifications reminder ids — backend just persists them
   // so the app can find and cancel/reschedule later. One per weekday occurrence.
   notificationIds?: string[];
@@ -59,6 +65,7 @@ const taskSchema = new Schema<TaskDocument>({
   // Calendar-sync event ids — only ever set when dueDate is non-empty.
   appleEventIds: { type: [String] },
   googleEventId: { type: String },
+  outlookEventId: { type: String },
   notificationIds: { type: [String] },
   calendarLinkExternal: { type: Boolean, default: false },
   alarmEnabled: { type: Boolean, default: false },
@@ -82,6 +89,7 @@ export function toPublicTask(doc: TaskDocument) {
     notes: doc.notes,
     appleEventIds: doc.appleEventIds,
     googleEventId: doc.googleEventId,
+    outlookEventId: doc.outlookEventId,
     notificationIds: doc.notificationIds,
     calendarLinkExternal: doc.calendarLinkExternal,
     alarmEnabled: doc.alarmEnabled,

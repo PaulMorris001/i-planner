@@ -13,7 +13,7 @@ export async function listTasks(req: AuthedRequest, res: Response) {
 export async function createTask(req: AuthedRequest, res: Response) {
   const {
     title, category, priority, day, hour, time, dueDate, recurring, freq, dayIdxs, notes,
-    appleEventIds, notificationIds, googleEventId, calendarLinkExternal, alarmEnabled,
+    appleEventIds, notificationIds, googleEventId, outlookEventId, calendarLinkExternal, alarmEnabled,
   } = req.body ?? {};
 
   if (!title || typeof title !== 'string' || !title.trim()) {
@@ -42,6 +42,7 @@ export async function createTask(req: AuthedRequest, res: Response) {
     // Only set when converting an imported calendar event — createTaskDoc skips
     // its own Google sync when this is present.
     googleEventId: typeof googleEventId === 'string' && googleEventId ? googleEventId : undefined,
+    outlookEventId: typeof outlookEventId === 'string' && outlookEventId ? outlookEventId : undefined,
     calendarLinkExternal: !!calendarLinkExternal,
     alarmEnabled: !!alarmEnabled,
   });

@@ -17,13 +17,14 @@ import type { ImportedCalendarEvent } from '@/types/calendarImport.types';
 const IMPORT_WINDOW_DAYS = 60;
 
 export default function ImportCalendar() {
-  const { appleCalendarConnected, googleCalendarConnected } = useSettings();
+  const { appleCalendarConnected, googleCalendarConnected, outlookCalendarConnected } = useSettings();
   const { isOpen: taskModalOpen, openWithDraft } = useNewTaskModal();
 
   const [events, setEvents] = useState<ImportedCalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [importingApple, setImportingApple] = useState(false);
   const [importingGoogle, setImportingGoogle] = useState(false);
+  const [importingOutlook, setImportingOutlook] = useState(false);
 
   const fetchList = useCallback(async () => {
     try {
@@ -96,6 +97,21 @@ export default function ImportCalendar() {
     }
   };
 
+  const handleImportOutlook = async () => {
+    setImportingOutlook(true);
+    try {
+      const beforeCount = events.length;
+      const updated = await calendarImportService.importOutlook();
+      setEvents(updated);
+      reportImportResult(Math.max(0, updated.length - beforeCount));
+    } catch (err) {
+      console.error('[ImportCalendar] Outlook import failed', err);
+      Alert.alert("Couldn't import", 'Check your connection and try again.');
+    } finally {
+      setImportingOutlook(false);
+    }
+  };
+
   const handleDismiss = (event: ImportedCalendarEvent) => {
     setEvents((prev) => prev.filter((e) => e.id !== event.id));
     calendarImportService.remove(event.id).catch((err) => {
@@ -116,11 +132,13 @@ export default function ImportCalendar() {
       // calendar-provider event id.
       appleEventIds: event.source === 'apple' ? [event.externalId] : undefined,
       googleEventId: event.source === 'google' ? event.externalId : undefined,
+      outlookEventId: event.source === 'outlook' ? event.externalId : undefined,
       draftSourceId: event.id,
     });
   };
 
-  const noCalendarConnected = !appleCalendarConnected && !googleCalendarConnected;
+  const noCalendarConnected =
+    !appleCalendarConnected && !googleCalendarConnected && !outlookCalendarConnected;
 
   return (
     <ScreenWrapper backgroundColor={Colors.offWhite} scroll style={styles.scrollContent}>
@@ -133,7 +151,7 @@ export default function ImportCalendar() {
 
       {noCalendarConnected ? (
         <Text style={styles.emptyText}>
-          Connect Apple or Google Calendar in Profile → Calendar Sync first.
+          Connect Apple, Google, or Outlook Calendar in Profile → Calendar Sync first.
         </Text>
       ) : (
         <View style={styles.importRow}>
@@ -171,6 +189,23 @@ export default function ImportCalendar() {
               )}
             </Pressable>
           )}
+          {outlookCalendarConnected && (
+            <Pressable
+              style={[styles.importCard, importingOutlook && styles.importCardBusy]}
+              onPress={handleImportOutlook}
+              disabled={importingOutlook}
+            >
+              <View style={styles.importIconBoxOutlook}>
+                <Text style={styles.importOutlookO}>O</Text>
+              </View>
+              <Text style={styles.importLabel} numberOfLines={1}>Outlook</Text>
+              {importingOutlook ? (
+                <ActivityIndicator color={Colors.textMuted} size="small" />
+              ) : (
+                <Text style={styles.importSub}>Import events</Text>
+              )}
+            </Pressable>
+          )}
         </View>
       )}
 
@@ -195,8 +230,19 @@ export default function ImportCalendar() {
                       {event.location ? ` · ${event.location}` : ''}
                     </Text>
                   </View>
-                  <View style={[styles.sourceBadge, event.source === 'apple' ? styles.sourceBadgeApple : styles.sourceBadgeGoogle]}>
-                    <Text style={styles.sourceBadgeText}>{event.source === 'apple' ? 'Apple' : 'Google'}</Text>
+                  <View
+                    style={[
+                      styles.sourceBadge,
+                      event.source === 'apple'
+                        ? styles.sourceBadgeApple
+                        : event.source === 'google'
+                        ? styles.sourceBadgeGoogle
+                        : styles.sourceBadgeOutlook,
+                    ]}
+                  >
+                    <Text style={styles.sourceBadgeText}>
+                      {event.source === 'apple' ? 'Apple' : event.source === 'google' ? 'Google' : 'Outlook'}
+                    </Text>
                   </View>
                 </View>
 
@@ -270,6 +316,20 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#4285F4',
   },
+  importIconBoxOutlook: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    backgroundColor: Colors.infoSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 5,
+  },
+  importOutlookO: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0078D4',
+  },
   importLabel: {
     fontSize: 14.5,
     fontWeight: '700',
@@ -318,6 +378,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.offWhite,
   },
   sourceBadgeGoogle: {
+    backgroundColor: Colors.infoSoft,
+  },
+  sourceBadgeOutlook: {
     backgroundColor: Colors.infoSoft,
   },
   sourceBadgeText: {

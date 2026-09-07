@@ -35,6 +35,10 @@ export interface Task {
   // weekdays task gets one Apple event per dayIdxs occurrence.
   appleEventIds?: string[];
   googleEventId?: string;
+  // Set only when converted from an imported Outlook event — read-only
+  // (Outlook import never writes back), tracked purely so re-importing
+  // doesn't resurrect an event already turned into a task.
+  outlookEventId?: string;
   // Locally-scheduled expo-notifications reminder ids — one per weekday
   // occurrence for a 'weekdays' task, same reasoning as appleEventIds.
   notificationIds?: string[];

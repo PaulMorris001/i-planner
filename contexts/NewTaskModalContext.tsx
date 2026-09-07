@@ -12,6 +12,7 @@ export interface TaskDraft {
   notes?: string;
   appleEventIds?: string[];
   googleEventId?: string;
+  outlookEventId?: string;
   // ImportedCalendarEvent id this draft came from, if any — NewTaskModal
   // deletes that row on save so it stops showing in "review imported events".
   draftSourceId?: string;

@@ -1,12 +1,15 @@
 import { Response } from 'express';
 import { Settings, toPublicSettings } from '../models/Settings';
 import { AuthedRequest } from '../middleware/requireAuth';
+import { ApiError } from '../utils/ApiError';
 import { env } from '../config/env';
 import { signState } from '../utils/googleOAuthState';
 
 // Write scope — needed to create the sync calendar and write events, not just read.
 // Users connected under the old readonly scope will need to reconnect once.
 const GOOGLE_CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar';
+// Read-only — Outlook import never writes back, unlike Google above.
+const MICROSOFT_CALENDAR_SCOPE = 'offline_access https://graph.microsoft.com/Calendars.Read';
 
 export async function getSettings(req: AuthedRequest, res: Response) {
   const settings = await Settings.findOne({ firebaseUid: req.userId });
@@ -69,6 +72,48 @@ export async function disconnectGoogleCalendar(req: AuthedRequest, res: Response
         googleRefreshToken: '',
         googleTokenExpiresAt: '',
         googleCalendarId: '',
+      },
+    },
+    { upsert: true, new: true }
+  );
+  res.json(toPublicSettings(settings));
+}
+
+// Same backend-relay shape as startGoogleCalendarConnect above, read-only scope.
+// Throws instead of silently returning a broken URL when the Azure app
+// registration hasn't been set up yet (microsoftOAuthClientId is optional at
+// startup — see config/env.ts — unlike Google's, which crashes at boot instead).
+export async function startMicrosoftCalendarConnect(req: AuthedRequest, res: Response) {
+  // Both, not just clientId — a partially-configured deployment (id set,
+  // secret missing) would otherwise hand back a working-looking authorize
+  // URL, let the user sit through Microsoft's consent screen, and only then
+  // fail in the callback (which does check both) with a generic error and
+  // no clue why.
+  if (!env.microsoftOAuthClientId || !env.microsoftOAuthClientSecret) {
+    throw new ApiError(503, 'Outlook Calendar is not configured yet.', 'general');
+  }
+
+  const redirectUri = `${env.backendPublicUrl}/api/oauth/microsoft/callback`;
+  const authorizeUrl = new URL('https://login.microsoftonline.com/common/oauth2/v2.0/authorize');
+  authorizeUrl.searchParams.set('client_id', env.microsoftOAuthClientId);
+  authorizeUrl.searchParams.set('redirect_uri', redirectUri);
+  authorizeUrl.searchParams.set('response_type', 'code');
+  authorizeUrl.searchParams.set('response_mode', 'query');
+  authorizeUrl.searchParams.set('scope', MICROSOFT_CALENDAR_SCOPE);
+  authorizeUrl.searchParams.set('state', signState(req.userId!));
+
+  res.json({ url: authorizeUrl.toString() });
+}
+
+export async function disconnectOutlookCalendar(req: AuthedRequest, res: Response) {
+  const settings = await Settings.findOneAndUpdate(
+    { firebaseUid: req.userId },
+    {
+      $set: { outlookCalendarConnected: false },
+      $unset: {
+        outlookAccessToken: '',
+        outlookRefreshToken: '',
+        outlookTokenExpiresAt: '',
       },
     },
     { upsert: true, new: true }

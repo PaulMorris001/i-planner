@@ -1,4 +1,4 @@
-export type CalendarSource = 'apple' | 'google';
+export type CalendarSource = 'apple' | 'google' | 'outlook';
 
 export interface ImportedCalendarEvent {
   id: string;

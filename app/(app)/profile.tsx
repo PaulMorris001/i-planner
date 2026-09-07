@@ -54,14 +54,17 @@ export default function Profile() {
   const {
     appleCalendarConnected,
     googleCalendarConnected,
+    outlookCalendarConnected,
     remindersEnabled,
     aiAccessTasks,
     aiAccessGoals,
     aiAccessCalendar,
     connectAppleCalendar,
     connectGoogleCalendar,
+    connectOutlookCalendar,
     disconnectAppleCalendar,
     disconnectGoogleCalendar,
+    disconnectOutlookCalendar,
     enableReminders,
     disableReminders,
     setAiAccess,
@@ -117,10 +120,26 @@ export default function Profile() {
     }
   };
 
-  const confirmDisconnect = (calendarName: string, onConfirm: () => void) => {
+  const handleConnectOutlook = async () => {
+    const ok = await connectOutlookCalendar();
+    if (!ok) {
+      Alert.alert(
+        "Couldn't connect calendar",
+        "Something went wrong finishing the Microsoft sign-in. Try again.",
+      );
+    }
+  };
+
+  const confirmDisconnect = (
+    calendarName: string,
+    onConfirm: () => void,
+    // Apple/Google write-sync copy doesn't apply to Outlook (import-only,
+    // nothing is ever added to the user's real calendar) — overridable per call.
+    message = "New classes and tasks won't be added to your calendar anymore. Events already created will stay put.",
+  ) => {
     Alert.alert(
       `Disconnect ${calendarName}?`,
-      "New classes and tasks won't be added to your calendar anymore. Events already created will stay put.",
+      message,
       [
         { text: "Cancel", style: "cancel" },
         { text: "Disconnect", style: "destructive", onPress: onConfirm },
@@ -337,6 +356,42 @@ export default function Profile() {
                 ]}
               >
                 {googleCalendarConnected ? "Disconnect" : "Connect"}
+              </Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.calendarRow}>
+            <View style={styles.calendarIconBox}>
+              <Text style={styles.outlookO}>O</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.consentLabel}>Outlook Calendar</Text>
+              <Text style={styles.consentDesc}>
+                {outlookCalendarConnected ? "Connected" : "Not connected"}
+              </Text>
+            </View>
+            <Pressable
+              style={[
+                styles.calendarActionBtn,
+                outlookCalendarConnected && styles.calendarActionBtnDanger,
+              ]}
+              onPress={() =>
+                outlookCalendarConnected
+                  ? confirmDisconnect(
+                      "Outlook Calendar",
+                      disconnectOutlookCalendar,
+                      "You can reconnect any time to import events again.",
+                    )
+                  : handleConnectOutlook()
+              }
+            >
+              <Text
+                style={[
+                  styles.calendarActionText,
+                  outlookCalendarConnected && styles.calendarActionTextDanger,
+                ]}
+              >
+                {outlookCalendarConnected ? "Disconnect" : "Connect"}
               </Text>
             </Pressable>
           </View>
@@ -708,6 +763,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "800",
     color: "#4285F4",
+  },
+  outlookO: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#0078D4",
   },
   calendarActionBtn: {
     borderWidth: 1.5,

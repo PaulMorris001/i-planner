@@ -16,6 +16,9 @@ export const calendarImportService = {
   importGoogle: () =>
     authedRequest<ImportedCalendarEvent[]>('/calendar/import/google', { method: 'POST' }),
 
+  importOutlook: () =>
+    authedRequest<ImportedCalendarEvent[]>('/calendar/import/outlook', { method: 'POST' }),
+
   importApple: (events: AppleEventInput[]) =>
     authedRequest<ImportedCalendarEvent[]>('/calendar/import/apple', {
       method: 'POST',

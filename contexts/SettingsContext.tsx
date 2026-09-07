@@ -141,6 +141,7 @@ async function cancelAllReminders() {
 const DEFAULT_SETTINGS: Settings = {
   appleCalendarConnected: false,
   googleCalendarConnected: false,
+  outlookCalendarConnected: false,
   calendarGateDismissed: false,
   remindersEnabled: false,
   aiAccessTasks: true,
@@ -156,8 +157,10 @@ interface SettingsContextValue extends Settings {
   loading: boolean;
   connectAppleCalendar: () => Promise<boolean>;
   connectGoogleCalendar: () => Promise<boolean>;
+  connectOutlookCalendar: () => Promise<boolean>;
   disconnectAppleCalendar: () => Promise<void>;
   disconnectGoogleCalendar: () => Promise<void>;
+  disconnectOutlookCalendar: () => Promise<void>;
   dismissCalendarGate: () => Promise<void>;
   enableReminders: () => Promise<boolean>;
   disableReminders: () => Promise<void>;
@@ -259,6 +262,33 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Read-only import, unlike Google above — otherwise the identical
+  // backend-relay dance (open the authorize URL, wait for the iplanner://
+  // deep link back, then re-fetch settings rather than guessing the outcome).
+  const connectOutlookCalendar = async (): Promise<boolean> => {
+    try {
+      const { url } = await settingsService.startMicrosoftConnect();
+      const result = await WebBrowser.openAuthSessionAsync(url, 'iplanner://oauth2redirect');
+      if (result.type !== 'success' || !result.url.includes('status=success')) return false;
+      setSettings(await settingsService.get());
+      return true;
+    } catch (err) {
+      console.error('[SettingsProvider] failed to connect Outlook Calendar', err);
+      return false;
+    }
+  };
+
+  const disconnectOutlookCalendar = async () => {
+    const prevSettings = settings;
+    setSettings((s) => ({ ...s, outlookCalendarConnected: false }));
+    try {
+      setSettings(await settingsService.disconnectOutlook());
+    } catch (err) {
+      setSettings(prevSettings);
+      console.error('[SettingsProvider] failed to disconnect Outlook Calendar', err);
+    }
+  };
+
   const dismissCalendarGate = async () => {
     const prevSettings = settings;
     setSettings((s) => ({ ...s, calendarGateDismissed: true }));
@@ -345,8 +375,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         loading,
         connectAppleCalendar,
         connectGoogleCalendar,
+        connectOutlookCalendar,
         disconnectAppleCalendar,
         disconnectGoogleCalendar,
+        disconnectOutlookCalendar,
         dismissCalendarGate,
         enableReminders,
         disableReminders,

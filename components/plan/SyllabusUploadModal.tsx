@@ -1,14 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, Pressable, ActivityIndicator, Alert, ScrollView, StyleSheet } from 'react-native';
+import { useRouter } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { File } from 'expo-file-system';
 import { BottomSheetModal } from '@/components/ui/BottomSheetModal';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { UpgradeModal } from '@/components/ui/UpgradeModal';
+import { AnimatedProgressBar } from '@/components/ui/AnimatedProgressBar';
 import { InlineDateTimePicker } from '@/components/ui/InlineDateTimePicker';
 import { Colors, Spacing, Radius } from '@/constants/theme';
-import { FEATURE_MIN_TIER, hasTier } from '@/constants/featureTiers';
+import { FEATURE_MIN_TIER, TIER_LABEL, hasTier } from '@/constants/featureTiers';
+import { Routes } from '@/constants/routes';
 import { usePurchases } from '@/contexts/PurchasesContext';
 import { syllabusService } from '@/services/syllabus.service';
 import { usePlan } from '@/hooks/usePlan';
@@ -35,6 +37,11 @@ interface PickedFile {
   name: string;
   mimeType?: string;
   size?: number;
+  // Only ever set for a photo (see handlePickPhoto) — the picker encodes it
+  // directly, sidestepping a second full-file disk read through
+  // expo-file-system at Continue time. Documents don't have this option, so
+  // they still get read via `new File(uri).base64()` in handleProcess.
+  base64?: string;
 }
 
 interface DraftDeadline {
@@ -43,7 +50,7 @@ interface DraftDeadline {
   date: Date;
 }
 
-type Step = 'pick' | 'preview' | 'extracting' | 'review' | 'creating' | 'success';
+type Step = 'pick' | 'preview' | 'upgrade' | 'extracting' | 'review' | 'creating' | 'success';
 
 // Human-readable size, e.g. "2.4 MB" / "180 KB" — a bare byte count reads as
 // meaningless on the preview screen.
@@ -53,6 +60,23 @@ function formatFileSize(bytes?: number): string | null {
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
+
+// There's no real progress to report — one request, one response, no
+// incremental events from the extraction call to hook into — so this climbs
+// asymptotically toward (never reaching) a cap instead of a fake linear fill,
+// which would either finish long before the real result and then sit at
+// 100% doing nothing, or look stalled once it's outpaced by a slow request.
+// Paired with rotating status text below so a longer wait still reads as
+// "working", not stuck.
+const EXTRACT_PROGRESS_CAP = 92;
+const EXTRACT_PROGRESS_TICK_MS = 400;
+const EXTRACT_STATUS_MESSAGES = [
+  'Reading your file…',
+  'Scanning for deadlines…',
+  'Pulling out the topic list…',
+  'Almost there…',
+];
+const EXTRACT_STATUS_INTERVAL_MS = 3000;
 
 interface SyllabusUploadModalProps {
   visible: boolean;
@@ -69,13 +93,13 @@ interface SuccessSummary {
 // Shared between onboarding's student-plan.tsx and the post-signin Syllabi
 // screens (syllabi.tsx, Dashboard's My Syllabi card).
 export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalProps) {
+  const router = useRouter();
   const { updatePlan } = usePlan();
   const { createTask } = useTasks();
   const { syllabi, createSyllabus } = useSyllabi();
   const { tier } = usePurchases();
 
   const [step, setStep] = useState<Step>('pick');
-  const [upgradeVisible, setUpgradeVisible] = useState(false);
   const [pickedAsset, setPickedAsset] = useState<PickedFile | null>(null);
   const [fileName, setFileName] = useState('');
   const [courseName, setCourseName] = useState('');
@@ -86,8 +110,17 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
   // look like something the AI actually found.
   const [showingTopicsFallback, setShowingTopicsFallback] = useState(false);
   const [successSummary, setSuccessSummary] = useState<SuccessSummary | null>(null);
+  const [extractProgress, setExtractProgress] = useState(0);
+  const [extractStatusIndex, setExtractStatusIndex] = useState(0);
+  // Bumped by reset() — an in-flight handleProcess call checks this after its
+  // await resolves and no-ops if it's changed, so closing the modal mid-
+  // extraction (see handleClose below) can't have a request that finally
+  // resolves seconds/minutes later still try to update a modal the user
+  // already dismissed and reset.
+  const processGenerationRef = useRef(0);
 
   const reset = () => {
+    processGenerationRef.current += 1;
     setStep('pick');
     setPickedAsset(null);
     setFileName('');
@@ -96,14 +129,43 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
     setDatePickerKey(null);
     setShowingTopicsFallback(false);
     setSuccessSummary(null);
+    setExtractProgress(0);
+    setExtractStatusIndex(0);
   };
 
   useEffect(() => {
     if (visible) reset();
   }, [visible]);
 
+  // Simulated progress + rotating status text while extracting — there's no
+  // real progress signal from a single request/response AI call, so this is
+  // purely to keep the screen feeling alive on a slower request rather than
+  // a static spinner that gives no sense of whether it's still working.
+  useEffect(() => {
+    if (step !== 'extracting') return;
+    setExtractProgress(0);
+    setExtractStatusIndex(0);
+    const progressTimer = setInterval(() => {
+      setExtractProgress((p) => p + (EXTRACT_PROGRESS_CAP - p) * 0.08);
+    }, EXTRACT_PROGRESS_TICK_MS);
+    const statusTimer = setInterval(() => {
+      setExtractStatusIndex((i) => Math.min(i + 1, EXTRACT_STATUS_MESSAGES.length - 1));
+    }, EXTRACT_STATUS_INTERVAL_MS);
+    return () => {
+      clearInterval(progressTimer);
+      clearInterval(statusTimer);
+    };
+  }, [step]);
+
   const handleClose = () => {
-    if (step === 'extracting' || step === 'creating') return;
+    // 'creating' (saving the reviewed deadlines) is still protected — a
+    // partial multi-step save is riskier to walk away from mid-flight.
+    // 'extracting' is deliberately NOT protected: a hung/slow network call
+    // used to leave the user with no way to dismiss the modal at all short
+    // of force-quitting (see apiRequest's new timeout in services/api.ts for
+    // the other half of this fix) — closing now just abandons that request,
+    // caught by the generation check above once/if it does resolve.
+    if (step === 'creating') return;
     onClose();
     reset();
   };
@@ -132,7 +194,18 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
       Alert.alert('Photo access needed', 'Allow photo library access in Settings to choose a syllabus photo.');
       return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
+    // quality: 1 (no compression) on a modern phone photo can be a 10-20+ MB
+    // file — base64-encoding something that size (both the disk read below
+    // and the network upload at Continue time) is heavy enough to visibly
+    // freeze the UI thread for a long stretch, not just "feel slow". 0.6 is
+    // still plenty readable for a document photo and cuts that dramatically.
+    // base64: true has the picker encode it directly, so Continue doesn't
+    // need a second full-file read through expo-file-system on top of this.
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.6,
+      base64: true,
+    });
     if (result.canceled || !result.assets[0]) return;
     const asset = result.assets[0];
     const mimeType = asset.mimeType ?? 'image/jpeg';
@@ -140,7 +213,7 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
     // syllabus.controller.ts-recognized extension is required either way,
     // since the backend derives the real MIME type from the filename itself.
     const name = asset.fileName ?? `syllabus-photo.${mimeType === 'image/png' ? 'png' : 'jpg'}`;
-    setPickedAsset({ uri: asset.uri, name, mimeType, size: asset.fileSize });
+    setPickedAsset({ uri: asset.uri, name, mimeType, size: asset.fileSize, base64: asset.base64 ?? undefined });
     setStep('preview');
   };
 
@@ -157,15 +230,22 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
     const asset = pickedAsset;
 
     if (syllabi.length > 0 && !hasTier(tier, FEATURE_MIN_TIER.syllabus_extraction)) {
-      setUpgradeVisible(true);
+      setStep('upgrade');
       return;
     }
 
+    const generation = ++processGenerationRef.current;
     setStep('extracting');
     try {
-      const file = new File(asset.uri);
-      const fileBase64 = await file.base64();
+      // A photo already has base64 from the picker itself (see
+      // handlePickPhoto) — only a document needs this separate disk read.
+      const fileBase64 = asset.base64 ?? (await new File(asset.uri).base64());
       const extraction = await syllabusService.extract({ fileBase64, filename: asset.name });
+      // The modal was closed (or a new pick/process started) while this was
+      // in flight — reset() already bumped the generation, so applying this
+      // now-stale result would resurrect state the user already walked away
+      // from. Silently drop it; nothing to alert them to, they left on purpose.
+      if (processGenerationRef.current !== generation) return;
       // Parsed as local midnight, not `new Date(d.date)`'s UTC midnight, so
       // this round-trips to the same calendar day for users west of UTC.
       const extractedDeadlines = extraction.deadlines.map((d, i) => ({
@@ -193,14 +273,17 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
       setStep('review');
     } catch (err) {
       console.error('[SyllabusUploadModal] extraction failed', err);
+      if (processGenerationRef.current !== generation) return;
       // Defense in depth — covers `syllabi` being stale; the backend's
       // exemption check (syllabus.controller.ts) is the real source of truth.
       const status = (err as { status?: number } | null)?.status;
       const field = (err as { field?: string } | null)?.field;
       const message = (err as { message?: string } | null)?.message;
       if (field === 'tier') {
-        setUpgradeVisible(true);
-      } else if (status === 429 && message) {
+        setStep('upgrade');
+        return;
+      }
+      if (status === 429 && message) {
         // Same title convention as Coach's identical quota-exceeded case —
         // a distinct message from a generic parse failure, so the user knows
         // it's their usage cap, not a bad file.
@@ -282,7 +365,6 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
   };
 
   return (
-    <>
     <BottomSheetModal visible={visible} onClose={handleClose} maxHeightPct={85}>
       {step === 'pick' && (
         <>
@@ -341,10 +423,45 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
         </>
       )}
 
+      {/* Folded into this same sheet (rather than a separate stacked
+          `<UpgradeModal>`) because React Native — iOS especially — doesn't
+          reliably present a second native Modal while one is already open;
+          that's what made the Continue button look completely dead for a
+          gated user instead of showing this prompt. */}
+      {step === 'upgrade' && (
+        <View style={styles.upgradeWrap}>
+          <View style={styles.upgradeIconBadge}>
+            <IconSymbol name="sparkles" color={Colors.primaryLight} size={26} />
+          </View>
+          <Text style={styles.upgradeTitle}>
+            Upgrade to {TIER_LABEL[FEATURE_MIN_TIER.syllabus_extraction]}
+          </Text>
+          <Text style={styles.upgradeSubtitle}>
+            Syllabus AI extraction is available on the {TIER_LABEL[FEATURE_MIN_TIER.syllabus_extraction]} plan and
+            above.
+          </Text>
+          <Pressable
+            style={styles.upgradeBtn}
+            onPress={() => {
+              handleClose();
+              router.push(Routes.PLANS);
+            }}
+          >
+            <Text style={styles.upgradeBtnText}>View Plans</Text>
+          </Pressable>
+          <Pressable onPress={() => setStep('preview')} hitSlop={8}>
+            <Text style={styles.upgradeNotNowText}>Not now</Text>
+          </Pressable>
+        </View>
+      )}
+
       {step === 'extracting' && (
         <View style={styles.centerBox}>
           <ActivityIndicator color={Colors.primary} size="large" />
-          <Text style={styles.centerText}>Reading your syllabus…</Text>
+          <Text style={styles.centerText}>{EXTRACT_STATUS_MESSAGES[extractStatusIndex]}</Text>
+          <View style={styles.extractProgressTrack}>
+            <AnimatedProgressBar pct={extractProgress} color={Colors.primary} />
+          </View>
         </View>
       )}
 
@@ -441,13 +558,6 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
         </View>
       )}
     </BottomSheetModal>
-    <UpgradeModal
-      visible={upgradeVisible}
-      onClose={() => setUpgradeVisible(false)}
-      requiredTier={FEATURE_MIN_TIER.syllabus_extraction}
-      featureLabel="Syllabus AI extraction"
-    />
-    </>
   );
 }
 
@@ -462,6 +572,53 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.textMuted,
     marginTop: 4,
+  },
+  upgradeWrap: {
+    alignItems: 'center',
+    paddingBottom: 4,
+  },
+  upgradeIconBadge: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: Colors.infoSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.md,
+  },
+  upgradeTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+    letterSpacing: -0.2,
+    textAlign: 'center',
+  },
+  upgradeSubtitle: {
+    fontSize: 13.5,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 19,
+    marginTop: 7,
+    marginBottom: Spacing.lg,
+  },
+  upgradeBtn: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.textPrimary,
+    borderRadius: 13,
+    paddingVertical: 14,
+    marginBottom: 12,
+  },
+  upgradeBtnText: {
+    fontSize: 14.5,
+    fontWeight: '700',
+    color: Colors.white,
+  },
+  upgradeNotNowText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.textMuted,
   },
   pickButton: {
     marginTop: 20,
@@ -561,6 +718,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: Colors.textSecondary,
+  },
+  extractProgressTrack: {
+    width: '80%',
+    height: 6,
+    borderRadius: 999,
+    backgroundColor: Colors.border,
+    overflow: 'hidden',
   },
   fieldLabel: {
     fontSize: 12,

@@ -1,6 +1,6 @@
 import { Schema, model, Document } from 'mongoose';
 
-export type CalendarSource = 'apple' | 'google';
+export type CalendarSource = 'apple' | 'google' | 'outlook';
 
 export interface ImportedCalendarEventDocument extends Document {
   firebaseUid: string;
@@ -19,7 +19,7 @@ export interface ImportedCalendarEventDocument extends Document {
 
 const importedCalendarEventSchema = new Schema<ImportedCalendarEventDocument>({
   firebaseUid: { type: String, required: true, index: true },
-  source: { type: String, enum: ['apple', 'google'], required: true },
+  source: { type: String, enum: ['apple', 'google', 'outlook'], required: true },
   externalId: { type: String, required: true },
   title: { type: String, required: true },
   startAt: { type: String, required: true },

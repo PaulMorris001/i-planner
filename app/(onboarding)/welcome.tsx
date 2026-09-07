@@ -45,7 +45,7 @@ export default function Welcome() {
         <View style={styles.actions}>
           <Button
             label="Get started"
-            onPress={() => router.push(Routes.REGISTER)}
+            onPress={() => router.push(Routes.PATH_INTRO)}
             variant="primary"
             style={styles.ctaAccent}
             textStyle={{ color: Colors.primary }}

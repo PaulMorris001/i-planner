@@ -3,6 +3,7 @@ import {
   listImportedEvents,
   importGoogleEvents,
   importAppleEvents,
+  importOutlookEvents,
   deleteImportedEvent,
 } from '../controllers/calendarImport.controller';
 import { requireAuth } from '../middleware/requireAuth';
@@ -15,4 +16,5 @@ calendarImportRouter.use(requireAuth);
 calendarImportRouter.get('/imported', asyncHandler(listImportedEvents));
 calendarImportRouter.post('/import/google', asyncHandler(importGoogleEvents));
 calendarImportRouter.post('/import/apple', asyncHandler(importAppleEvents));
+calendarImportRouter.post('/import/outlook', asyncHandler(importOutlookEvents));
 calendarImportRouter.delete('/imported/:id', asyncHandler(deleteImportedEvent));

@@ -15,6 +15,13 @@ export interface SettingsDocument extends Document {
   // Id of the dedicated secondary "i-Planner" Google Calendar synced events go to,
   // keeping them isolated from the user's primary calendar. Internal only.
   googleCalendarId?: string;
+  // Outlook Calendar import (read-only, no write-back — see
+  // services/microsoftCalendarSync.ts). No calendarId field: unlike Google
+  // there's no dedicated secondary calendar to track, since nothing is written.
+  outlookCalendarConnected: boolean;
+  outlookAccessToken?: string;
+  outlookRefreshToken?: string;
+  outlookTokenExpiresAt?: Date;
   // IANA timezone from the device — synced events land at the correct local hour
   // instead of UTC.
   timeZone?: string;
@@ -48,6 +55,10 @@ const settingsSchema = new Schema<SettingsDocument>({
   googleRefreshToken: { type: String },
   googleTokenExpiresAt: { type: Date },
   googleCalendarId: { type: String },
+  outlookCalendarConnected: { type: Boolean, default: false },
+  outlookAccessToken: { type: String },
+  outlookRefreshToken: { type: String },
+  outlookTokenExpiresAt: { type: Date },
   timeZone: { type: String },
   aiAccessTasks: { type: Boolean, default: true },
   aiAccessGoals: { type: Boolean, default: true },
@@ -61,6 +72,7 @@ export function toPublicSettings(doc: SettingsDocument | null) {
   return {
     appleCalendarConnected: doc?.appleCalendarConnected ?? false,
     googleCalendarConnected: doc?.googleCalendarConnected ?? false,
+    outlookCalendarConnected: doc?.outlookCalendarConnected ?? false,
     calendarGateDismissed: doc?.calendarGateDismissed ?? false,
     remindersEnabled: doc?.remindersEnabled ?? false,
     aiAccessTasks: doc?.aiAccessTasks ?? true,

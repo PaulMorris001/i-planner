@@ -6,6 +6,7 @@ import { Plan } from '../models/Plan';
 import { AuthedRequest } from '../middleware/requireAuth';
 import { ApiError } from '../utils/ApiError';
 import { listPrimaryGoogleEvents } from '../services/googleCalendarSync';
+import { listPrimaryOutlookEvents } from '../services/microsoftCalendarSync';
 
 // How far ahead to pull events on each import — keeps both the Google API call and
 // the Apple-side local read bounded.
@@ -49,6 +50,52 @@ export async function importGoogleEvents(req: AuthedRequest, res: Response) {
     incoming.map((e) =>
       ImportedCalendarEvent.findOneAndUpdate(
         { firebaseUid: req.userId, source: 'google', externalId: e.id },
+        {
+          $set: {
+            title: e.title,
+            startAt: e.startAt,
+            endAt: e.endAt,
+            allDay: e.allDay,
+            location: e.location,
+          },
+        },
+        { upsert: true }
+      )
+    )
+  );
+
+  const events = await ImportedCalendarEvent.find({ firebaseUid: req.userId }).sort({ startAt: 1 });
+  res.json(events.map(toPublicImportedCalendarEvent));
+}
+
+// Read-only, so unlike importGoogleEvents there's no need to exclude events
+// this app itself *wrote* (nothing ever gets written to the user's Outlook
+// calendar, see microsoftCalendarSync.ts). But an event the user already
+// converted to a task still needs excluding here — converting deletes the
+// ImportedCalendarEvent row (see NewTaskModal), so without this a re-import
+// would just fetch the same event from Graph again and resurrect it.
+export async function importOutlookEvents(req: AuthedRequest, res: Response) {
+  const settings = await Settings.findOne({ firebaseUid: req.userId });
+  if (!settings?.outlookCalendarConnected) {
+    throw new ApiError(400, 'Outlook Calendar is not connected.', 'general');
+  }
+
+  const { start, end } = importWindow();
+  const remoteEvents = await listPrimaryOutlookEvents(settings, start.toISOString(), end.toISOString());
+
+  const ownedTasks = await Task.find(
+    { firebaseUid: req.userId, outlookEventId: { $exists: true, $ne: null } },
+    'outlookEventId'
+  );
+  const ownedOutlookEventIds = new Set(
+    (ownedTasks as unknown as { outlookEventId?: string }[]).map((t) => t.outlookEventId).filter((id): id is string => !!id)
+  );
+  const incoming = remoteEvents.filter((e) => !ownedOutlookEventIds.has(e.id));
+
+  await Promise.all(
+    incoming.map((e) =>
+      ImportedCalendarEvent.findOneAndUpdate(
+        { firebaseUid: req.userId, source: 'outlook', externalId: e.id },
         {
           $set: {
             title: e.title,

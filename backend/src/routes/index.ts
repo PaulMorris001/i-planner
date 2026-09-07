@@ -11,6 +11,7 @@ import { coachRouter } from './coach.routes';
 import { accountRouter } from './account.routes';
 import { syllabusRouter } from './syllabus.routes';
 import { googleOAuthRouter } from './googleOAuth.routes';
+import { microsoftOAuthRouter } from './microsoftOAuth.routes';
 import { subscriptionRouter } from './subscription.routes';
 import { calendarImportRouter } from './calendarImport.routes';
 
@@ -38,3 +39,4 @@ router.use('/calendar', calendarImportRouter);
 // Sibling to /settings, not nested — settingsRouter blanket-applies requireAuth,
 // but this unauthenticated browser redirect can't carry one.
 router.use('/oauth/google', googleOAuthRouter);
+router.use('/oauth/microsoft', microsoftOAuthRouter);

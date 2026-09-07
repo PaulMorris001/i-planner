@@ -1,4 +1,4 @@
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Image, StyleSheet } from 'react-native';
 import { Redirect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useOnboarding } from '@/hooks/useOnboarding';
@@ -12,12 +12,18 @@ export default function Index() {
 
   // hasOnboarded (AsyncStorage) and user (Firebase session) are independent and both
   // async — wait for both, or an onboarded device with no live session lands on
-  // Dashboard unauthenticated and every backend call silently 401s.
+  // Dashboard unauthenticated and every backend call silently 401s. Shows the app's
+  // own logo (same artwork as the native splash screen) instead of a bare spinner,
+  // so this reads as a continuation of the splash rather than a generic loading state.
   if (hasOnboarded === null || initializing) {
     return (
       <View style={styles.loading}>
         <StatusBar style="light" />
-        <ActivityIndicator color={Colors.accent} size="large" />
+        <Image
+          source={require('@/assets/images/splash-icon.png')}
+          style={styles.logo}
+          resizeMode="contain"
+        />
       </View>
     );
   }
@@ -35,5 +41,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: Colors.primary,
+  },
+  logo: {
+    width: 140,
+    height: 140,
   },
 });

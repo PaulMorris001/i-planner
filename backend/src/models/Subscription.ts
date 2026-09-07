@@ -16,6 +16,12 @@ export interface SubscriptionDocument extends Document {
   // POST /api/subscription/verify — the only thing that updates this doc
   // (no push notifications from either store in this setup).
   lastVerifiedAt: Date;
+  // True only for tiers granted manually via scripts/grantComplimentaryAccess.ts
+  // (curated free access, no real purchase behind it) — purely informational for
+  // support/debugging, not read anywhere in gating logic. A real purchase via
+  // verifySubscription still overwrites tier/productIdentifier/store normally but
+  // leaves this flag as-is (harmless — it just becomes stale bookkeeping at that point).
+  comped?: boolean;
 }
 
 const subscriptionSchema = new Schema<SubscriptionDocument>({
@@ -25,6 +31,7 @@ const subscriptionSchema = new Schema<SubscriptionDocument>({
   store: { type: String },
   expiresAt: { type: Date },
   lastVerifiedAt: { type: Date, default: () => new Date() },
+  comped: { type: Boolean, default: false },
 });
 
 export function toPublicSubscription(doc: SubscriptionDocument | null) {

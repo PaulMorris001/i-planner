@@ -1,17 +1,20 @@
 import { IconSymbol, type IconSymbolName } from "@/components/ui/icon-symbol";
-import { Routes } from "@/constants/routes";
+import { Routes, type AppRoute } from "@/constants/routes";
 import { Colors, Spacing } from "@/constants/theme";
 import { useAuth } from "@/hooks/useAuth";
 import { useRouter } from "expo-router";
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import {
   Animated,
   Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface ProfileInfoModalProps {
   visible: boolean;
@@ -62,6 +65,15 @@ const PATH_META: Record<
   },
 };
 
+const DRAWER_WIDTH_PCT = 0.82;
+const DRAWER_MAX_WIDTH = 340;
+const ANIM_MS = 260;
+
+// A right-side sliding tab, not a centered pop-up — tapping the avatar now
+// pulls in a drawer from the screen's right edge instead. Modal's own
+// "slide"/"fade" animationType only moves vertically or fades, so the slide
+// is driven manually (translateX + overlay opacity), same approach the old
+// centered-card version already used for its scale/opacity pop-in.
 export function ProfileInfoModal({
   visible,
   onClose,
@@ -69,109 +81,158 @@ export function ProfileInfoModal({
 }: ProfileInfoModalProps) {
   const router = useRouter();
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
+  const drawerWidth = Math.min(windowWidth * DRAWER_WIDTH_PCT, DRAWER_MAX_WIDTH);
+
   const displayName = user?.fullName?.trim() || user?.email || "";
   const initial = displayName.charAt(0).toUpperCase();
   const path = PATH_META[toPathId(focusProfile)];
 
-  // Modal's "fade" animationType covers the overlay; this scale+opacity pair gives the card a
-  // soft pop-in. Re-armed on every open since RN Modal unmounts content on close (no exit to drive).
-  const scale = useRef(new Animated.Value(0.9)).current;
-  const opacity = useRef(new Animated.Value(0)).current;
+  const translateX = useRef(new Animated.Value(drawerWidth)).current;
+  const overlayOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (!visible) return;
-    scale.setValue(0.9);
-    opacity.setValue(0);
+    translateX.setValue(drawerWidth);
+    overlayOpacity.setValue(0);
     Animated.parallel([
-      Animated.spring(scale, {
-        toValue: 1,
+      Animated.timing(translateX, {
+        toValue: 0,
+        duration: ANIM_MS,
         useNativeDriver: true,
-        friction: 8,
-        tension: 65,
       }),
-      Animated.timing(opacity, {
+      Animated.timing(overlayOpacity, {
         toValue: 1,
-        duration: 180,
+        duration: ANIM_MS,
         useNativeDriver: true,
       }),
     ]).start();
-  }, [visible, scale, opacity]);
+  }, [visible, drawerWidth, translateX, overlayOpacity]);
+
+  // Modal unmounts its content the instant `visible` flips false, which would
+  // otherwise cut the slide-out short — every dismissal path (overlay tap, X
+  // button, a nav action below) animates the drawer back off-screen first and
+  // only calls the real onClose once that finishes.
+  const handleClose = useCallback(() => {
+    Animated.parallel([
+      Animated.timing(translateX, {
+        toValue: drawerWidth,
+        duration: ANIM_MS - 60,
+        useNativeDriver: true,
+      }),
+      Animated.timing(overlayOpacity, {
+        toValue: 0,
+        duration: ANIM_MS - 60,
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
+      if (finished) onClose();
+    });
+  }, [drawerWidth, translateX, overlayOpacity, onClose]);
+
+  const goTo = useCallback(
+    (route: AppRoute) => {
+      Animated.parallel([
+        Animated.timing(translateX, {
+          toValue: drawerWidth,
+          duration: ANIM_MS - 60,
+          useNativeDriver: true,
+        }),
+        Animated.timing(overlayOpacity, {
+          toValue: 0,
+          duration: ANIM_MS - 60,
+          useNativeDriver: true,
+        }),
+      ]).start(({ finished }) => {
+        if (!finished) return;
+        onClose();
+        router.push(route);
+      });
+    },
+    [drawerWidth, translateX, overlayOpacity, onClose, router]
+  );
 
   return (
     <Modal
       visible={visible}
       transparent
-      animationType="fade"
-      onRequestClose={onClose}
+      animationType="none"
+      onRequestClose={handleClose}
     >
       <View style={styles.root}>
-        <Pressable style={styles.overlay} onPress={onClose} />
+        <Pressable style={StyleSheet.absoluteFill} onPress={handleClose}>
+          <Animated.View style={[styles.overlay, { opacity: overlayOpacity }]} />
+        </Pressable>
+
         <Animated.View
-          style={[styles.card, { opacity, transform: [{ scale }] }]}
+          style={[
+            styles.drawer,
+            {
+              width: drawerWidth,
+              transform: [{ translateX }],
+            },
+          ]}
         >
-          <Pressable style={styles.closeButton} hitSlop={10} onPress={onClose}>
-            <IconSymbol name="xmark" color={Colors.textMuted} size={18} />
-          </Pressable>
+          <ScrollView
+            contentContainerStyle={[
+              styles.drawerContent,
+              { paddingTop: insets.top + Spacing.lg, paddingBottom: insets.bottom + Spacing.lg },
+            ]}
+            showsVerticalScrollIndicator={false}
+          >
+            <Pressable style={styles.closeButton} hitSlop={10} onPress={handleClose}>
+              <IconSymbol name="xmark" color={Colors.textMuted} size={18} />
+            </Pressable>
 
-          <View style={styles.profileRow}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{initial}</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.name}>{displayName}</Text>
-              {!!user?.email && (
-                <Text style={styles.email} numberOfLines={1}>
-                  {user.email}
-                </Text>
-              )}
-            </View>
-          </View>
-
-          <Text style={styles.eyebrow}>CURRENT PATH</Text>
-          <View style={styles.pathCard}>
-            <View style={[styles.pathIconBox, { backgroundColor: path.soft }]}>
-              <IconSymbol name={path.icon} color={path.color} size={20} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.pathLabel}>{path.label}</Text>
-              <Text style={styles.pathDesc}>{path.desc}</Text>
-            </View>
-          </View>
-
-          <View style={styles.actionsGroup}>
-            <Pressable
-              style={styles.manageRow}
-              onPress={() => {
-                onClose();
-                router.push(Routes.NOTES);
-              }}
-            >
-              <View style={styles.manageLabelRow}>
-                <IconSymbol name="note.text" color={Colors.primaryLight} size={18} />
-                <Text style={styles.manageText}>Notes</Text>
+            <View style={styles.profileRow}>
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>{initial}</Text>
               </View>
-              <IconSymbol
-                name="chevron.right"
-                color={Colors.primaryLight}
-                size={18}
-              />
-            </Pressable>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.name}>{displayName}</Text>
+                {!!user?.email && (
+                  <Text style={styles.email} numberOfLines={1}>
+                    {user.email}
+                  </Text>
+                )}
+              </View>
+            </View>
 
-            <Pressable
-              style={styles.manageRow}
-              onPress={() => {
-                onClose();
-                router.push(Routes.PROFILE);
-              }}
-            >
-              <Text style={styles.manageText}>Manage in Profile & settings</Text>
-              <IconSymbol
-                name="chevron.right"
-                color={Colors.primaryLight}
-                size={18}
-              />
-            </Pressable>
-          </View>
+            <Text style={styles.eyebrow}>CURRENT PATH</Text>
+            <View style={styles.pathCard}>
+              <View style={[styles.pathIconBox, { backgroundColor: path.soft }]}>
+                <IconSymbol name={path.icon} color={path.color} size={20} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.pathLabel}>{path.label}</Text>
+                <Text style={styles.pathDesc}>{path.desc}</Text>
+              </View>
+            </View>
+
+            <View style={styles.actionsGroup}>
+              <Pressable style={styles.manageRow} onPress={() => goTo(Routes.NOTES)}>
+                <View style={styles.manageLabelRow}>
+                  <IconSymbol name="note.text" color={Colors.primaryLight} size={18} />
+                  <Text style={styles.manageText}>Notes</Text>
+                </View>
+                <IconSymbol
+                  name="chevron.right"
+                  color={Colors.primaryLight}
+                  size={18}
+                />
+              </Pressable>
+
+              <Pressable style={styles.manageRow} onPress={() => goTo(Routes.PROFILE)}>
+                <Text style={styles.manageText}>Manage in Profile & settings</Text>
+                <IconSymbol
+                  name="chevron.right"
+                  color={Colors.primaryLight}
+                  size={18}
+                />
+              </Pressable>
+            </View>
+          </ScrollView>
         </Animated.View>
       </View>
     </Modal>
@@ -181,34 +242,33 @@ export function ProfileInfoModal({
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: Spacing.lg,
   },
   overlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(20,18,40,0.4)",
   },
-  card: {
-    width: "100%",
-    maxWidth: 380,
+  drawer: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: Colors.offWhite,
-    borderRadius: 22,
-    padding: Spacing.lg,
+    borderTopLeftRadius: 24,
+    borderBottomLeftRadius: 24,
     shadowColor: Colors.textPrimary,
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.2,
-    shadowRadius: 28,
-    elevation: 12,
+    shadowOffset: { width: -6, height: 0 },
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    elevation: 16,
+  },
+  drawerContent: {
+    paddingHorizontal: Spacing.lg,
+    flexGrow: 1,
   },
   closeButton: {
     position: "absolute",
     top: 14,
-    right: 14,
+    right: Spacing.lg,
     zIndex: 1,
   },
   profileRow: {
@@ -217,6 +277,7 @@ const styles = StyleSheet.create({
     gap: 14,
     paddingBottom: 6,
     paddingRight: 24,
+    paddingTop: 28,
   },
   avatar: {
     width: 54,

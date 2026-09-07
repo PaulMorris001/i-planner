@@ -1,6 +1,7 @@
 export interface Settings {
   appleCalendarConnected: boolean;
   googleCalendarConnected: boolean;
+  outlookCalendarConnected: boolean;
   calendarGateDismissed: boolean;
   remindersEnabled: boolean;
   aiAccessTasks: boolean;

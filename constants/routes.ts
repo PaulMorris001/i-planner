@@ -3,6 +3,7 @@ export const Routes = {
   LOGIN:            '/(onboarding)/login',
   REGISTER:         '/(onboarding)/register',
   FORGOT_PASSWORD:  '/(onboarding)/forgot-password',
+  PATH_INTRO:       '/(onboarding)/path-intro',
   FOCUS:            '/(onboarding)/focus',
   STUDENT_PLAN:     '/(onboarding)/student-plan',
   EXAM_PLAN:        '/(onboarding)/exam-plan',
