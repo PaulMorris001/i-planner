@@ -68,7 +68,7 @@ export default function Register() {
         <View style={styles.form}>
           <Input
             label="Full name"
-            placeholder="Ada Okafor"
+            placeholder="Alex Jackson"
             value={fullName}
             onChangeText={setFullName}
             autoCapitalize="words"

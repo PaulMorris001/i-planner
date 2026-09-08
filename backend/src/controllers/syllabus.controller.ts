@@ -1,12 +1,15 @@
 import { Response } from 'express';
 import { Syllabus, toPublicSyllabus } from '../models/Syllabus';
-import { Subscription } from '../models/Subscription';
+import { Subscription, SubscriptionTier } from '../models/Subscription';
 import { AuthedRequest } from '../middleware/requireAuth';
 import { ApiError } from '../utils/ApiError';
 import { extractSyllabus, mimeTypeForFilename } from '../services/syllabusExtraction';
 import { FEATURE_MIN_TIER, hasTier } from '../constants/featureTiers';
-import { checkAndConsumeQuery } from '../services/aiUsageLimiter';
+import { hasQueryRemaining, consumeQuery } from '../services/aiUsageLimiter';
 import { findOwnedOrThrow } from '../utils/ownedDoc';
+
+// First N syllabi are free regardless of tier — see extractSyllabusHandler.
+const FREE_SYLLABUS_COUNT = 2;
 
 export async function listSyllabi(req: AuthedRequest, res: Response) {
   const syllabi = await Syllabus.find({ firebaseUid: req.userId }).sort({ createdAt: -1 });
@@ -35,26 +38,36 @@ export async function extractSyllabusHandler(req: AuthedRequest, res: Response) 
     throw new ApiError(400, 'Upload a PDF, Word/PowerPoint document, or a photo (JPG/PNG).', 'general');
   }
 
-  // First-ever syllabus is free (onboarding shares this endpoint with the in-app
-  // upload modal); gated from the second onward — same as generateExamTopicsHandler.
-  const existingSyllabus = await Syllabus.findOne({ firebaseUid: req.userId });
-  if (existingSyllabus) {
+  // First two syllabi are free (onboarding shares this endpoint with the in-app
+  // upload modal); gated from the third onward — same as generateExamTopicsHandler.
+  const existingSyllabusCount = await Syllabus.countDocuments({ firebaseUid: req.userId });
+  const withinFreeAllowance = existingSyllabusCount < FREE_SYLLABUS_COUNT;
+
+  let tier: SubscriptionTier = 'free';
+  // Only set when this request actually needs to spend a metered AI query —
+  // i.e. past the free allowance. Checked (not consumed) before the extract
+  // call below, and only actually consumed after that call succeeds, so a
+  // failed/unreadable upload never costs the user a query for nothing.
+  let shouldConsumeUsage = false;
+
+  if (!withinFreeAllowance) {
     const subscription = await Subscription.findOne({ firebaseUid: req.userId });
-    const tier = subscription?.tier ?? 'free';
+    tier = subscription?.tier ?? 'free';
     if (!hasTier(tier, FEATURE_MIN_TIER.syllabus_extraction)) {
       throw new ApiError(403, `Syllabus AI extraction requires a ${FEATURE_MIN_TIER.syllabus_extraction} subscription.`, 'tier');
     }
-    const usage = await checkAndConsumeQuery(req.userId!, tier);
+    const usage = await hasQueryRemaining(req.userId!, tier);
     if (!usage.allowed) {
       const period = usage.period === 'week' ? 'week' : 'month';
       const resetLabel = usage.resetsAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       throw new ApiError(429, `You've used all ${usage.cap} AI actions for this ${period}. It resets ${resetLabel}.`, 'general');
     }
+    shouldConsumeUsage = true;
   }
 
+  let result;
   try {
-    const result = await extractSyllabus({ fileBase64, filename, mimeType });
-    res.json(result);
+    result = await extractSyllabus({ fileBase64, filename, mimeType });
   } catch (err) {
     console.error('[syllabus.controller] extraction failed', err);
     throw new ApiError(
@@ -63,6 +76,21 @@ export async function extractSyllabusHandler(req: AuthedRequest, res: Response) 
       'general'
     );
   }
+
+  // Only now — extraction actually produced content — does this count against
+  // the user's metered quota. Deliberately outside the try above (and its own
+  // try/catch here) so a transient failure recording usage can never turn an
+  // already-successful extraction into a false "couldn't read" error for the
+  // user; worst case here is one query going uncounted, not a wrongly-lost result.
+  if (shouldConsumeUsage) {
+    try {
+      await consumeQuery(req.userId!, tier);
+    } catch (err) {
+      console.error('[syllabus.controller] failed to record AI usage after successful extraction', err);
+    }
+  }
+
+  res.json(result);
 }
 
 export async function createSyllabus(req: AuthedRequest, res: Response) {

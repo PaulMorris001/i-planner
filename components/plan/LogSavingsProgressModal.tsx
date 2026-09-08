@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
 import { BottomSheetModal } from '@/components/ui/BottomSheetModal';
 import { Colors, Radius } from '@/constants/theme';
+import { CURRENCY_SYMBOL } from '@/utils/currency';
 import type { SavingsGoal } from '@/types/savingsGoal.types';
 
 const ADD_STEP = 50;
@@ -76,7 +77,7 @@ export function LogSavingsProgressModal({ visible, onClose, goal, onLogProgress 
           <Text style={styles.stepperBtnText}>−</Text>
         </Pressable>
         <View style={styles.amountInputRow}>
-          <Text style={styles.amountPrefix}>$</Text>
+          <Text style={styles.amountPrefix}>{CURRENCY_SYMBOL}</Text>
           <TextInput
             value={amountText}
             onChangeText={handleAmountChange}

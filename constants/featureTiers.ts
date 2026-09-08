@@ -18,6 +18,11 @@ export const FEATURE_MIN_TIER = {
   syllabus_extraction: 'student',
 } as const satisfies Record<string, SubscriptionTier>;
 
+// Mirrors backend/src/controllers/syllabus.controller.ts's FREE_SYLLABUS_COUNT
+// — first N syllabi are free regardless of tier. Client-side pre-check only,
+// same caveat as FEATURE_MIN_TIER above (the backend is the real enforcement).
+export const FREE_SYLLABUS_COUNT = 2;
+
 export const TIER_LABEL: Record<SubscriptionTier, string> = {
   free: 'Free',
   student: 'Student / Edu',

@@ -6,7 +6,7 @@ import { InlineDateTimePicker } from '@/components/ui/InlineDateTimePicker';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors, Spacing, Radius } from '@/constants/theme';
 import { useSettings } from '@/hooks/useSettings';
-import { formatCurrency, monthlySavingsAmount } from '@/utils/currency';
+import { formatCurrency, monthlySavingsAmount, CURRENCY_SYMBOL } from '@/utils/currency';
 import { confirmDelete } from '@/utils/confirmDelete';
 import { formatDatePickerLabel, parseISODateLocal, toDateKey } from '@/utils/date';
 import type { SavingsGoal, NewSavingsGoalInput } from '@/types/savingsGoal.types';
@@ -169,7 +169,7 @@ export function SavingsGoalModal({ visible, onClose, onSave, onRemove, editingGo
             <Text style={styles.stepperLabel}>Target amount</Text>
             <View style={styles.stepperValueRow}>
               <View style={styles.amountInputRow}>
-                <Text style={styles.amountPrefix}>$</Text>
+                <Text style={styles.amountPrefix}>{CURRENCY_SYMBOL}</Text>
                 <TextInput
                   value={targetAmountText}
                   onChangeText={handleTargetAmountChange}
@@ -195,7 +195,7 @@ export function SavingsGoalModal({ visible, onClose, onSave, onRemove, editingGo
             <Text style={styles.stepperLabel}>Already saved</Text>
             <View style={styles.stepperValueRow}>
               <View style={styles.amountInputRow}>
-                <Text style={styles.amountPrefix}>$</Text>
+                <Text style={styles.amountPrefix}>{CURRENCY_SYMBOL}</Text>
                 <TextInput
                   value={savedAmountText}
                   onChangeText={handleSavedAmountChange}

@@ -47,6 +47,7 @@ const MAPPING = {
   'doc.on.doc': 'content-copy',
   'note.text': 'notes',
   'photo.fill': 'image',
+  'line.3.horizontal': 'menu',
 } as IconMapping;
 
 /**

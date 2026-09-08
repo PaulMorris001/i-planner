@@ -75,7 +75,10 @@ export default function PathIntro() {
   const scrollRef = useRef<ScrollView>(null);
   const [index, setIndex] = useState(0);
 
-  const goToRegister = () => router.push(Routes.REGISTER);
+  // Welcome now comes right after this carousel (not Register directly) —
+  // its own "Get started"/"I already have an account" buttons are what
+  // actually lead to Register/Login. See app/index.tsx for the full order.
+  const goToWelcome = () => router.push(Routes.WELCOME);
 
   const scrollToIndex = (next: number) => {
     scrollRef.current?.scrollTo({ x: next * width, animated: true });
@@ -86,7 +89,7 @@ export default function PathIntro() {
     if (index < SLIDES.length - 1) {
       scrollToIndex(index + 1);
     } else {
-      goToRegister();
+      goToWelcome();
     }
   };
 
@@ -101,7 +104,7 @@ export default function PathIntro() {
   return (
     <ScreenWrapper backgroundColor={Colors.white}>
       <View style={styles.root}>
-        <Pressable style={styles.skip} onPress={goToRegister} hitSlop={10}>
+        <Pressable style={styles.skip} onPress={goToWelcome} hitSlop={10}>
           <Text style={styles.skipText}>Skip</Text>
         </Pressable>
 
@@ -150,7 +153,10 @@ export default function PathIntro() {
             ))}
           </View>
 
-          <Button label={isLast ? "Get started" : "Next"} onPress={handleNext} style={styles.cta} />
+          {/* "Continue" not "Get started" on the last slide — this leads into
+              Welcome, which has its own "Get started" button; two in a row
+              would read as redundant. */}
+          <Button label={isLast ? "Continue" : "Next"} onPress={handleNext} style={styles.cta} />
         </View>
       </View>
     </ScreenWrapper>

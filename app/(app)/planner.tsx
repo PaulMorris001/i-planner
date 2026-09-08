@@ -270,7 +270,7 @@ export default function Planner() {
   if (!settingsLoading && !calendarConnected && !calendarGateDismissed) {
     return (
       <ScreenWrapper backgroundColor={Colors.offWhite} edges={['top', 'right', 'left']}>
-        <GreetingHeader onAvatarPress={() => setProfileModalOpen(true)} />
+        <GreetingHeader onMenuPress={() => setProfileModalOpen(true)} />
         <CalendarConnectGate
           onConnectApple={async () => {
             const ok = await connectAppleCalendar();
@@ -307,7 +307,7 @@ export default function Planner() {
       style={{ ...styles.scrollContent, paddingBottom: styles.scrollContent.paddingBottom + tabBarHeight }}
       edges={['top', 'right', 'left']}
     >
-      <GreetingHeader onAvatarPress={() => setProfileModalOpen(true)} />
+      <GreetingHeader onMenuPress={() => setProfileModalOpen(true)} />
 
       <View style={styles.body}>
         <SegmentedToggle options={VIEW_OPTIONS} value={view} onChange={setView} />

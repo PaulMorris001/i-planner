@@ -7,6 +7,7 @@ import { InlineDateTimePicker } from '@/components/ui/InlineDateTimePicker';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors, Spacing, Radius } from '@/constants/theme';
 import { formatDatePickerLabel, parseISODateLocal, toDateKey } from '@/utils/date';
+import { CURRENCY_SYMBOL } from '@/utils/currency';
 import { confirmDelete } from '@/utils/confirmDelete';
 import type { Bill, BillCategory, NewBillInput } from '@/types/bill.types';
 
@@ -133,7 +134,7 @@ export function AddBillModal({ visible, onClose, onSave, onRemove, editingBill }
           <Text style={styles.stepperLabel}>Amount</Text>
           <View style={styles.stepperValueRow}>
             <View style={styles.amountInputRow}>
-              <Text style={styles.amountPrefix}>$</Text>
+              <Text style={styles.amountPrefix}>{CURRENCY_SYMBOL}</Text>
               <TextInput
                 value={amountText}
                 onChangeText={handleAmountChange}

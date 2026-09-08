@@ -8,7 +8,8 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
-    "grant-access": "ts-node src/scripts/grantComplimentaryAccess.ts"
+    "grant-access": "ts-node src/scripts/grantComplimentaryAccess.ts",
+    "check-access": "ts-node src/scripts/checkAccess.ts"
   },
   "dependencies": {
     "@apple/app-store-server-library": "^3.1.0",

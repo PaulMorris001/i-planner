@@ -28,8 +28,12 @@ export default function Index() {
     );
   }
 
+  // First-launch entry point is the path-intro carousel now, not Welcome
+  // directly — Welcome (Get started / I already have an account) comes after
+  // it. See path-intro.tsx's Skip/final-CTA and welcome.tsx's own buttons for
+  // the rest of this chain.
   if (!hasOnboarded) {
-    return <Redirect href={Routes.WELCOME} />;
+    return <Redirect href={Routes.PATH_INTRO} />;
   }
 
   return <Redirect href={user ? Routes.DASHBOARD : Routes.LOGIN} />;

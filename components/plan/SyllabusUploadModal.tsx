@@ -9,7 +9,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { AnimatedProgressBar } from '@/components/ui/AnimatedProgressBar';
 import { InlineDateTimePicker } from '@/components/ui/InlineDateTimePicker';
 import { Colors, Spacing, Radius } from '@/constants/theme';
-import { FEATURE_MIN_TIER, TIER_LABEL, hasTier } from '@/constants/featureTiers';
+import { FEATURE_MIN_TIER, TIER_LABEL, hasTier, FREE_SYLLABUS_COUNT } from '@/constants/featureTiers';
 import { Routes } from '@/constants/routes';
 import { usePurchases } from '@/contexts/PurchasesContext';
 import { syllabusService } from '@/services/syllabus.service';
@@ -229,7 +229,7 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
     }
     const asset = pickedAsset;
 
-    if (syllabi.length > 0 && !hasTier(tier, FEATURE_MIN_TIER.syllabus_extraction)) {
+    if (syllabi.length >= FREE_SYLLABUS_COUNT && !hasTier(tier, FEATURE_MIN_TIER.syllabus_extraction)) {
       setStep('upgrade');
       return;
     }

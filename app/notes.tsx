@@ -69,7 +69,13 @@ export default function Notes() {
         ))}
 
         {notes.length === 0 && (
-          <Text style={styles.emptyText}>No notes yet — tap &quot;New note&quot; to add one.</Text>
+          <View style={styles.emptyState}>
+            <View style={styles.emptyIconBadge}>
+              <IconSymbol name="doc.fill" color={Colors.primaryLight} size={26} />
+            </View>
+            <Text style={styles.emptyStateTitle}>No notes yet</Text>
+            <Text style={styles.emptyStateSub}>Create your first note to get started.</Text>
+          </View>
         )}
       </View>
 
@@ -128,8 +134,31 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     fontStyle: 'italic',
   },
-  emptyText: {
+  emptyState: {
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 16,
+    paddingVertical: 36,
+    alignItems: 'center',
+  },
+  emptyIconBadge: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: Colors.infoSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.md,
+  },
+  emptyStateTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  emptyStateSub: {
     fontSize: 13,
     color: Colors.textMuted,
+    marginTop: 4,
   },
 });

@@ -209,7 +209,7 @@ export default function Dashboard() {
         onRefresh={handleRefresh}
         refreshing={refreshing}
       >
-        <GreetingHeader onAvatarPress={() => setProfileModalOpen(true)} />
+        <GreetingHeader onMenuPress={() => setProfileModalOpen(true)} />
 
         {dashboardLoading ? (
           <DashboardSkeleton />

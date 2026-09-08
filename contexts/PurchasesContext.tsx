@@ -1,7 +1,9 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { Platform } from 'react-native';
+import { onAuthStateChanged } from 'firebase/auth';
 import { useIAP, ErrorCode } from 'expo-iap';
 import type { ProductSubscription, Purchase } from 'expo-iap';
+import { auth } from '@/config/firebase';
 import { subscriptionService } from '@/services/subscription.service';
 import type { SubscriptionTier } from '@/types/subscription.types';
 
@@ -41,14 +43,25 @@ const PurchasesContext = createContext<PurchasesContextValue | null>(null);
 
 // Reads the already-known tier from the backend so a previously-verified
 // subscriber sees their real tier immediately on launch (and even while live
-// purchasing is disabled) — shared by both providers below.
+// purchasing is disabled) — shared by both providers below. Re-fetches on
+// every auth state change (not just once on mount) — otherwise logging out
+// and into a *different* account without a full app restart leaves `tier`
+// stuck at whichever account was signed in when this provider first mounted,
+// silently gating (or wrongly ungating) whoever's actually signed in now.
 function useKnownTier(): [SubscriptionTier, (tier: SubscriptionTier) => void] {
   const [tier, setTier] = useState<SubscriptionTier>('free');
   useEffect(() => {
-    subscriptionService
-      .get()
-      .then((subscription) => setTier(subscription.tier))
-      .catch((err) => console.error('[Purchases] failed to load current subscription', err));
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        setTier('free');
+        return;
+      }
+      subscriptionService
+        .get()
+        .then((subscription) => setTier(subscription.tier))
+        .catch((err) => console.error('[Purchases] failed to load current subscription', err));
+    });
+    return unsubscribe;
   }, []);
   return [tier, setTier];
 }

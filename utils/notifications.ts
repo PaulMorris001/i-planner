@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import { router } from 'expo-router';
 import { parseTimeToMinutes } from '@/utils/time';
 import { parseISODateLocal, toDateKey, formatTimeLabel } from '@/utils/date';
+import { formatCurrency } from '@/utils/currency';
 import { Routes } from '@/constants/routes';
 
 // Local, on-device scheduling via expo-notifications — no backend involvement.
@@ -339,11 +340,11 @@ export async function scheduleBillNotifications(bill: {
   // day count. Shared by both lead reminders — which nominal lead scheduled it
   // only matters for the days-remaining number this produces.
   const daysAwayBody = (days: number) => {
-    if (days <= 0) return `${bill.name} is due today — $${bill.amount}`;
-    if (days >= 6) return `${bill.name} is due in 1 week — $${bill.amount}`;
-    return `${bill.name} is due in ${days} day${days === 1 ? '' : 's'} — $${bill.amount}`;
+    if (days <= 0) return `${bill.name} is due today — ${formatCurrency(bill.amount)}`;
+    if (days >= 6) return `${bill.name} is due in 1 week — ${formatCurrency(bill.amount)}`;
+    return `${bill.name} is due in ${days} day${days === 1 ? '' : 's'} — ${formatCurrency(bill.amount)}`;
   };
-  const dueBodyText = () => `${bill.name} is due today — $${bill.amount}`;
+  const dueBodyText = () => `${bill.name} is due today — ${formatCurrency(bill.amount)}`;
 
   if (!bill.recurring) {
     // scheduleOccurrence's one-off path already operates on full Date timestamps,

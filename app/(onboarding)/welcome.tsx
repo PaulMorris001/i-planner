@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, Image, StyleSheet } from "react-native";
 import { router } from "expo-router";
 import { ScreenWrapper } from "@/components/layout/ScreenWrapper";
 import { Button } from "@/components/ui/Button";
@@ -17,9 +17,11 @@ export default function Welcome() {
 
         {/* Hero */}
         <View style={styles.hero}>
-          <View style={styles.logoMark}>
-            <Text style={styles.logoText}>i</Text>
-          </View>
+          <Image
+            source={require("@/assets/images/icon.png")}
+            style={styles.logoMark}
+            resizeMode="contain"
+          />
 
           <Badge label="I-planner" variant="accent" style={styles.badge} />
 
@@ -45,7 +47,7 @@ export default function Welcome() {
         <View style={styles.actions}>
           <Button
             label="Get started"
-            onPress={() => router.push(Routes.PATH_INTRO)}
+            onPress={() => router.push(Routes.REGISTER)}
             variant="primary"
             style={styles.ctaAccent}
             textStyle={{ color: Colors.primary }}
@@ -84,19 +86,9 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.xxl,
   },
   logoMark: {
-    width: 52,
-    height: 52,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.accent,
-    alignItems: "center",
-    justifyContent: "center",
+    width: 56,
+    height: 56,
     marginBottom: Spacing.lg,
-  },
-  logoText: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: Colors.primary,
-    lineHeight: 34,
   },
   badge: {
     marginBottom: Spacing.md,

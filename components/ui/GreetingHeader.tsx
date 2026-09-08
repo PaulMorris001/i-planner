@@ -1,15 +1,15 @@
+import { IconSymbol } from "@/components/ui/icon-symbol";
 import { SkeletonBlock } from "@/components/ui/Skeleton";
-import { Colors, Spacing } from "@/constants/theme";
+import { Colors, Spacing, Radius } from "@/constants/theme";
 import { useAuth } from "@/hooks/useAuth";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 interface GreetingHeaderProps {
   greeting?: string;
   name?: string;
-  avatarInitial?: string;
-  // Only the home page wires this up — elsewhere the avatar stays a plain,
-  // non-interactive badge.
-  onAvatarPress?: () => void;
+  // Only the home page wires this up — elsewhere the menu button stays hidden.
+  // Opens the profile side-drawer (see ProfileInfoModal).
+  onMenuPress?: () => void;
 }
 
 function getTimeBasedGreeting(): string {
@@ -22,33 +22,18 @@ function getTimeBasedGreeting(): string {
 export function GreetingHeader({
   greeting,
   name,
-  avatarInitial,
-  onAvatarPress,
+  onMenuPress,
 }: GreetingHeaderProps) {
   const { user, initializing } = useAuth();
   // Only show a skeleton when actually waiting on auth with no explicit override.
   const nameLoading = initializing && !name;
-  const avatarLoading = initializing && !avatarInitial;
 
   const firstName = user?.fullName?.trim().split(/\s+/)[0];
-  const initial = user?.fullName?.trim().charAt(0).toUpperCase();
-  const emailInitial = user?.email
-    ? user.email.trim().charAt(0).toUpperCase()
-    : undefined;
 
   const displayGreeting = greeting ?? getTimeBasedGreeting();
   // "||" not "??" — AuthContext stores fullName as '' when Firebase's displayName is null,
   // and "??" wouldn't catch that empty string.
   const displayName = name || firstName || user?.email?.split("@")[0] || "";
-  const displayInitial = avatarInitial || initial || emailInitial || "J";
-
-  const avatar = avatarLoading ? (
-    <SkeletonBlock width={42} height={42} borderRadius={21} />
-  ) : (
-    <View style={styles.avatar}>
-      <Text style={styles.avatarText}>{displayInitial}</Text>
-    </View>
-  );
 
   return (
     <View style={styles.header}>
@@ -65,12 +50,10 @@ export function GreetingHeader({
           <Text style={styles.name}>{displayName}</Text>
         )}
       </View>
-      {onAvatarPress && !avatarLoading ? (
-        <Pressable onPress={onAvatarPress} hitSlop={6}>
-          {avatar}
+      {onMenuPress && (
+        <Pressable style={styles.menuButton} onPress={onMenuPress} hitSlop={8}>
+          <IconSymbol name="line.3.horizontal" color={Colors.textPrimary} size={22} />
         </Pressable>
-      ) : (
-        avatar
       )}
     </View>
   );
@@ -96,17 +79,14 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     marginTop: 1,
   },
-  avatar: {
+  // Same 42x42 footprint the old circular avatar had, so the header's height
+  // doesn't shift now that it's a menu trigger instead of a user badge.
+  menuButton: {
     width: 42,
     height: 42,
-    borderRadius: 21,
-    backgroundColor: Colors.successSoft,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.offWhite,
     alignItems: "center",
     justifyContent: "center",
-  },
-  avatarText: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: Colors.success,
   },
 });

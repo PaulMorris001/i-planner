@@ -174,17 +174,32 @@ export function ProfileInfoModal({
             },
           ]}
         >
+          {/* Pinned outside the ScrollView (not just above its content) — an
+              absolutely-positioned child inside a ScrollView is measured from
+              the top of the scrollable content itself, ignoring the
+              contentContainer's paddingTop entirely, which is what let this
+              sit under the status bar/Dynamic Island in the first place. Being
+              a sibling of the ScrollView also means it never scrolls away. */}
+          <Pressable
+            style={[styles.closeButton, { top: insets.top + Spacing.sm }]}
+            hitSlop={10}
+            onPress={handleClose}
+          >
+            <IconSymbol name="xmark" color={Colors.textMuted} size={18} />
+          </Pressable>
+
+          {/* flex: 1 (not just the content padding below) — otherwise the
+              ScrollView shrinks to fit its own content and the footer row
+              ends up sitting right after it instead of pinned to the actual
+              bottom of the drawer on a short content list. */}
           <ScrollView
+            style={styles.scroll}
             contentContainerStyle={[
               styles.drawerContent,
-              { paddingTop: insets.top + Spacing.lg, paddingBottom: insets.bottom + Spacing.lg },
+              { paddingTop: insets.top + Spacing.lg, paddingBottom: Spacing.lg },
             ]}
             showsVerticalScrollIndicator={false}
           >
-            <Pressable style={styles.closeButton} hitSlop={10} onPress={handleClose}>
-              <IconSymbol name="xmark" color={Colors.textMuted} size={18} />
-            </Pressable>
-
             <View style={styles.profileRow}>
               <View style={styles.avatar}>
                 <Text style={styles.avatarText}>{initial}</Text>
@@ -222,17 +237,26 @@ export function ProfileInfoModal({
                   size={18}
                 />
               </Pressable>
-
-              <Pressable style={styles.manageRow} onPress={() => goTo(Routes.PROFILE)}>
-                <Text style={styles.manageText}>Manage in Profile & settings</Text>
-                <IconSymbol
-                  name="chevron.right"
-                  color={Colors.primaryLight}
-                  size={18}
-                />
-              </Pressable>
             </View>
           </ScrollView>
+
+          {/* Pinned to the bottom of the drawer, outside the ScrollView, so it
+              always stays put as a footer action instead of scrolling away
+              with the rest of the content. */}
+          <Pressable
+            style={[styles.footerRow, { paddingBottom: insets.bottom + Spacing.md }]}
+            onPress={() => goTo(Routes.PROFILE)}
+          >
+            <View style={styles.manageLabelRow}>
+              <IconSymbol name="person.fill" color={Colors.primaryLight} size={18} />
+              <Text style={styles.manageText}>Profile & Settings</Text>
+            </View>
+            <IconSymbol
+              name="chevron.right"
+              color={Colors.primaryLight}
+              size={18}
+            />
+          </Pressable>
         </Animated.View>
       </View>
     </Modal>
@@ -261,13 +285,17 @@ const styles = StyleSheet.create({
     shadowRadius: 24,
     elevation: 16,
   },
+  scroll: {
+    flex: 1,
+  },
   drawerContent: {
     paddingHorizontal: Spacing.lg,
     flexGrow: 1,
   },
   closeButton: {
+    // top is set inline (insets.top + Spacing.sm) — no static default here,
+    // since the safe-area inset isn't known until render.
     position: "absolute",
-    top: 14,
     right: Spacing.lg,
     zIndex: 1,
   },
@@ -277,7 +305,6 @@ const styles = StyleSheet.create({
     gap: 14,
     paddingBottom: 6,
     paddingRight: 24,
-    paddingTop: 28,
   },
   avatar: {
     width: 54,
@@ -348,6 +375,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingVertical: 6,
+  },
+  // paddingBottom is set inline (insets.bottom + Spacing.md) — clears the
+  // home indicator on notched/gesture-nav devices.
+  footerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
   },
   manageLabelRow: {
     flexDirection: "row",
