@@ -32,6 +32,7 @@ import {
   toDateKey,
   formatShortDate,
   formatClassDays,
+  classOccursOnDate,
 } from '@/utils/date';
 import { parseTimeToMinutes } from '@/utils/time';
 import { dashboardStyles as styles } from './dashboardStyles';
@@ -79,10 +80,13 @@ export function StudentPathView({
   const taskStreak = computeTaskStreak(tasks);
   const thisWeeksGoals = goals.filter((g) => g.targetDate && isThisWeek(g.targetDate));
 
-  // Classes happening today, matched against the real current weekday.
-  const todayIdx = weekdayIndexMonday(new Date());
+  // Classes happening today. NOT a dayIdxs check — dayIdxs is a lossy proxy
+  // built for the weekly grid view (see classOccursOnDate's own comment) that
+  // silently excludes monthly-recurring classes and over-includes one-time
+  // classes on every future occurrence of their start weekday.
+  const today = new Date();
   const todaysClasses = plan.classes
-    .filter((c) => (c.dayIdxs ?? []).includes(todayIdx))
+    .filter((c) => classOccursOnDate(c, today))
     .sort((a, b) => parseTimeToMinutes(a.time) - parseTimeToMinutes(b.time));
 
   // Most-recently-created first; class ids are Date.now() timestamps, so a

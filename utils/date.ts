@@ -70,6 +70,39 @@ export function taskOccursOnDay(task: Task, dayIdx: number): boolean {
   return task.day === dayIdx;
 }
 
+// True when `item` actually happens on `date`'s calendar day. NOT the same
+// question as "is dayIdx in item.dayIdxs" — dayIdxs is a lossy proxy built
+// for the weekly grid view specifically (AddClassModal), where it silently
+// breaks two cases that matter here:
+//  - monthly-recurring classes always get dayIdxs: [] (no weekly-grid slot
+//    exists for "the 15th of every month"), so checking dayIdxs alone would
+//    make a monthly class NEVER show as happening today, even on its real day.
+//  - a non-recurring (one-time) class gets dayIdxs: [its start weekday] as a
+//    grid-display convenience, which would make it look like it recurs on
+//    that weekday every week forever, instead of just its one real date.
+// This checks the actual calendar semantics per frequency instead.
+export function classOccursOnDate(item: ClassItem, date: Date): boolean {
+  const start = parseISODateLocal(item.startDate);
+  if (Number.isNaN(start.getTime())) return false;
+
+  const dateMs = localMidnight(date);
+  const startMs = localMidnight(start);
+  if (dateMs < startMs) return false; // hasn't started yet
+
+  if (!item.recurring) return dateMs === startMs;
+
+  if (item.freq === 'daily') return true;
+  if (item.freq === 'weekdays') return weekdayIndexMonday(date) <= 4;
+  if (item.freq === 'weekly') return (item.dayIdxs ?? []).includes(weekdayIndexMonday(date));
+  if (item.freq === 'monthly') {
+    // Same day-of-month as startDate, clamped to the target month's actual
+    // last day — same reasoning/approach as nextRecurringDueDate below.
+    const lastDayOfMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+    return date.getDate() === Math.min(start.getDate(), lastDayOfMonth);
+  }
+  return false;
+}
+
 export function localMidnight(date: Date): number {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 }
@@ -170,27 +203,45 @@ export function nextTaskOccurrence(task: Task): Date | null {
   return null;
 }
 
-// Current task-completion streak: counts consecutive "active" days (a calendar day
-// with at least one task due, by dueDate, not recurring occurrences) working
-// backward from today, where at least one due task was completed. A day with no
-// due tasks is skipped — it neither extends nor breaks the streak. Today never
-// breaks the streak while still in progress; it only adds once something on it
-// is actually completed.
+// Current task-completion streak: counts consecutive "active" days (a calendar
+// day with at least one task due — including each real occurrence of a
+// recurring task, not just its fixed original dueDate) working backward from
+// today, where at least one due task was completed. A day with no due tasks
+// is skipped — it neither extends nor breaks the streak. Today never breaks
+// the streak while still in progress; it only adds once something on it is
+// actually completed.
 export function computeTaskStreak(tasks: Task[]): number {
   const completedByDay = new Map<number, boolean>();
+  const todayMs = localMidnight(new Date());
 
   for (const task of tasks) {
     if (!task.dueDate) continue;
     const due = parseISODateLocal(task.dueDate);
     if (Number.isNaN(due.getTime())) continue;
-    const dayMs = localMidnight(due);
-    completedByDay.set(dayMs, (completedByDay.get(dayMs) ?? false) || isTaskDoneOnDate(task, due));
+    const startMs = localMidnight(due);
+    if (startMs > todayMs) continue; // not due yet
+
+    if (!task.recurring) {
+      completedByDay.set(startMs, (completedByDay.get(startMs) ?? false) || isTaskDoneOnDate(task, due));
+      continue;
+    }
+
+    // A recurring task's stored dueDate never advances (see nextTaskOccurrence
+    // above) — using it alone would only ever register the task's very first
+    // day. Walk every real occurrence from creation through today instead, via
+    // setDate (not raw ms arithmetic) so this stays correct across DST changes.
+    for (
+      let d = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+      localMidnight(d) <= todayMs;
+      d.setDate(d.getDate() + 1)
+    ) {
+      if (!taskOccursOnDay(task, weekdayIndexMonday(d))) continue;
+      const dayMs = localMidnight(d);
+      completedByDay.set(dayMs, (completedByDay.get(dayMs) ?? false) || isTaskDoneOnDate(task, d));
+    }
   }
 
-  const todayMs = localMidnight(new Date());
-  const activeDays = [...completedByDay.keys()]
-    .filter((dayMs) => dayMs <= todayMs)
-    .sort((a, b) => b - a);
+  const activeDays = [...completedByDay.keys()].sort((a, b) => b - a);
 
   let streak = 0;
   for (const dayMs of activeDays) {

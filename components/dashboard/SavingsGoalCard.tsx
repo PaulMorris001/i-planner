@@ -16,9 +16,6 @@ interface SavingsGoalCardProps {
   onLogProgress: () => void;
 }
 
-// Shared by all three dashboards (Student/Exam/Professional) — the goal itself is
-// stored on Settings, not any one path's plan, since a user only ever sees one
-// dashboard at a time and there's no reason for three independent goals.
 export function SavingsGoalCard({ goal, emptySubtitle, onPress, onLogProgress }: SavingsGoalCardProps) {
   const pct = goal ? Math.min(100, Math.round((goal.savedAmount / goal.targetAmount) * 100)) : 0;
   const monthly = goal ? monthlySavingsAmount(goal.targetAmount, goal.savedAmount, goal.targetDate) : null;

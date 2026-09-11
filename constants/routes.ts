@@ -4,6 +4,7 @@ export const Routes = {
   REGISTER:         '/(onboarding)/register',
   FORGOT_PASSWORD:  '/(onboarding)/forgot-password',
   PATH_INTRO:       '/(onboarding)/path-intro',
+  NOTIFICATIONS_PROMPT: '/(onboarding)/notifications-prompt',
   FOCUS:            '/(onboarding)/focus',
   STUDENT_PLAN:     '/(onboarding)/student-plan',
   EXAM_PLAN:        '/(onboarding)/exam-plan',

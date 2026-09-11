@@ -50,7 +50,19 @@ function mondayOfCurrentWeek(): Date {
 }
 
 export default function Habits() {
-  const { habits, createHabit, toggleToday, updateHabit, deleteHabit } = useHabits();
+  const { habits, createHabit, toggleToday, updateHabit, deleteHabit, refetch } = useHabits();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refetch();
+    } catch (err) {
+      console.error('[Habits] failed to refresh', err);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const sheet = useEditableSheet<Habit>();
   const [habitName, setHabitName] = useState('');
@@ -102,7 +114,13 @@ export default function Habits() {
   };
 
   return (
-    <ScreenWrapper backgroundColor={Colors.offWhite} scroll style={styles.scrollContent}>
+    <ScreenWrapper
+      backgroundColor={Colors.offWhite}
+      scroll
+      style={styles.scrollContent}
+      onRefresh={handleRefresh}
+      refreshing={refreshing}
+    >
       <BackButton />
 
       <PageHeader title="Habits" subtitle={`${doneToday} of ${habits.length} done today`} />

@@ -4,14 +4,12 @@ import { useEffect, useRef, useState } from "react";
 interface TypingMessageTextProps {
   content: string;
   variant: "user" | "assistant";
-  // True only on a freshly-arrived reply's first render; history/re-renders show full text immediately.
   animate: boolean;
   onProgress?: () => void;
 }
 
 const CHARS_PER_SECOND = 105;
 
-// Reveals `content` a bit at a time. Uses real elapsed time via requestAnimationFrame, not a tick counter, so pace stays even if a frame drops.
 export function TypingMessageText({
   content,
   variant,
@@ -51,7 +49,6 @@ export function TypingMessageText({
     return () => {
       if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content, animate]);
 
   return (

@@ -1,7 +1,6 @@
 import { StyleSheet } from 'react-native';
 import { Colors, Spacing } from '@/constants/theme';
 
-// Shared by dashboard.tsx and all three path view components — same card/stat/row shapes.
 export const dashboardStyles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 40,

@@ -16,6 +16,7 @@ import { TasksProvider } from '@/contexts/TasksContext';
 import { SyllabiProvider } from '@/contexts/SyllabiContext';
 import { NewTaskModalProvider } from '@/contexts/NewTaskModalContext';
 import { NewTaskModal } from '@/components/task/NewTaskModal';
+import { RefetchOnForeground } from '@/components/RefetchOnForeground';
 import { initNotificationHandler, registerAlarmNotificationRouting } from '@/utils/notifications';
 
 // Catches render/startup errors and shows them on screen — used in production
@@ -67,6 +68,7 @@ export default function RootLayout() {
                               <StatusBar style="dark" />
                               <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }} />
                               <NewTaskModal />
+                              <RefetchOnForeground />
                             </NewTaskModalProvider>
                           </SyllabiProvider>
                         </TasksProvider>

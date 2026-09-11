@@ -36,7 +36,10 @@ export default function Index() {
     return <Redirect href={Routes.PATH_INTRO} />;
   }
 
-  return <Redirect href={user ? Routes.DASHBOARD : Routes.LOGIN} />;
+  // Logged out but already onboarded (e.g. closed the app after logging out) —
+  // Welcome, not Login directly, so a cold start always lands on the same
+  // hero/CTA screen; "I already have an account" from there reaches Login.
+  return <Redirect href={user ? Routes.DASHBOARD : Routes.WELCOME} />;
 }
 
 const styles = StyleSheet.create({

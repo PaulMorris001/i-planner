@@ -10,6 +10,7 @@ import {
 import { Edge, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Colors } from '@/constants/theme';
+import { waitForNoPendingMutations } from '@/utils/pendingMutations';
 
 // Perceptual luminance, not full WCAG (gamma correction isn't worth it for a
 // binary status-bar-icon choice) — matches every hex in Colors (#RGB/#RRGGBB).
@@ -42,6 +43,20 @@ export function ScreenWrapper({
   onRefresh,
   refreshing = false,
 }: ScreenWrapperProps) {
+  // Waits out any save/create/delete still in flight before actually running
+  // the caller's onRefresh — a pull-to-refresh's GET landing mid-write would
+  // read pre-edit server data and stomp the correct optimistic local state
+  // with it. The pull spinner (controlled by the caller's own `refreshing`
+  // state) just keeps showing a little longer while this waits, which is the
+  // right visible behavior — not a silent extra delay with no indication
+  // anything's happening. See utils/pendingMutations.ts.
+  const handleRefresh = onRefresh
+    ? async () => {
+        await waitForNoPendingMutations();
+        await onRefresh();
+      }
+    : undefined;
+
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor }]} edges={edges}>
       <StatusBar style={isLightColor(backgroundColor) ? 'dark' : 'light'} />
@@ -55,10 +70,10 @@ export function ScreenWrapper({
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
             refreshControl={
-              onRefresh ? (
+              handleRefresh ? (
                 <RefreshControl
                   refreshing={refreshing}
-                  onRefresh={onRefresh}
+                  onRefresh={handleRefresh}
                   tintColor={Colors.primaryLight}
                   colors={[Colors.primaryLight]}
                 />

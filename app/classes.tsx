@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { AddClassModal } from '@/components/plan/AddClassModal';
@@ -15,16 +16,34 @@ import { formatClassDays } from '@/utils/date';
 import type { ClassItem } from '@/types/plan.types';
 
 export default function Classes() {
-  const { plan } = usePlan();
+  const { plan, refetch } = usePlan();
   const sheet = useEditableSheet<ClassItem>();
   const { saveClass, deleteClass } = useClassActions();
+  const [refreshing, setRefreshing] = useState(false);
 
   // Most-recent first: ids are Date.now() timestamps, so numeric sort = creation order.
   // Matches the Dashboard's "My Classes" ordering.
   const classes = [...plan.classes].sort((a, b) => Number(b.id) - Number(a.id));
 
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refetch();
+    } catch (err) {
+      console.error('[Classes] failed to refresh', err);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   return (
-    <ScreenWrapper backgroundColor={Colors.offWhite} scroll style={styles.scrollContent}>
+    <ScreenWrapper
+      backgroundColor={Colors.offWhite}
+      scroll
+      style={styles.scrollContent}
+      onRefresh={handleRefresh}
+      refreshing={refreshing}
+    >
       <BackButton />
 
       <PageHeader title="Classes" subtitle={`${classes.length} class${classes.length === 1 ? '' : 'es'}`} />

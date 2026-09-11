@@ -1,7 +1,13 @@
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { BottomSheetModal } from '@/components/ui/BottomSheetModal';
-import { IconSymbol } from '@/components/ui/icon-symbol';
+import { IconSymbol, IconSymbolName } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
+
+interface ExtraAction {
+  label: string;
+  icon: IconSymbolName;
+  onPress: () => void;
+}
 
 interface ItemActionSheetProps {
   visible: boolean;
@@ -10,6 +16,9 @@ interface ItemActionSheetProps {
   onDelete: () => void;
   editLabel?: string;
   deleteLabel?: string;
+  // Extra rows between Edit and Delete — e.g. Notes' "Share" export. Optional,
+  // so every other caller (goals, tasks, classes, exams, habits) is unaffected.
+  extraActions?: ExtraAction[];
 }
 
 // Shared "⋮" / long-press menu for every editable-and-deletable list row (goals, tasks,
@@ -21,6 +30,7 @@ export function ItemActionSheet({
   onDelete,
   editLabel = 'Edit',
   deleteLabel = 'Delete',
+  extraActions,
 }: ItemActionSheetProps) {
   return (
     <BottomSheetModal visible={visible} onClose={onClose} maxHeightPct={40}>
@@ -35,6 +45,19 @@ export function ItemActionSheet({
           <IconSymbol name="pencil" color={Colors.textPrimary} size={19} />
           <Text style={styles.rowText}>{editLabel}</Text>
         </Pressable>
+        {extraActions?.map((action) => (
+          <Pressable
+            key={action.label}
+            style={styles.row}
+            onPress={() => {
+              onClose();
+              action.onPress();
+            }}
+          >
+            <IconSymbol name={action.icon} color={Colors.textPrimary} size={19} />
+            <Text style={styles.rowText}>{action.label}</Text>
+          </Pressable>
+        ))}
         <Pressable
           style={styles.row}
           onPress={() => {

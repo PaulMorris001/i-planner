@@ -33,9 +33,6 @@ export function SavingsGoalModal({ visible, onClose, onSave, onRemove, editingGo
   const [name, setName] = useState('');
   const [targetAmount, setTargetAmount] = useState(DEFAULT_TARGET);
   const [savedAmount, setSavedAmount] = useState(0);
-  // Raw text mirrors of the two amounts, for the typeable fields below — kept
-  // separate so a mid-typing state like "" or a leading-zero string doesn't
-  // get clobbered by re-deriving it from the numeric value on every keystroke.
   const [targetAmountText, setTargetAmountText] = useState(String(DEFAULT_TARGET));
   const [savedAmountText, setSavedAmountText] = useState('0');
   const [targetDate, setTargetDate] = useState(new Date());
@@ -51,8 +48,6 @@ export function SavingsGoalModal({ visible, onClose, onSave, onRemove, editingGo
     setTargetDate(new Date());
   };
 
-  // Shared by both the stepper buttons and the typed field for each amount —
-  // keeps the two in sync so each always reflects the other's latest edit.
   const applyTargetAmount = (next: number) => {
     const clamped = Math.max(AMOUNT_MIN, next);
     setTargetAmount(clamped);
@@ -73,7 +68,6 @@ export function SavingsGoalModal({ visible, onClose, onSave, onRemove, editingGo
     setSavedAmountText(digits);
     setSavedAmount(digits === '' ? AMOUNT_MIN : Math.max(AMOUNT_MIN, Number(digits)));
   };
-  // On blur, drop a stray "" or leading zeros back to the clean numeric value.
   const handleTargetAmountBlur = () => setTargetAmountText(String(targetAmount));
   const handleSavedAmountBlur = () => setSavedAmountText(String(savedAmount));
 
@@ -315,6 +309,7 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     backgroundColor: Colors.white,
   },
+  // TEMPORARY diagnostic — remove alongside the debug Text above.
   sheetEyebrow: {
     fontSize: 12,
     fontWeight: '700',

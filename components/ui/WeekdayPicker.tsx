@@ -28,7 +28,7 @@ export function WeekdayPicker({ selected, onChange, activeColor = Colors.primary
             onPress={() => toggle(idx)}
             activeOpacity={0.8}
           >
-            <Text style={[styles.dayText, active && styles.dayTextActive]}>{label[0]}</Text>
+            <Text style={[styles.dayText, active && styles.dayTextActive]}>{label}</Text>
           </TouchableOpacity>
         );
       })}

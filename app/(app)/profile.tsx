@@ -54,17 +54,20 @@ export default function Profile() {
   const {
     appleCalendarConnected,
     googleCalendarConnected,
-    outlookCalendarConnected,
+    // outlookCalendarConnected, — Outlook UI disabled for now, see the
+    // commented-out calendar row below (no Azure app registration/credentials
+    // set up yet). Kept in SettingsContext/backend untouched — just not wired
+    // to any visible control here.
     remindersEnabled,
     aiAccessTasks,
     aiAccessGoals,
     aiAccessCalendar,
     connectAppleCalendar,
     connectGoogleCalendar,
-    connectOutlookCalendar,
+    // connectOutlookCalendar, — see outlookCalendarConnected note above.
     disconnectAppleCalendar,
     disconnectGoogleCalendar,
-    disconnectOutlookCalendar,
+    // disconnectOutlookCalendar, — see outlookCalendarConnected note above.
     enableReminders,
     disableReminders,
     setAiAccess,
@@ -120,15 +123,16 @@ export default function Profile() {
     }
   };
 
-  const handleConnectOutlook = async () => {
-    const ok = await connectOutlookCalendar();
-    if (!ok) {
-      Alert.alert(
-        "Couldn't connect calendar",
-        "Something went wrong finishing the Microsoft sign-in. Try again.",
-      );
-    }
-  };
+  // Outlook UI disabled for now — see the useSettings() destructure above.
+  // const handleConnectOutlook = async () => {
+  //   const ok = await connectOutlookCalendar();
+  //   if (!ok) {
+  //     Alert.alert(
+  //       "Couldn't connect calendar",
+  //       "Something went wrong finishing the Microsoft sign-in. Try again.",
+  //     );
+  //   }
+  // };
 
   const confirmDisconnect = (
     calendarName: string,
@@ -360,6 +364,11 @@ export default function Profile() {
             </Pressable>
           </View>
 
+          {/* Outlook Calendar disabled for now — no Azure app registration/
+              credentials set up yet. Everything it needs (backend routes,
+              SettingsContext state) is still in place; just re-enable this
+              block plus the useSettings() destructure and handleConnectOutlook
+              above once MICROSOFT_OAUTH_CLIENT_ID/SECRET are configured.
           <View style={styles.calendarRow}>
             <View style={styles.calendarIconBox}>
               <Text style={styles.outlookO}>O</Text>
@@ -395,6 +404,7 @@ export default function Profile() {
               </Text>
             </Pressable>
           </View>
+          */}
 
           <Pressable
             style={styles.calendarRow}

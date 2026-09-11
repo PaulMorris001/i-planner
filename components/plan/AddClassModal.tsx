@@ -41,6 +41,7 @@ export function AddClassModal({ visible, onClose, onAdd, editingClass }: AddClas
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [professor, setProfessor] = useState('');
   const [venue, setVenue] = useState('');
+  const [alarmEnabled, setAlarmEnabled] = useState(false);
 
   const canSave = className.trim().length > 0 && !(recurring && freq === 'weekly' && selectedDays.length === 0);
 
@@ -53,6 +54,7 @@ export function AddClassModal({ visible, onClose, onAdd, editingClass }: AddClas
     setTime(null);
     setProfessor('');
     setVenue('');
+    setAlarmEnabled(false);
   };
 
   useEffect(() => {
@@ -66,6 +68,7 @@ export function AddClassModal({ visible, onClose, onAdd, editingClass }: AddClas
       setTime(editingClass.time ? parseTimeToDate(editingClass.time) : null);
       setProfessor(editingClass.professor ?? '');
       setVenue(editingClass.venue ?? '');
+      setAlarmEnabled(!!editingClass.alarmEnabled);
     } else {
       reset();
     }
@@ -99,6 +102,11 @@ export function AddClassModal({ visible, onClose, onAdd, editingClass }: AddClas
       time: time ? formatTimeLabel(time) : '9:00 AM',
       professor: professor.trim() || undefined,
       venue: venue.trim() || undefined,
+      // Guards against the toggle having been on for a time that's since been
+      // cleared — matches NewTaskModal's identical dueDate/dueTime guard. A
+      // silently-defaulted '9:00 AM' above should never become a loud,
+      // DND-bypassing alarm the user never actually chose that time for.
+      alarmEnabled: time ? alarmEnabled : false,
     };
     onAdd(item);
     handleClose();
@@ -188,10 +196,24 @@ export function AddClassModal({ visible, onClose, onAdd, editingClass }: AddClas
             onDismiss={() => setShowTimePicker(false)}
           />
 
+          {!!time && (
+            <View style={styles.recurringRow}>
+              <View>
+                <Text style={styles.recurringTitle}>Alarm</Text>
+                <Text style={styles.recurringSub}>Ring loudly at the start time</Text>
+              </View>
+              <TouchableOpacity onPress={() => setAlarmEnabled(p => !p)} activeOpacity={0.8}>
+                <View style={[styles.toggle, alarmEnabled && styles.toggleActive]}>
+                  <View style={[styles.toggleThumb, alarmEnabled && styles.toggleThumbActive]} />
+                </View>
+              </TouchableOpacity>
+            </View>
+          )}
+
           <Text style={styles.sheetEyebrow}>Professor / lecturer</Text>
           <TextInput
             style={styles.input}
-            placeholder="e.g. Dr. Adaeze Obi"
+            placeholder="e.g. Bro Code"
             placeholderTextColor={Colors.textMuted}
             value={professor}
             onChangeText={setProfessor}

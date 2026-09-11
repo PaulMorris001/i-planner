@@ -7,6 +7,7 @@ export default function OnboardingLayout() {
       <Stack.Screen name="welcome" />
       <Stack.Screen name="login" />
       <Stack.Screen name="register" />
+      <Stack.Screen name="notifications-prompt" />
       <Stack.Screen name="focus" />
       <Stack.Screen name="student-plan" />
       <Stack.Screen name="exam-plan" />

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -14,8 +15,20 @@ import { useEditableSheet } from '@/hooks/useEditableSheet';
 import type { Goal, MilestonePatch } from '@/types/goal.types';
 
 export default function Goals() {
-  const { goals, loading, createGoal, updateGoal, toggleMilestone, deleteGoal } = useGoals();
+  const { goals, loading, createGoal, updateGoal, toggleMilestone, deleteGoal, refetch } = useGoals();
   const sheet = useEditableSheet<Goal>();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refetch();
+    } catch (err) {
+      console.error('[Goals] failed to refresh', err);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const handleToggleMilestone = (goalId: string, milestoneId: string) => {
     toggleMilestone(goalId, milestoneId).catch((err) => {
@@ -48,7 +61,14 @@ export default function Goals() {
   };
 
   return (
-    <ScreenWrapper backgroundColor={Colors.offWhite} scroll style={styles.scrollContent} edges={['top', 'right', 'left']}>
+    <ScreenWrapper
+      backgroundColor={Colors.offWhite}
+      scroll
+      style={styles.scrollContent}
+      edges={['top', 'right', 'left']}
+      onRefresh={handleRefresh}
+      refreshing={refreshing}
+    >
       <BackButton />
 
       <View style={styles.body}>

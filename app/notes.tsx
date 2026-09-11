@@ -13,15 +13,34 @@ import { Routes } from '@/constants/routes';
 import { useNotes } from '@/hooks/useNotes';
 import { confirmDelete } from '@/utils/confirmDelete';
 import { formatShortDate } from '@/utils/date';
+import { shareNote } from '@/utils/exportNote';
 import type { Note } from '@/types/note.types';
 
 function openEditor(id?: string) {
   router.push(id ? `${Routes.NOTE_EDITOR}?id=${id}` : Routes.NOTE_EDITOR);
 }
 
+// Cap what ever reaches <Text numberOfLines={1}> below, not just what's
+// visually shown. numberOfLines only truncates the rendered layout — Fabric
+// still builds the full AttributedString/text-fragment tree for the entire
+// string first, one Fragment per run. A note with a very large body (a big
+// paste, or one grown over many edits — nothing bounds body length before
+// this) built a pathologically deep tree that way, and when that tree was
+// later torn down on a background GC sweep, recursive C++ destructor
+// chaining through it overflowed the thread stack — a confirmed real crash
+// (SIGBUS, "excessive recursion"). Truncating the JS string itself first
+// means this screen never builds more than a few hundred characters' worth
+// of fragments, regardless of how large the actual note is.
+const PREVIEW_CHARS = 200;
+function previewText(body: string): string {
+  const trimmed = body.trim();
+  return trimmed.length > PREVIEW_CHARS ? `${trimmed.slice(0, PREVIEW_CHARS)}…` : trimmed;
+}
+
 export default function Notes() {
-  const { notes, deleteNote } = useNotes();
+  const { notes, deleteNote, refetch } = useNotes();
   const [actionTarget, setActionTarget] = useState<Note | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   const handleDeleteNote = (note: Note) => {
     confirmDelete(note.title, () => {
@@ -31,8 +50,25 @@ export default function Notes() {
     });
   };
 
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refetch();
+    } catch (err) {
+      console.error('[Notes] failed to refresh', err);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   return (
-    <ScreenWrapper backgroundColor={Colors.offWhite} scroll style={styles.scrollContent}>
+    <ScreenWrapper
+      backgroundColor={Colors.offWhite}
+      scroll
+      style={styles.scrollContent}
+      onRefresh={handleRefresh}
+      refreshing={refreshing}
+    >
       <BackButton />
 
       <PageHeader title="Notes" subtitle={`${notes.length} note${notes.length === 1 ? '' : 's'}`} />
@@ -60,7 +96,7 @@ export default function Notes() {
             </View>
             {note.body.trim() ? (
               <Text style={styles.noteBody} numberOfLines={1}>
-                {note.body.trim()}
+                {previewText(note.body)}
               </Text>
             ) : (
               <Text style={[styles.noteBody, styles.noteBodyEmpty]}>No additional text</Text>
@@ -84,6 +120,11 @@ export default function Notes() {
         onClose={() => setActionTarget(null)}
         onEdit={() => actionTarget && openEditor(actionTarget.id)}
         onDelete={() => actionTarget && handleDeleteNote(actionTarget)}
+        extraActions={
+          actionTarget
+            ? [{ label: 'Share', icon: 'square.and.arrow.up', onPress: () => shareNote(actionTarget) }]
+            : undefined
+        }
       />
     </ScreenWrapper>
   );

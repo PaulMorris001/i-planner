@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { View, Text, StyleSheet, Alert } from 'react-native';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { AddExamModal } from '@/components/plan/AddExamModal';
@@ -14,8 +15,20 @@ import { formatShortDate } from '@/utils/date';
 import type { Exam } from '@/types/plan.types';
 
 export default function Exams() {
-  const { examPlan, updateExamPlan } = usePlan();
+  const { examPlan, updateExamPlan, refetch } = usePlan();
   const sheet = useEditableSheet<Exam>();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refetch();
+    } catch (err) {
+      console.error('[Exams] failed to refresh', err);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   // Soonest-upcoming first — matches the Dashboard's "My Exams" ordering.
   const exams = [...examPlan.exams].sort(
@@ -49,7 +62,13 @@ export default function Exams() {
   };
 
   return (
-    <ScreenWrapper backgroundColor={Colors.offWhite} scroll style={styles.scrollContent}>
+    <ScreenWrapper
+      backgroundColor={Colors.offWhite}
+      scroll
+      style={styles.scrollContent}
+      onRefresh={handleRefresh}
+      refreshing={refreshing}
+    >
       <BackButton />
 
       <PageHeader title="Exams" subtitle={`${exams.length} exam${exams.length === 1 ? '' : 's'}`} />

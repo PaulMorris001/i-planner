@@ -22,7 +22,6 @@ import type { Task } from '@/types/task.types';
 import type { SavingsGoal } from '@/types/savingsGoal.types';
 
 interface ExamPathViewProps {
-  // Passed in rather than rebuilt here so it doesn't remount on re-render.
   quickLinks: ReactNode;
   onAddExam: () => void;
   onAddSavingsGoal: () => void;
@@ -44,11 +43,6 @@ export function ExamPathView({
 
   const taskStreak = computeTaskStreak(tasks);
 
-  // Soonest not-yet-done task with a due date, for the "Next session" stat. A
-  // recurring task's `dueDate` is fixed at whenever it was first set and never
-  // advances, so its actual next occurrence is computed instead — otherwise an
-  // ongoing recurring task would vanish here the moment that original date passes.
-  // Sorts by calendar day, then by hour within the day.
   const nextTask = tasks
     .map((t) => ({ task: t, date: t.recurring ? nextTaskOccurrence(t) : parseISODateLocal(t.dueDate) }))
     .filter(
@@ -60,13 +54,10 @@ export function ExamPathView({
       return dayDiff !== 0 ? dayDiff : a.task.hour - b.task.hour;
     })[0];
 
-  // Soonest-upcoming first — feeds both the countdown carousel and the "My
-  // Exams" list below.
   const sortedExams = [...examPlan.exams].sort(
     (a, b) => new Date(a.examDate).getTime() - new Date(b.examDate).getTime(),
   );
 
-  // "This week" card follows whichever exam is soonest.
   const nearestExam = sortedExams[0];
   const nearestExamWeek = nearestExam ? currentExamWeek(nearestExam) : 0;
   const currentWeekTopic = nearestExam?.topics?.find((t) => t.week === nearestExamWeek);
@@ -82,9 +73,6 @@ export function ExamPathView({
 
   return (
     <>
-      {/* Countdown carousel, capped to the nearest 8 (soonest-first) — ExamCarousel
-          has no virtualization, so mounting an unbounded list risks a freeze.
-          Rest are reachable via "Manage exams" below. */}
       {sortedExams.length > 0 ? (
         <ExamCarousel
           exams={sortedExams.slice(0, 8)}
@@ -101,6 +89,31 @@ export function ExamPathView({
           />
         </Card>
       )}
+
+      {/* Study streak + Next session */}
+      <View style={styles.statsRow}>
+        <StatCard label="Study streak" flex={1.3}>
+          <View style={styles.statValueRow}>
+            <Text style={styles.statValue}>{taskStreak}</Text>
+            <Text style={styles.statUnit}>days</Text>
+          </View>
+        </StatCard>
+        <StatCard label="Next session" flex={0.7}>
+          {nextTask ? (
+            <>
+              <Text style={styles.statNextTitle} numberOfLines={1}>
+                {nextTask.task.title}
+              </Text>
+              <Text style={styles.statNextDateMuted}>
+                {formatShortDate(toDateKey(nextTask.date))}
+                {nextTask.task.time ? ` · ${nextTask.task.time}` : ''}
+              </Text>
+            </>
+          ) : (
+            <Text style={styles.statNextTitle}>Nothing scheduled</Text>
+          )}
+        </StatCard>
+      </View>
 
       {quickLinks}
 
@@ -123,8 +136,6 @@ export function ExamPathView({
                 <Text style={styles.classRowTime}>{formatShortDate(exam.examDate)}</Text>
               </View>
             ))}
-            {/* Always shown, even with all exams already listed above — it's the
-                only path to the Exams screen where edit/delete live. */}
             <ViewAllRow
               label={
                 sortedExams.length > 3
@@ -191,31 +202,6 @@ export function ExamPathView({
           </View>
         </Card>
       )}
-
-      {/* Study streak + Next session */}
-      <View style={styles.statsRow}>
-        <StatCard label="Study streak" flex={1.3}>
-          <View style={styles.statValueRow}>
-            <Text style={styles.statValue}>{taskStreak}</Text>
-            <Text style={styles.statUnit}>days</Text>
-          </View>
-        </StatCard>
-        <StatCard label="Next session" flex={0.7}>
-          {nextTask ? (
-            <>
-              <Text style={styles.statNextTitle} numberOfLines={1}>
-                {nextTask.task.title}
-              </Text>
-              <Text style={styles.statNextDateMuted}>
-                {formatShortDate(toDateKey(nextTask.date))}
-                {nextTask.task.time ? ` · ${nextTask.task.time}` : ''}
-              </Text>
-            </>
-          ) : (
-            <Text style={styles.statNextTitle}>Nothing scheduled</Text>
-          )}
-        </StatCard>
-      </View>
 
       <SavingsGoalsSection
         goals={savingsGoals}

@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useRef } from "react";
 import {
+  Alert,
   Animated,
   Modal,
   Pressable,
@@ -80,7 +81,7 @@ export function ProfileInfoModal({
   focusProfile,
 }: ProfileInfoModalProps) {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const drawerWidth = Math.min(windowWidth * DRAWER_WIDTH_PCT, DRAWER_MAX_WIDTH);
@@ -152,6 +153,41 @@ export function ProfileInfoModal({
     },
     [drawerWidth, translateX, overlayOpacity, onClose, router]
   );
+
+  // Same "confirm, then log out" copy/pattern as profile.tsx's own logout —
+  // kept in sync deliberately, since this drawer is now a second entry point
+  // to the same action.
+  const handleLogout = useCallback(() => {
+    Alert.alert(
+      "Log out?",
+      "You'll need to sign back in to access your planner.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Log out",
+          style: "destructive",
+          onPress: () => {
+            Animated.parallel([
+              Animated.timing(translateX, {
+                toValue: drawerWidth,
+                duration: ANIM_MS - 60,
+                useNativeDriver: true,
+              }),
+              Animated.timing(overlayOpacity, {
+                toValue: 0,
+                duration: ANIM_MS - 60,
+                useNativeDriver: true,
+              }),
+            ]).start(({ finished }) => {
+              if (!finished) return;
+              onClose();
+              logout().then(() => router.replace(Routes.WELCOME));
+            });
+          },
+        },
+      ]
+    );
+  }, [drawerWidth, translateX, overlayOpacity, onClose, logout, router]);
 
   return (
     <Modal
@@ -226,6 +262,17 @@ export function ProfileInfoModal({
             </View>
 
             <View style={styles.actionsGroup}>
+              <Pressable style={styles.manageRow} onPress={() => goTo(Routes.GOALS)}>
+                <View style={styles.manageLabelRow}>
+                  <IconSymbol name="target" color={Colors.primaryLight} size={18} />
+                  <Text style={styles.manageText}>Goals</Text>
+                </View>
+                <IconSymbol
+                  name="chevron.right"
+                  color={Colors.primaryLight}
+                  size={18}
+                />
+              </Pressable>
               <Pressable style={styles.manageRow} onPress={() => goTo(Routes.NOTES)}>
                 <View style={styles.manageLabelRow}>
                   <IconSymbol name="note.text" color={Colors.primaryLight} size={18} />
@@ -243,10 +290,7 @@ export function ProfileInfoModal({
           {/* Pinned to the bottom of the drawer, outside the ScrollView, so it
               always stays put as a footer action instead of scrolling away
               with the rest of the content. */}
-          <Pressable
-            style={[styles.footerRow, { paddingBottom: insets.bottom + Spacing.md }]}
-            onPress={() => goTo(Routes.PROFILE)}
-          >
+          <Pressable style={styles.footerRow} onPress={() => goTo(Routes.PROFILE)}>
             <View style={styles.manageLabelRow}>
               <IconSymbol name="person.fill" color={Colors.primaryLight} size={18} />
               <Text style={styles.manageText}>Profile & Settings</Text>
@@ -256,6 +300,16 @@ export function ProfileInfoModal({
               color={Colors.primaryLight}
               size={18}
             />
+          </Pressable>
+
+          <Pressable
+            style={[styles.footerRow, { paddingBottom: insets.bottom + Spacing.md }]}
+            onPress={handleLogout}
+          >
+            <View style={styles.manageLabelRow}>
+              <IconSymbol name="rectangle.portrait.and.arrow.right" color={Colors.error} size={18} />
+              <Text style={styles.logoutText}>Log out</Text>
+            </View>
           </Pressable>
         </Animated.View>
       </View>
@@ -376,14 +430,20 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingVertical: 6,
   },
-  // paddingBottom is set inline (insets.bottom + Spacing.md) — clears the
-  // home indicator on notched/gesture-nav devices.
+  // paddingVertical (not just paddingTop) — the Profile & Settings row is
+  // followed immediately by another footerRow (Log out); without a bottom
+  // value here too, its content had nothing under it before the next row's
+  // divider line, reading as cramped/overlapping rather than two separate
+  // rows. The second row's own inline paddingBottom (insets.bottom +
+  // Spacing.md, for the home indicator) still overrides this one's bottom
+  // half — style arrays merge left-to-right, so a later explicit
+  // paddingBottom wins over paddingVertical's without touching its paddingTop.
   footerRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
+    paddingVertical: Spacing.md,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
   },
@@ -396,5 +456,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
     color: Colors.primaryLight,
+  },
+  logoutText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: Colors.error,
   },
 });

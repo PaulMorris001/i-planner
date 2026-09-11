@@ -42,7 +42,7 @@ export default function Register() {
     setErrors({});
     try {
       await register({ fullName, email, password });
-      router.replace(Routes.FOCUS);
+      router.replace(Routes.NOTIFICATIONS_PROMPT);
     } catch (e: any) {
       setErrors({ general: e.message });
     }

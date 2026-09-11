@@ -15,7 +15,19 @@ const CONFIDENCE_WORDS = ['', 'Shaky', 'Building', 'Steady', 'Strong', 'Exam-rea
 
 export default function CertTracker() {
   const { examId } = useLocalSearchParams<{ examId?: string }>();
-  const { examPlan, toggleExamTopic, logExamPractice, logExamMockScore, setExamConfidence } = usePlan();
+  const { examPlan, toggleExamTopic, logExamPractice, logExamMockScore, setExamConfidence, refetch } = usePlan();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refetch();
+    } catch (err) {
+      console.error('[CertTracker] failed to refresh', err);
+    } finally {
+      setRefreshing(false);
+    }
+  };
   // UI-only — whether an entry row is expanded and what's currently typed
   // into it. The actual logged numbers (practiceQuestionsLogged, mockScores,
   // confidence) live on the Exam record via PlanContext, not here.
@@ -88,7 +100,13 @@ export default function CertTracker() {
 
   if (!exam) {
     return (
-      <ScreenWrapper backgroundColor={Colors.offWhite} scroll style={styles.scrollContent}>
+      <ScreenWrapper
+        backgroundColor={Colors.offWhite}
+        scroll
+        style={styles.scrollContent}
+        onRefresh={handleRefresh}
+        refreshing={refreshing}
+      >
         <BackButton />
         <PageHeader title="No exam yet" titleSize={25} />
         <Text style={[styles.emptyText, { paddingHorizontal: Spacing.md }]}>
@@ -99,7 +117,13 @@ export default function CertTracker() {
   }
 
   return (
-    <ScreenWrapper backgroundColor={Colors.offWhite} scroll style={styles.scrollContent}>
+    <ScreenWrapper
+      backgroundColor={Colors.offWhite}
+      scroll
+      style={styles.scrollContent}
+      onRefresh={handleRefresh}
+      refreshing={refreshing}
+    >
       <BackButton />
 
       <PageHeader title={`${exam.name} progress`} titleSize={25} />

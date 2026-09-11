@@ -17,14 +17,17 @@ import type { ImportedCalendarEvent } from '@/types/calendarImport.types';
 const IMPORT_WINDOW_DAYS = 60;
 
 export default function ImportCalendar() {
-  const { appleCalendarConnected, googleCalendarConnected, outlookCalendarConnected } = useSettings();
+  // Outlook UI disabled for now — no Azure app registration/credentials set
+  // up yet. See the commented-out import card below to re-enable.
+  const { appleCalendarConnected, googleCalendarConnected } = useSettings();
   const { isOpen: taskModalOpen, openWithDraft } = useNewTaskModal();
 
   const [events, setEvents] = useState<ImportedCalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [importingApple, setImportingApple] = useState(false);
   const [importingGoogle, setImportingGoogle] = useState(false);
-  const [importingOutlook, setImportingOutlook] = useState(false);
+  // const [importingOutlook, setImportingOutlook] = useState(false);
 
   const fetchList = useCallback(async () => {
     try {
@@ -35,6 +38,18 @@ export default function ImportCalendar() {
       setLoading(false);
     }
   }, []);
+
+  // Separate from fetchList's own `loading` — that's for the initial
+  // full-screen "Loading…" state; pulling to refresh should just show the
+  // pull-refresh spinner while keeping the current list visible.
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await fetchList();
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   // Refetches on real navigation back to this screen (e.g. switching tabs and returning).
   useFocusEffect(
@@ -97,20 +112,20 @@ export default function ImportCalendar() {
     }
   };
 
-  const handleImportOutlook = async () => {
-    setImportingOutlook(true);
-    try {
-      const beforeCount = events.length;
-      const updated = await calendarImportService.importOutlook();
-      setEvents(updated);
-      reportImportResult(Math.max(0, updated.length - beforeCount));
-    } catch (err) {
-      console.error('[ImportCalendar] Outlook import failed', err);
-      Alert.alert("Couldn't import", 'Check your connection and try again.');
-    } finally {
-      setImportingOutlook(false);
-    }
-  };
+  // const handleImportOutlook = async () => {
+  //   setImportingOutlook(true);
+  //   try {
+  //     const beforeCount = events.length;
+  //     const updated = await calendarImportService.importOutlook();
+  //     setEvents(updated);
+  //     reportImportResult(Math.max(0, updated.length - beforeCount));
+  //   } catch (err) {
+  //     console.error('[ImportCalendar] Outlook import failed', err);
+  //     Alert.alert("Couldn't import", 'Check your connection and try again.');
+  //   } finally {
+  //     setImportingOutlook(false);
+  //   }
+  // };
 
   const handleDismiss = (event: ImportedCalendarEvent) => {
     setEvents((prev) => prev.filter((e) => e.id !== event.id));
@@ -137,11 +152,16 @@ export default function ImportCalendar() {
     });
   };
 
-  const noCalendarConnected =
-    !appleCalendarConnected && !googleCalendarConnected && !outlookCalendarConnected;
+  const noCalendarConnected = !appleCalendarConnected && !googleCalendarConnected;
 
   return (
-    <ScreenWrapper backgroundColor={Colors.offWhite} scroll style={styles.scrollContent}>
+    <ScreenWrapper
+      backgroundColor={Colors.offWhite}
+      scroll
+      style={styles.scrollContent}
+      onRefresh={handleRefresh}
+      refreshing={refreshing}
+    >
       <BackButton />
 
       <PageHeader
@@ -151,7 +171,7 @@ export default function ImportCalendar() {
 
       {noCalendarConnected ? (
         <Text style={styles.emptyText}>
-          Connect Apple, Google, or Outlook Calendar in Profile → Calendar Sync first.
+          Connect Apple or Google Calendar in Profile → Calendar Sync first.
         </Text>
       ) : (
         <View style={styles.importRow}>
@@ -189,6 +209,9 @@ export default function ImportCalendar() {
               )}
             </Pressable>
           )}
+          {/* Outlook import card disabled for now — see the useSettings()
+              destructure and handleImportOutlook near the top of this file to
+              re-enable once Outlook Calendar is configured.
           {outlookCalendarConnected && (
             <Pressable
               style={[styles.importCard, importingOutlook && styles.importCardBusy]}
@@ -206,6 +229,7 @@ export default function ImportCalendar() {
               )}
             </Pressable>
           )}
+          */}
         </View>
       )}
 

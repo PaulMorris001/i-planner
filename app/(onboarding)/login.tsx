@@ -45,7 +45,7 @@ export default function Login() {
         await completeOnboarding();
         router.replace(Routes.DASHBOARD);
       } else {
-        router.replace(Routes.FOCUS);
+        router.replace(Routes.NOTIFICATIONS_PROMPT);
       }
     } catch (e: any) {
       setErrors({ general: e.message });

@@ -70,7 +70,12 @@
           "photosPermission": "Allow $(PRODUCT_NAME) to access your photos so you can upload a syllabus photo."
         }
       ],
-      "expo-notifications",
+      [
+        "expo-notifications",
+        {
+          "sounds": ["./assets/sounds/alarm_buzzer.wav"]
+        }
+      ],
       "expo-secure-store",
       [
         "expo-build-properties",

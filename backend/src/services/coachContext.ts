@@ -110,7 +110,7 @@ export async function buildContextSummary(firebaseUid: string, consent: CoachDat
     sections.push(
       'HABITS:\n' +
       habits
-        .map(toPublicHabit)
+        .map((h) => toPublicHabit(h))
         .map((h) => `- "${h.name}" — ${h.doneToday ? 'done today' : 'not done today'}, ${h.streak}-day streak`)
         .join('\n')
     );

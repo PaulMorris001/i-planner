@@ -1,3 +1,5 @@
+import { beginMutation, endMutation } from '@/utils/pendingMutations';
+
 // EXPO_PUBLIC_API_URL, if set, always wins (useful for pointing a dev build at
 // staging/production, or production at a different host). Otherwise this falls
 // back automatically based on __DEV__: localhost while running via `expo start`,
@@ -27,49 +29,61 @@ export async function apiRequest<T>(
 ): Promise<T> {
   const { method = 'GET', body, token, timeoutMs = DEFAULT_TIMEOUT_MS } = options;
 
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
+  // Tracked for the whole round trip (not just the fetch itself) — a mutating
+  // context's local state stays ahead of the server until this resolves or
+  // throws, and RefetchOnForeground/pull-to-refresh need to know that so they
+  // don't GET stale data mid-write and stomp a correct optimistic update.
+  // See utils/pendingMutations.ts.
+  const isMutation = method !== 'GET';
+  if (isMutation) beginMutation();
 
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
-  let response: Response;
   try {
-    response = await fetch(`${BASE_URL}${endpoint}`, {
-      method,
-      headers,
-      body: body ? JSON.stringify(body) : undefined,
-      signal: controller.signal,
-    });
-  } catch (err) {
-    // AbortError specifically means the timeout fired, not a real network
-    // failure — worth a distinct message so it doesn't read as "check your
-    // internet" when the actual problem is a slow/unreachable backend.
-    if (err instanceof Error && err.name === 'AbortError') {
-      throw { message: 'The server took too long to respond. Try again in a moment.', field: 'general', status: 0 };
-    }
-    throw { message: 'Could not reach the server. Check your connection and try again.', field: 'general', status: 0 };
-  } finally {
-    clearTimeout(timeout);
-  }
-
-  // Delete endpoints reply 204 with an empty body — response.json() throws on
-  // that ("Unexpected end of input"), so parse manually and treat empty as null.
-  const raw = await response.text();
-  const data = raw ? JSON.parse(raw) : null;
-
-  if (!response.ok) {
-    throw {
-      message: data?.message ?? 'Something went wrong.',
-      field: data?.field ?? 'general',
-      status: response.status,
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
     };
-  }
 
-  return data as T;
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+    let response: Response;
+    try {
+      response = await fetch(`${BASE_URL}${endpoint}`, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+        signal: controller.signal,
+      });
+    } catch (err) {
+      // AbortError specifically means the timeout fired, not a real network
+      // failure — worth a distinct message so it doesn't read as "check your
+      // internet" when the actual problem is a slow/unreachable backend.
+      if (err instanceof Error && err.name === 'AbortError') {
+        throw { message: 'The server took too long to respond. Try again in a moment.', field: 'general', status: 0 };
+      }
+      throw { message: 'Could not reach the server. Check your connection and try again.', field: 'general', status: 0 };
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    // Delete endpoints reply 204 with an empty body — response.json() throws on
+    // that ("Unexpected end of input"), so parse manually and treat empty as null.
+    const raw = await response.text();
+    const data = raw ? JSON.parse(raw) : null;
+
+    if (!response.ok) {
+      throw {
+        message: data?.message ?? 'Something went wrong.',
+        field: data?.field ?? 'general',
+        status: response.status,
+      };
+    }
+
+    return data as T;
+  } finally {
+    if (isMutation) endMutation();
+  }
 }

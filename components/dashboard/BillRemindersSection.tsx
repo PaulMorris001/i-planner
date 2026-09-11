@@ -13,9 +13,6 @@ import type { Bill } from '@/types/bill.types';
 interface BillRemindersSectionProps {
   bills: Bill[];
   onAddBill: () => void;
-  // Tapping a row — the caller decides what that means (opens the "Mark as
-  // paid?" prompt), and gets the already-computed current cycle's date-key
-  // alongside the bill so it doesn't have to recompute nextRecurringDueDate.
   onPressBill: (bill: Bill, cycleDueDateKey: string) => void;
   onLongPressBill: (bill: Bill) => void;
 }
@@ -33,9 +30,6 @@ function dueLabel(days: number): string {
 export function BillRemindersSection({ bills, onAddBill, onPressBill, onLongPressBill }: BillRemindersSectionProps) {
   const [expanded, setExpanded] = useState(false);
 
-  // A recurring bill's stored dueDate never advances — only its day-of-month
-  // matters, so the actual next occurrence is computed for both sorting and
-  // display (same bug class already fixed for recurring tasks this session).
   const allUpcoming = bills
     .map((bill) => {
       const dueDate = bill.recurring ? nextRecurringDueDate(bill.dueDate) : parseISODateLocal(bill.dueDate);
@@ -55,9 +49,6 @@ export function BillRemindersSection({ bills, onAddBill, onPressBill, onLongPres
   );
 
   if (upcoming.length === 0) {
-    // Same bordered-white-card shell as the Career Goal card above it, instead
-    // of floating loose against the page background — keeps every dashboard
-    // section reading as its own distinct block regardless of empty/filled state.
     return (
       <Card style={[styles.card, localStyles.section]}>
         {headerRow}
@@ -128,10 +119,6 @@ export function BillRemindersSection({ bills, onAddBill, onPressBill, onLongPres
 }
 
 const localStyles = StyleSheet.create({
-  // A little extra room on top of the dashboard stack's own gap between
-  // sections — Bill Reminders/Savings Goals/AI Coach otherwise read as
-  // crowded against each other since none of the section headers carry any
-  // spacing of their own the way a bordered Card's padding naturally would.
   section: {
     marginTop: 6,
   },

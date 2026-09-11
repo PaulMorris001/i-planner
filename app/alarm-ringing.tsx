@@ -6,25 +6,37 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors, Spacing, Radius } from '@/constants/theme';
 import { Routes } from '@/constants/routes';
 import { useTasks } from '@/hooks/useTasks';
-import { snoozeTaskAlarm } from '@/utils/notifications';
+import { usePlan } from '@/hooks/usePlan';
+import { snoozeAlarm, ALARM_SNOOZE_MINUTES, formatMinutes, type AlarmKind } from '@/utils/notifications';
 import { formatTimeLabel } from '@/utils/date';
 
-const SNOOZE_MINUTES = 5;
+const SNOOZE_MINUTES = ALARM_SNOOZE_MINUTES;
 
 // Reached only via registerAlarmNotificationRouting (utils/notifications.ts)
-// when the user taps an alarm-flagged task notification — never linked from
-// anywhere in the UI. Deliberately skips ScreenWrapper's usual header/back-
-// button chrome for a bespoke, urgent full-bleed presentation.
+// when the user taps an alarm-flagged task or class notification — never
+// linked from anywhere in the UI. Deliberately skips ScreenWrapper's usual
+// header/back-button chrome for a bespoke, urgent full-bleed presentation.
 export default function AlarmRinging() {
-  const { taskId, title: paramTitle } = useLocalSearchParams<{ taskId?: string; title?: string }>();
+  const { kind: kindParam, id, title: paramTitle } = useLocalSearchParams<{
+    kind?: string;
+    id?: string;
+    title?: string;
+  }>();
+  // Defaults to task-alarm — covers an already-scheduled notification from
+  // before this screen learned about classes, which won't carry a kind param.
+  const kind: AlarmKind = kindParam === 'class-alarm' ? 'class-alarm' : 'task-alarm';
   const { tasks } = useTasks();
+  const { plan } = usePlan();
   const [snoozing, setSnoozing] = useState(false);
 
-  // The live task is only ever an enhancement, never required — see
+  // The live task/class is only ever an enhancement, never required — see
   // utils/notifications.ts's scheduleTaskNotifications doc comment for why a
-  // brand-new task's alarm can't always carry a resolvable id yet.
-  const liveTask = taskId ? tasks.find((t) => t.id === taskId) : undefined;
-  const title = liveTask?.title || paramTitle || 'Task';
+  // brand-new entity's alarm can't always carry a resolvable id yet.
+  const liveTitle =
+    kind === 'task-alarm'
+      ? tasks.find((t) => t.id === id)?.title
+      : plan.classes.find((c) => c.id === id)?.courseName;
+  const title = liveTitle || paramTitle || (kind === 'task-alarm' ? 'Task' : 'Class');
 
   const dismiss = () => {
     if (router.canGoBack()) {
@@ -37,9 +49,9 @@ export default function AlarmRinging() {
   const handleSnooze = async () => {
     setSnoozing(true);
     try {
-      await snoozeTaskAlarm({ id: taskId || undefined, title }, SNOOZE_MINUTES);
+      await snoozeAlarm(kind, { id: id || undefined, title }, SNOOZE_MINUTES);
       dismiss();
-      Alert.alert('Snoozed', `We'll remind you again in ${SNOOZE_MINUTES} minutes.`);
+      Alert.alert('Snoozed', `We'll remind you again in ${formatMinutes(SNOOZE_MINUTES)}.`);
     } catch (err) {
       console.error('[AlarmRinging] failed to snooze', err);
       Alert.alert("Couldn't snooze", 'Check your connection and try again.');

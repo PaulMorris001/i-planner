@@ -11,6 +11,10 @@ export interface ClassItem {
   time:       string;
   professor?: string;
   venue?:     string;
+  // Louder/harder-to-miss delivery for the exact start-time notification —
+  // same treatment as a task's Alarm toggle (custom sound, DND-bypass,
+  // Dismiss/Snooze actions). Absent/false = a normal, gentle reminder.
+  alarmEnabled?: boolean;
   // Calendar-sync event ids, one per synced entry (Apple gets one event per
   // dayIdxs occurrence; Google gets a single event with a multi-day RRULE).
   appleEventIds?: string[];

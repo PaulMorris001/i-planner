@@ -7,6 +7,18 @@ import { Colors, Spacing, Radius } from '@/constants/theme';
 import { useNotes } from '@/hooks/useNotes';
 import { confirmDelete } from '@/utils/confirmDelete';
 import { formatShortDate, formatTimeLabel } from '@/utils/date';
+import { shareNote } from '@/utils/exportNote';
+
+// Keep in sync with backend/src/controllers/note.controller.ts's
+// NOTE_BODY_MAX_LENGTH — this bounds it at entry (nicer UX, an inline cap
+// instead of a save-time rejection), the backend enforces it regardless (a
+// stale/old client build, or the API called directly, shouldn't be able to
+// bypass it). Generous for any real note, but bounds how large a single
+// note's text can ever get — see notes.tsx's previewText for why that matters:
+// an unbounded body rendered into a <Text> builds a proportionally large
+// AttributedString/text-fragment tree, and a large enough one has caused a
+// real, confirmed stack-overflow crash when that tree was later torn down.
+const NOTE_BODY_MAX_LENGTH = 20_000;
 
 // Full page, not a sheet — a note deserves the whole screen to write in, unlike
 // the short forms every other "New X" flow in this app uses. `id` (querystring,
@@ -19,6 +31,7 @@ export default function NoteEditor() {
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [sharing, setSharing] = useState(false);
 
   useEffect(() => {
     if (editing) {
@@ -56,6 +69,19 @@ export default function NoteEditor() {
     });
   };
 
+  const handleShare = async () => {
+    if (!editing || sharing) return;
+    setSharing(true);
+    try {
+      // Share what's currently on screen, not the last-saved version — the
+      // Share button sits right next to Save, so exporting stale content the
+      // instant someone edits and taps Share (before saving) would be wrong.
+      await shareNote({ ...editing, title: title.trim() || editing.title, body });
+    } finally {
+      setSharing(false);
+    }
+  };
+
   return (
     <ScreenWrapper backgroundColor={Colors.offWhite} edges={['top', 'right', 'left']}>
       <View style={styles.headerRow}>
@@ -70,6 +96,11 @@ export default function NoteEditor() {
         </View>
 
         <View style={styles.headerActions}>
+          {!!editing && (
+            <Pressable hitSlop={10} onPress={handleShare} disabled={sharing} style={styles.shareBtn}>
+              <IconSymbol name="square.and.arrow.up" color={Colors.textPrimary} size={17} />
+            </Pressable>
+          )}
           {!!editing && (
             <Pressable hitSlop={10} onPress={handleDelete} style={styles.deleteBtn}>
               <IconSymbol name="trash" color={Colors.error} size={17} />
@@ -113,6 +144,7 @@ export default function NoteEditor() {
           style={styles.bodyInput}
           multiline
           textAlignVertical="top"
+          maxLength={NOTE_BODY_MAX_LENGTH}
         />
       </View>
     </ScreenWrapper>
@@ -158,6 +190,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+  },
+  shareBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.offWhite,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   deleteBtn: {
     width: 32,

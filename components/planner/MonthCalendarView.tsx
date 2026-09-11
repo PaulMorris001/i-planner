@@ -5,7 +5,7 @@ import { Colors } from '@/constants/theme';
 import { TaskCategories } from '@/constants/taskMeta';
 import { COURSE_COLORS } from '@/constants/classColors';
 import { useTasks } from '@/hooks/useTasks';
-import { weekdayIndexMonday, localMidnight, parseISODateLocal, isTaskDoneOnDate } from '@/utils/date';
+import { weekdayIndexMonday, localMidnight, parseISODateLocal, isTaskDoneOnDate, classOccursOnDate } from '@/utils/date';
 import { parseTimeToMinutes } from '@/utils/time';
 import type { Task } from '@/types/task.types';
 import type { ClassItem } from '@/types/plan.types';
@@ -83,18 +83,14 @@ export function MonthCalendarView({ classes, courseFilter, onTaskLongPress, onCl
     [classes]
   );
 
-  // Recurring items match by weekday (like Day/Week); one-time items match by their real date
-  // instead, so they show exactly once rather than repeating on every matching weekday.
-  const classesOnDate = (date: Date): ClassItem[] => {
-    const wd = weekdayIndexMonday(date);
-    return classes
+  // classOccursOnDate (not a bare dayIdxs check) — a monthly-recurring class
+  // always has dayIdxs: [] (see its own comment in utils/date.ts), so the
+  // old dayIdxs.includes(wd) check here made a monthly class — and the
+  // course filter selecting it — show nothing on the Month view, ever.
+  const classesOnDate = (date: Date): ClassItem[] =>
+    classes
       .filter((c) => !courseFilter || c.id === courseFilter)
-      .filter((c) => {
-        if (c.recurring) return hasStartedBy(c.startDate, date) && (c.dayIdxs ?? []).includes(wd);
-        const start = parseISODateLocal(c.startDate);
-        return !Number.isNaN(start.getTime()) && isSameLocalDay(start, date);
-      });
-  };
+      .filter((c) => classOccursOnDate(c, date));
 
   const tasksOnDate = (date: Date): Task[] => {
     const wd = weekdayIndexMonday(date);

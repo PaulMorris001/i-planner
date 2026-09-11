@@ -16,9 +16,21 @@ import { formatShortDate } from '@/utils/date';
 import type { Syllabus } from '@/types/syllabus.types';
 
 export default function Syllabi() {
-  const { syllabi, loading, updateSyllabus, deleteSyllabus } = useSyllabi();
+  const { syllabi, loading, updateSyllabus, deleteSyllabus, refetch } = useSyllabi();
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const sheet = useEditableSheet<Syllabus>();
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refetch();
+    } catch (err) {
+      console.error('[Syllabi] failed to refresh', err);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const handleSave = async (courseName: string) => {
     if (!sheet.editing) return;
@@ -39,7 +51,13 @@ export default function Syllabi() {
   };
 
   return (
-    <ScreenWrapper backgroundColor={Colors.offWhite} scroll style={styles.scrollContent}>
+    <ScreenWrapper
+      backgroundColor={Colors.offWhite}
+      scroll
+      style={styles.scrollContent}
+      onRefresh={handleRefresh}
+      refreshing={refreshing}
+    >
       <BackButton />
 
       <PageHeader title="Syllabi" subtitle={`${syllabi.length} syllab${syllabi.length === 1 ? 'us' : 'i'}`} />

@@ -7,7 +7,6 @@ interface CoachMessageTextProps {
   variant: 'user' | 'assistant';
 }
 
-// Splits a line into plain-text/**bold**/`code` runs, each a nested styled <Text> — no markdown library needed.
 function renderInline(line: string, textColor: string, codeColor: string) {
   const tokens = line.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).filter((t) => t.length > 0);
   return tokens.map((token, i) => {

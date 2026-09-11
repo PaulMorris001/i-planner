@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, Alert } from 'react-native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useLocalSearchParams } from 'expo-router';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { GreetingHeader } from '@/components/ui/GreetingHeader';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -27,7 +28,7 @@ import { useEditableSheet } from '@/hooks/useEditableSheet';
 import { useClassActions } from '@/hooks/useClassActions';
 import { useBills } from '@/hooks/useBills';
 import { confirmDelete } from '@/utils/confirmDelete';
-import { weekdayIndexMonday, taskOccursOnDay, isTaskDoneOnDate, DAY_FULL, formatClassDays } from '@/utils/date';
+import { weekdayIndexMonday, taskOccursOnDay, isTaskDoneOnDate, classOccursOnDate, DAY_FULL, formatClassDays } from '@/utils/date';
 import { parseTimeToMinutes } from '@/utils/time';
 import type { Task } from '@/types/task.types';
 import type { ClassItem } from '@/types/plan.types';
@@ -61,8 +62,20 @@ type DayItem =
   | { kind: 'class'; time: number; item: ClassItem; color: string; soft: string };
 
 export default function Planner() {
+  // ?view=day|week|month — e.g. Dashboard's "Today's tasks" card deep-links
+  // here wanting the Day view specifically. Planner lives in a bottom-tab
+  // navigator, which keeps it mounted across tab switches, so a plain default
+  // state alone wouldn't re-apply if the user had last left it on Week/Month;
+  // this effect re-syncs whenever a fresh param arrives.
+  const { view: viewParam } = useLocalSearchParams<{ view?: string }>();
   const tabBarHeight = useBottomTabBarHeight();
   const [view, setView] = useState<'day' | 'week' | 'month'>('day');
+
+  useEffect(() => {
+    if (viewParam === 'day' || viewParam === 'week' || viewParam === 'month') {
+      setView(viewParam);
+    }
+  }, [viewParam]);
   const [courseFilter, setCourseFilter] = useState<string | null>(null);
   const [actionSheetTarget, setActionSheetTarget] = useState<Task | null>(null);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
@@ -70,16 +83,28 @@ export default function Planner() {
   const classSheet = useEditableSheet<ClassItem>();
   const billSheet = useEditableSheet<Bill>();
   const { saveClass, deleteClass } = useClassActions();
-  const { tasks, toggleDone, removeTask } = useTasks();
-  const { plan } = usePlan();
+  const { tasks, toggleDone, removeTask, refetch: refetchTasks } = useTasks();
+  const { plan, refetch: refetchPlan } = usePlan();
   const { openForEdit } = useNewTaskModal();
   const { focusProfile } = useOnboarding();
   const pathKey = toPathKey(focusProfile);
   // Bill Reminders is Professional-path-only (same scope as the Dashboard's
   // copy of this section) — the hook itself is called unconditionally per
   // Rules of Hooks, only the section/modal rendering below is path-gated.
-  const { bills, createBill, updateBill, deleteBill, markBillPaidCycle } = useBills();
+  const { bills, createBill, updateBill, deleteBill, markBillPaidCycle, refetch: refetchBills } = useBills();
   const [markPaidTarget, setMarkPaidTarget] = useState<{ bill: Bill; cycleDueDateKey: string } | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([refetchTasks(), refetchPlan(), refetchBills()]);
+    } catch (err) {
+      console.error('[Planner] failed to refresh', err);
+    } finally {
+      setRefreshing(false);
+    }
+  };
   const {
     appleCalendarConnected,
     googleCalendarConnected,
@@ -133,17 +158,21 @@ export default function Planner() {
   const todayIdx = weekdayIndexMonday(today);
   const todayDateLabel = formatTodayDate(today);
 
-  const classesForDay = (dayIdx: number) =>
+  // NOT a dayIdxs check — dayIdxs is a lossy proxy built for the weekly grid
+  // (see classOccursOnDate's own comment): a monthly-recurring class always
+  // has dayIdxs: [], so checking it directly would make that class (and any
+  // course filter selecting it) show nothing here, ever, regardless of date.
+  const classesForDate = (date: Date) =>
     plan.classes
       .map((item, idx) => ({
         item,
         color: COURSE_COLORS[idx % COURSE_COLORS.length],
         soft: COURSE_SOFT_COLORS[idx % COURSE_SOFT_COLORS.length],
       }))
-      .filter(({ item }) => (item.dayIdxs ?? []).includes(dayIdx));
+      .filter(({ item }) => classOccursOnDate(item, date));
 
-  const buildDayItems = (dayIdx: number, taskList: Task[]): DayItem[] => {
-    const classItems: DayItem[] = classesForDay(dayIdx)
+  const buildDayItems = (date: Date, taskList: Task[]): DayItem[] => {
+    const classItems: DayItem[] = classesForDate(date)
       .filter(({ item }) => !courseFilter || item.id === courseFilter)
       .map(({ item, color, soft }) => ({ kind: 'class', time: parseTimeToMinutes(item.time), item, color, soft }));
     const taskItems: DayItem[] = sortTasks(taskList).map((task) => ({
@@ -159,7 +188,7 @@ export default function Planner() {
   const mondayThisWeek = new Date(today);
   mondayThisWeek.setDate(today.getDate() - todayIdx);
 
-  const dayItems = buildDayItems(todayIdx, tasks.filter((t) => taskOccursOnDay(t, todayIdx)));
+  const dayItems = buildDayItems(today, tasks.filter((t) => taskOccursOnDay(t, todayIdx)));
   const weekDays = DAY_FULL.map((label, i) => {
     const date = new Date(mondayThisWeek);
     date.setDate(mondayThisWeek.getDate() + i);
@@ -167,7 +196,7 @@ export default function Planner() {
       label,
       date,
       isToday: i === todayIdx,
-      items: buildDayItems(i, tasks.filter((t) => taskOccursOnDay(t, i))),
+      items: buildDayItems(date, tasks.filter((t) => taskOccursOnDay(t, i))),
     };
   });
 
@@ -306,6 +335,8 @@ export default function Planner() {
       // this, Month/Week view's last row can end up unreachable behind it.
       style={{ ...styles.scrollContent, paddingBottom: styles.scrollContent.paddingBottom + tabBarHeight }}
       edges={['top', 'right', 'left']}
+      onRefresh={handleRefresh}
+      refreshing={refreshing}
     >
       <GreetingHeader onMenuPress={() => setProfileModalOpen(true)} />
 

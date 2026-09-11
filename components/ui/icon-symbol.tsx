@@ -48,6 +48,9 @@ const MAPPING = {
   'note.text': 'notes',
   'photo.fill': 'image',
   'line.3.horizontal': 'menu',
+  'banknote.fill': 'account-balance-wallet',
+  'rectangle.portrait.and.arrow.right': 'logout',
+  'square.and.arrow.up': 'ios-share',
 } as IconMapping;
 
 /**

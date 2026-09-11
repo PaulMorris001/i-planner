@@ -11,22 +11,21 @@ import { parseISODateLocal } from './date';
 // behavior, so that's the fallback either way.
 const deviceLocale = getLocales()[0];
 const CURRENCY_CODE = deviceLocale?.currencyCode ?? 'USD';
-const LOCALE_TAG = deviceLocale?.languageTag ?? 'en-US';
-
-// Standalone symbol (e.g. "₦", "£") for UI that shows it separately from a
-// formatted number — e.g. a fixed prefix character next to an amount
-// TextInput, where formatCurrency's full "₦1,000" string doesn't fit.
-// Derived from the same Intl.NumberFormat call formatCurrency uses (not
-// expo-localization's own currencySymbol field directly) so this can never
-// drift from what formatCurrency actually renders.
-export const CURRENCY_SYMBOL: string = (() => {
-  try {
-    const parts = new Intl.NumberFormat(LOCALE_TAG, { style: 'currency', currency: CURRENCY_CODE }).formatToParts(0);
-    return parts.find((p) => p.type === 'currency')?.value ?? '$';
-  } catch {
-    return '$';
-  }
-})();
+// NOT deviceLocale.languageTag — Language and Region are independently
+// configurable on iOS (e.g. Language "English (U.S.)" with Region "Nigeria"
+// is a completely normal setup), and languageTag reflects the Language half.
+// Intl.NumberFormat's currency SYMBOL choice (₦ vs the literal "NGN" ISO
+// fallback it uses when the locale has no symbol mapping for that currency)
+// is tied to the region half specifically — a Nigeria-region device with
+// Language left on "English (U.S.)" resolved languageTag to "en-US", which
+// correctly knew the currency was NGN but rendered "NGN 2,100" instead of
+// "₦2,100" because "en-US" has no Naira symbol mapping. Reconstructing the
+// tag from languageCode + regionCode keeps the user's language but forces
+// the region half to match what currencyCode was actually resolved from.
+const LOCALE_TAG =
+  deviceLocale?.languageCode && deviceLocale?.regionCode
+    ? `${deviceLocale.languageCode}-${deviceLocale.regionCode}`
+    : deviceLocale?.languageTag ?? 'en-US';
 
 // Whole-currency-unit display only (no cents/kobo) — matches every amount in
 // the savings-goal/bill UI (values move in whole steps, so fractional units
@@ -46,6 +45,19 @@ export function formatCurrency(amount: number): string {
     return `$${Math.round(amount).toLocaleString('en-US')}`;
   }
 }
+
+// Standalone symbol (e.g. "₦", "£") for UI that shows it separately from a
+// formatted number — e.g. a fixed prefix character next to an amount
+// TextInput, where formatCurrency's full "₦1,000" string doesn't fit.
+// Deliberately NOT Intl.NumberFormat's own formatToParts() — Hermes (React
+// Native's JS engine) has documented gaps in its Intl support that don't
+// always match Node/V8 (what local testing runs on), and formatToParts is
+// exactly the kind of secondary API more likely to be incomplete than the
+// plain .format() path formatCurrency above already uses successfully.
+// Instead, this reuses formatCurrency itself (proven working) and strips the
+// digits/punctuation back out — whatever's left is the symbol, regardless of
+// whether it's a prefix ("₦0") or suffix ("0 kr") in a given locale.
+export const CURRENCY_SYMBOL: string = formatCurrency(0).replace(/[\d\s.,]/g, '') || '$';
 
 // `targetDateIso` is a real "YYYY-MM-DD" date-key (SavingsGoalModal's date
 // picker, via toDateKey) — whole months from today, or null if it doesn't

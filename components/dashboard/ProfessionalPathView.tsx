@@ -27,7 +27,6 @@ import { taskOccursOnDay, weekdayIndexMonday, formatMonthYear, isTaskDoneOnDate 
 import { dashboardStyles as styles } from './dashboardStyles';
 
 interface ProfessionalPathViewProps {
-  // Passed in rather than rebuilt here so it doesn't remount on re-render.
   quickLinks: ReactNode;
   onViewGoal: (goal: Goal | null) => void;
   onAddSavingsGoal: () => void;
@@ -67,10 +66,6 @@ export function ProfessionalPathView({
     });
   };
 
-  // One-time bill: paying it means there's nothing left to track, so it's
-  // simply removed (same as deleting it). Recurring bill: can't delete the
-  // whole thing just because this cycle's paid — instead records which cycle
-  // was paid, so it stops showing as due/overdue until next month's due date.
   const handleMarkBillPaid = async () => {
     if (!markPaidTarget) return;
     const { bill, cycleDueDateKey } = markPaidTarget;
@@ -85,7 +80,6 @@ export function ProfessionalPathView({
   const careerMilestonesDone = careerGoal?.milestones.filter((m) => m.done).length ?? 0;
   const nextCareerMilestone = careerGoal?.milestones.find((m) => !m.done);
 
-  // Today's task completion, for the "Today's tasks" stat.
   const today = new Date();
   const todayIdx = weekdayIndexMonday(today);
   const todaysTasks = tasks.filter((t) => taskOccursOnDay(t, todayIdx));
@@ -93,9 +87,11 @@ export function ProfessionalPathView({
 
   return (
     <>
-      {/* Today's tasks + Weekly action */}
       <View style={styles.statsRow}>
-        <StatCard label="Today's tasks">
+        <StatCard
+          label="Today's tasks"
+          onPress={() => router.push({ pathname: Routes.PLANNER, params: { view: 'day' } })}
+        >
           <View style={styles.statValueRow}>
             <Text style={styles.statValue}>{todaysTasksDone}</Text>
             <Text style={styles.statUnit}>/ {todaysTasks.length} done</Text>
