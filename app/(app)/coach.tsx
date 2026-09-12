@@ -151,8 +151,12 @@ export default function Coach() {
     setTimeout(() => setCopiedId((current) => (current === message.id ? null : current)), 1200);
   };
 
-  const handleSend = async () => {
-    const text = input.trim();
+  // Optional override so a tapped suggestion chip can send its text directly
+  // instead of round-tripping through the input box first — reading `input`
+  // state right after a setInput(q) call would still see the pre-update
+  // value, since React state updates aren't synchronous.
+  const handleSend = async (textOverride?: string) => {
+    const text = (textOverride ?? input).trim();
     if (!text || sending) return;
 
     setInput('');
@@ -316,7 +320,7 @@ export default function Coach() {
             contentContainerStyle={styles.chipsRow}
           >
             {SUGGESTIONS[mode].map((q) => (
-              <Pressable key={q} style={styles.chip} onPress={() => setInput(q)}>
+              <Pressable key={q} style={styles.chip} onPress={() => handleSend(q)}>
                 <Text style={styles.chipText}>{q}</Text>
               </Pressable>
             ))}
@@ -355,12 +359,12 @@ export default function Coach() {
               placeholderTextColor={Colors.textMuted}
               style={styles.input}
               editable={!sending}
-              onSubmitEditing={handleSend}
+              onSubmitEditing={() => handleSend()}
               returnKeyType="send"
             />
             <Pressable
               style={[styles.sendButton, (sending || !input.trim()) && styles.sendButtonDisabled]}
-              onPress={handleSend}
+              onPress={() => handleSend()}
               disabled={sending || !input.trim()}
             >
               <IconSymbol name="arrow.right" color={Colors.white} size={20} />

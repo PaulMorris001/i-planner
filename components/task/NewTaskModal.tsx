@@ -51,7 +51,11 @@ export function NewTaskModal() {
 
   const currentWd = dueDate ? weekdayIndexMonday(dueDate) : DEFAULT_DAY_INDEX;
   const canSave =
-    title.trim().length > 0 && !submitting && !(recurring && freq === 'weekly' && selectedDays.length === 0);
+    title.trim().length > 0 &&
+    !!dueDate &&
+    !!dueTime &&
+    !submitting &&
+    !(recurring && freq === 'weekly' && selectedDays.length === 0);
 
   const reset = () => {
     setTitle('');
@@ -211,12 +215,16 @@ export function NewTaskModal() {
               </Pressable>
             )}
           </View>
-          <Pressable style={styles.datePickerButton} onPress={() => setShowDatePicker(true)}>
-            <IconSymbol name="calendar" color={Colors.textSecondary} size={17} />
+          <Pressable
+            style={[styles.datePickerButton, !dueDate && styles.datePickerButtonError]}
+            onPress={() => setShowDatePicker(true)}
+          >
+            <IconSymbol name="calendar" color={dueDate ? Colors.textSecondary : Colors.error} size={17} />
             <Text style={[styles.datePickerText, !dueDate && styles.datePickerPlaceholder]}>
-              {dueDate ? formatDatePickerLabel(dueDate) : 'Select date (optional)'}
+              {dueDate ? formatDatePickerLabel(dueDate) : 'Select date'}
             </Text>
           </Pressable>
+          {!dueDate && <Text style={styles.fieldError}>Due date is required</Text>}
           <InlineDateTimePicker
             visible={showDatePicker}
             value={dueDate ?? new Date()}
@@ -233,12 +241,16 @@ export function NewTaskModal() {
               </Pressable>
             )}
           </View>
-          <Pressable style={styles.datePickerButton} onPress={() => setShowTimePicker(true)}>
-            <IconSymbol name="clock" color={Colors.textSecondary} size={17} />
+          <Pressable
+            style={[styles.datePickerButton, !dueTime && styles.datePickerButtonError]}
+            onPress={() => setShowTimePicker(true)}
+          >
+            <IconSymbol name="clock" color={dueTime ? Colors.textSecondary : Colors.error} size={17} />
             <Text style={[styles.datePickerText, !dueTime && styles.datePickerPlaceholder]}>
-              {dueTime ? formatTimeLabel(dueTime) : 'Select time (optional)'}
+              {dueTime ? formatTimeLabel(dueTime) : 'Select time'}
             </Text>
           </Pressable>
+          {!dueTime && <Text style={styles.fieldError}>Due time is required</Text>}
           <InlineDateTimePicker
             visible={showTimePicker}
             value={dueTime ?? new Date()}
@@ -396,6 +408,14 @@ const styles = StyleSheet.create({
   datePickerPlaceholder: {
     color: Colors.textMuted,
     fontWeight: '400',
+  },
+  datePickerButtonError: {
+    borderColor: Colors.error,
+  },
+  fieldError: {
+    fontSize: 12,
+    color: Colors.error,
+    marginTop: 6,
   },
   chipWrap: {
     flexDirection: 'row',

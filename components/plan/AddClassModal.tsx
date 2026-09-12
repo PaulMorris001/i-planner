@@ -43,7 +43,10 @@ export function AddClassModal({ visible, onClose, onAdd, editingClass }: AddClas
   const [venue, setVenue] = useState('');
   const [alarmEnabled, setAlarmEnabled] = useState(false);
 
-  const canSave = className.trim().length > 0 && !(recurring && freq === 'weekly' && selectedDays.length === 0);
+  const canSave =
+    className.trim().length > 0 &&
+    !!time &&
+    !(recurring && freq === 'weekly' && selectedDays.length === 0);
 
   const reset = () => {
     setClassName('');
@@ -182,12 +185,17 @@ export function AddClassModal({ visible, onClose, onAdd, editingClass }: AddClas
           )}
 
           <Text style={styles.sheetEyebrow}>Start time</Text>
-          <TouchableOpacity style={styles.datePicker} onPress={() => setShowTimePicker(true)} activeOpacity={0.8}>
+          <TouchableOpacity
+            style={[styles.datePicker, !time && styles.datePickerError]}
+            onPress={() => setShowTimePicker(true)}
+            activeOpacity={0.8}
+          >
             <Text style={styles.datePickerIcon}>🕐</Text>
             <Text style={[styles.datePickerText, !time && styles.datePickerPlaceholder]}>
               {time ? formatTimeLabel(time) : 'Select a time'}
             </Text>
           </TouchableOpacity>
+          {!time && <Text style={styles.fieldError}>Start time is required</Text>}
           <InlineDateTimePicker
             visible={showTimePicker}
             value={time ?? new Date()}
@@ -267,6 +275,8 @@ const styles = StyleSheet.create({
   datePickerIcon: { fontSize: 16 },
   datePickerText: { flex: 1, fontSize: 15, color: '#000000', fontWeight: '600' },
   datePickerPlaceholder: { color: Colors.textMuted, fontWeight: '400' },
+  datePickerError: { borderColor: Colors.error },
+  fieldError: { fontSize: 12, color: Colors.error, marginTop: 6 },
 
   recurringRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',

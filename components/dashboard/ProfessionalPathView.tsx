@@ -19,6 +19,7 @@ import { useTasks } from '@/hooks/useTasks';
 import { useBills } from '@/hooks/useBills';
 import { useSavingsGoals } from '@/hooks/useSavingsGoals';
 import { useEditableSheet } from '@/hooks/useEditableSheet';
+import { useNewTaskModal } from '@/contexts/NewTaskModalContext';
 import { confirmDelete } from '@/utils/confirmDelete';
 import type { Goal } from '@/types/goal.types';
 import type { Bill } from '@/types/bill.types';
@@ -42,6 +43,7 @@ export function ProfessionalPathView({
   onLogSavingsProgress,
 }: ProfessionalPathViewProps) {
   const router = useRouter();
+  const { open: openNewTask } = useNewTaskModal();
   const { tasks } = useTasks();
   const { goals } = useGoals();
   const { goals: savingsGoals } = useSavingsGoals();
@@ -90,7 +92,13 @@ export function ProfessionalPathView({
       <View style={styles.statsRow}>
         <StatCard
           label="Today's tasks"
-          onPress={() => router.push({ pathname: Routes.PLANNER, params: { view: 'day' } })}
+          // Nothing due yet today — jump straight to creating one instead of
+          // opening an empty Day view with nothing to look at.
+          onPress={() =>
+            todaysTasks.length === 0
+              ? openNewTask()
+              : router.push({ pathname: Routes.PLANNER, params: { view: 'day' } })
+          }
         >
           <View style={styles.statValueRow}>
             <Text style={styles.statValue}>{todaysTasksDone}</Text>

@@ -5,6 +5,8 @@ import { Colors } from '@/constants/theme';
 import { TaskCategories } from '@/constants/taskMeta';
 import { COURSE_COLORS } from '@/constants/classColors';
 import { useTasks } from '@/hooks/useTasks';
+import { useTaskCompleteConfirm } from '@/hooks/useTaskCompleteConfirm';
+import { CompleteTaskModal } from '@/components/task/CompleteTaskModal';
 import { weekdayIndexMonday, localMidnight, parseISODateLocal, isTaskDoneOnDate, classOccursOnDate } from '@/utils/date';
 import { parseTimeToMinutes } from '@/utils/time';
 import type { Task } from '@/types/task.types';
@@ -68,7 +70,8 @@ function SkeletonRow() {
 }
 
 export function MonthCalendarView({ classes, courseFilter, onTaskLongPress, onClassLongPress }: MonthCalendarViewProps) {
-  const { tasks, toggleDone } = useTasks();
+  const { tasks } = useTasks();
+  const { target: completeTarget, requestToggle, confirm: confirmComplete, cancel: cancelComplete } = useTaskCompleteConfirm();
   const today = new Date();
   const [monthCursor, setMonthCursor] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
   const [selectedDate, setSelectedDate] = useState<Date | null>(today);
@@ -277,7 +280,7 @@ export function MonthCalendarView({ classes, courseFilter, onTaskLongPress, onCl
                       <Pressable
                         key={task.id}
                         style={styles.detailRow}
-                        onPress={() => toggleDone(task.id, selectedDate)}
+                        onPress={() => requestToggle(task, selectedDate)}
                         onLongPress={() => onTaskLongPress(task)}
                       >
                         <View style={[styles.detailBar, { backgroundColor: category.color }]} />
@@ -309,6 +312,13 @@ export function MonthCalendarView({ classes, courseFilter, onTaskLongPress, onCl
           )}
         </View>
       )}
+
+      <CompleteTaskModal
+        visible={!!completeTarget}
+        task={completeTarget?.task ?? null}
+        onClose={cancelComplete}
+        onConfirm={confirmComplete}
+      />
     </View>
   );
 }

@@ -14,6 +14,7 @@ import { ViewMoreToggle } from '@/components/ui/ViewMoreToggle';
 import { AddClassModal } from '@/components/plan/AddClassModal';
 import { AddBillModal } from '@/components/plan/AddBillModal';
 import { MarkBillPaidModal } from '@/components/plan/MarkBillPaidModal';
+import { CompleteTaskModal } from '@/components/task/CompleteTaskModal';
 import { BillRemindersSection } from '@/components/dashboard/BillRemindersSection';
 import { Colors, Spacing } from '@/constants/theme';
 import { TaskCategories, TaskPriorities, TaskPriorityId } from '@/constants/taskMeta';
@@ -25,6 +26,7 @@ import { useOnboarding } from '@/hooks/useOnboarding';
 import { toPathKey } from '@/hooks/usePathKey';
 import { useNewTaskModal } from '@/contexts/NewTaskModalContext';
 import { useEditableSheet } from '@/hooks/useEditableSheet';
+import { useTaskCompleteConfirm } from '@/hooks/useTaskCompleteConfirm';
 import { useClassActions } from '@/hooks/useClassActions';
 import { useBills } from '@/hooks/useBills';
 import { confirmDelete } from '@/utils/confirmDelete';
@@ -83,7 +85,8 @@ export default function Planner() {
   const classSheet = useEditableSheet<ClassItem>();
   const billSheet = useEditableSheet<Bill>();
   const { saveClass, deleteClass } = useClassActions();
-  const { tasks, toggleDone, removeTask, refetch: refetchTasks } = useTasks();
+  const { tasks, removeTask, refetch: refetchTasks } = useTasks();
+  const { target: completeTarget, requestToggle, confirm: confirmComplete, cancel: cancelComplete } = useTaskCompleteConfirm();
   const { plan, refetch: refetchPlan } = usePlan();
   const { openForEdit } = useNewTaskModal();
   const { focusProfile } = useOnboarding();
@@ -208,7 +211,7 @@ export default function Planner() {
       <Pressable
         key={`task-${task.id}`}
         style={styles.taskRow}
-        onPress={() => toggleDone(task.id, date)}
+        onPress={() => requestToggle(task, date)}
         onLongPress={() => setActionSheetTarget(task)}
       >
         <View
@@ -441,7 +444,7 @@ export default function Planner() {
                         <Pressable
                           key={`wk-task-${task.id}`}
                           style={styles.weekTaskRow}
-                          onPress={() => toggleDone(task.id, day.date)}
+                          onPress={() => requestToggle(task, day.date)}
                           onLongPress={() => setActionSheetTarget(task)}
                         >
                           <View style={[styles.weekTaskBar, { backgroundColor: category.color }]} />
@@ -493,6 +496,13 @@ export default function Planner() {
         onClose={() => setActionSheetTarget(null)}
         onEdit={() => actionSheetTarget && openForEdit(actionSheetTarget)}
         onDelete={() => actionSheetTarget && handleDeleteTask(actionSheetTarget)}
+      />
+
+      <CompleteTaskModal
+        visible={!!completeTarget}
+        task={completeTarget?.task ?? null}
+        onClose={cancelComplete}
+        onConfirm={confirmComplete}
       />
 
       <AddClassModal
