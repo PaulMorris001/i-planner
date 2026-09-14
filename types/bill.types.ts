@@ -1,4 +1,10 @@
-export type BillCategory = 'housing' | 'utilities' | 'subscriptions' | 'insurance' | 'loans' | 'other';
+export type BillCategory =
+  | "housing"
+  | "utilities"
+  | "subscriptions"
+  | "insurance"
+  | "loans"
+  | "other";
 
 export interface Bill {
   id: string;
@@ -8,8 +14,7 @@ export interface Bill {
   recurring: boolean;
   category: BillCategory;
   notificationIds?: string[];
-  // "YYYY-MM-DD" date-key of the recurring cycle last marked paid — see
-  // Bill.ts's backend doc comment for the full "resets automatically" reasoning.
+  // "YYYY-MM-DD" date-key of the recurring cycle last marked paid
   lastPaidCycle?: string;
 }
 

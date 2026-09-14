@@ -3,7 +3,11 @@ export interface SavingsGoal {
   name: string;
   targetAmount: number;
   savedAmount: number;
-  targetDate: string; // "YYYY-MM-DD" — from SavingsGoalModal's date picker.
+  targetDate: string; //
+  // Locally-scheduled expo-notifications reminder id(s) — a weekly check-in
+  // nudge to log a contribution, not tied to targetDate. See
+  // utils/notifications.ts's scheduleSavingsGoalNotifications.
+  notificationIds?: string[];
 }
 
 export interface NewSavingsGoalInput {
@@ -11,4 +15,5 @@ export interface NewSavingsGoalInput {
   targetAmount: number;
   savedAmount: number;
   targetDate: string;
+  notificationIds?: string[];
 }

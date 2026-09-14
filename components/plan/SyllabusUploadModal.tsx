@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, Pressable, ActivityIndicator, Alert, ScrollView, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
-import * as DocumentPicker from 'expo-document-picker';
-import * as ImagePicker from 'expo-image-picker';
 import { File } from 'expo-file-system';
 import { BottomSheetModal } from '@/components/ui/BottomSheetModal';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -16,33 +14,10 @@ import { syllabusService } from '@/services/syllabus.service';
 import { usePlan } from '@/hooks/usePlan';
 import { useTasks } from '@/hooks/useTasks';
 import { useSyllabi } from '@/hooks/useSyllabi';
+import { useFilePicker, formatFileSize } from '@/hooks/useFilePicker';
+import { useFakeExtractionProgress } from '@/hooks/useFakeExtractionProgress';
 import { weekdayIndexMonday, parseISODateLocal, formatDatePickerLabel } from '@/utils/date';
 import type { ClassItem } from '@/types/plan.types';
-
-// Matches backend/src/services/syllabusExtraction.ts's SYLLABUS_MIME_BY_EXT —
-// the backend derives the actual MIME type from the filename itself (safer
-// than trusting the OS-reported one), so this list only needs to keep the
-// native document picker's own filter in sync with what the server will
-// accept. Images are deliberately NOT here — see handlePickPhoto below.
-const SUPPORTED_DOCUMENT_TYPES = [
-  'application/pdf',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation', // .pptx
-];
-
-// Common shape both pickers normalize into, so the preview/process logic
-// below doesn't care which one was used.
-interface PickedFile {
-  uri: string;
-  name: string;
-  mimeType?: string;
-  size?: number;
-  // Only ever set for a photo (see handlePickPhoto) — the picker encodes it
-  // directly, sidestepping a second full-file disk read through
-  // expo-file-system at Continue time. Documents don't have this option, so
-  // they still get read via `new File(uri).base64()` in handleProcess.
-  base64?: string;
-}
 
 interface DraftDeadline {
   key: string;
@@ -52,31 +27,12 @@ interface DraftDeadline {
 
 type Step = 'pick' | 'preview' | 'upgrade' | 'extracting' | 'review' | 'creating' | 'success';
 
-// Human-readable size, e.g. "2.4 MB" / "180 KB" — a bare byte count reads as
-// meaningless on the preview screen.
-function formatFileSize(bytes?: number): string | null {
-  if (!bytes) return null;
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-// There's no real progress to report — one request, one response, no
-// incremental events from the extraction call to hook into — so this climbs
-// asymptotically toward (never reaching) a cap instead of a fake linear fill,
-// which would either finish long before the real result and then sit at
-// 100% doing nothing, or look stalled once it's outpaced by a slow request.
-// Paired with rotating status text below so a longer wait still reads as
-// "working", not stuck.
-const EXTRACT_PROGRESS_CAP = 92;
-const EXTRACT_PROGRESS_TICK_MS = 400;
 const EXTRACT_STATUS_MESSAGES = [
   'Reading your file…',
   'Scanning for deadlines…',
   'Pulling out the topic list…',
   'Almost there…',
 ];
-const EXTRACT_STATUS_INTERVAL_MS = 3000;
 
 interface SyllabusUploadModalProps {
   visible: boolean;
@@ -100,7 +56,7 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
   const { tier } = usePurchases();
 
   const [step, setStep] = useState<Step>('pick');
-  const [pickedAsset, setPickedAsset] = useState<PickedFile | null>(null);
+  const { pickedAsset, pickDocument, pickPhoto, reset: resetPicker } = useFilePicker('syllabus-photo');
   const [fileName, setFileName] = useState('');
   const [courseName, setCourseName] = useState('');
   const [deadlines, setDeadlines] = useState<DraftDeadline[]>([]);
@@ -110,8 +66,10 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
   // look like something the AI actually found.
   const [showingTopicsFallback, setShowingTopicsFallback] = useState(false);
   const [successSummary, setSuccessSummary] = useState<SuccessSummary | null>(null);
-  const [extractProgress, setExtractProgress] = useState(0);
-  const [extractStatusIndex, setExtractStatusIndex] = useState(0);
+  const { progress: extractProgress, statusMessage: extractStatusMessage } = useFakeExtractionProgress(
+    step === 'extracting',
+    EXTRACT_STATUS_MESSAGES
+  );
   // Bumped by reset() — an in-flight handleProcess call checks this after its
   // await resolves and no-ops if it's changed, so closing the modal mid-
   // extraction (see handleClose below) can't have a request that finally
@@ -122,40 +80,19 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
   const reset = () => {
     processGenerationRef.current += 1;
     setStep('pick');
-    setPickedAsset(null);
+    resetPicker();
     setFileName('');
     setCourseName('');
     setDeadlines([]);
     setDatePickerKey(null);
     setShowingTopicsFallback(false);
     setSuccessSummary(null);
-    setExtractProgress(0);
-    setExtractStatusIndex(0);
   };
 
   useEffect(() => {
     if (visible) reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
-
-  // Simulated progress + rotating status text while extracting — there's no
-  // real progress signal from a single request/response AI call, so this is
-  // purely to keep the screen feeling alive on a slower request rather than
-  // a static spinner that gives no sense of whether it's still working.
-  useEffect(() => {
-    if (step !== 'extracting') return;
-    setExtractProgress(0);
-    setExtractStatusIndex(0);
-    const progressTimer = setInterval(() => {
-      setExtractProgress((p) => p + (EXTRACT_PROGRESS_CAP - p) * 0.08);
-    }, EXTRACT_PROGRESS_TICK_MS);
-    const statusTimer = setInterval(() => {
-      setExtractStatusIndex((i) => Math.min(i + 1, EXTRACT_STATUS_MESSAGES.length - 1));
-    }, EXTRACT_STATUS_INTERVAL_MS);
-    return () => {
-      clearInterval(progressTimer);
-      clearInterval(statusTimer);
-    };
-  }, [step]);
 
   const handleClose = () => {
     // 'creating' (saving the reviewed deadlines) is still protected — a
@@ -172,49 +109,13 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
 
   // Only picks a file and shows it back for confirmation — the actual AI call
   // (and its tier/quota gating) happens in handleProcess once the user taps
-  // Continue, not the instant a file is chosen. Files (PDF/Word/PowerPoint)
-  // live in the Files-app-style document picker; photos don't — see
-  // handlePickPhoto for those, launched from a separate button.
+  // Continue, not the instant a file is chosen.
   const handlePickDocument = async () => {
-    const result = await DocumentPicker.getDocumentAsync({
-      type: SUPPORTED_DOCUMENT_TYPES,
-      copyToCacheDirectory: true,
-    });
-    if (result.canceled) return;
-    const asset = result.assets[0];
-    setPickedAsset({ uri: asset.uri, name: asset.name, mimeType: asset.mimeType, size: asset.size });
-    setStep('preview');
+    if (await pickDocument()) setStep('preview');
   };
 
-  // A syllabus photo naturally comes from the Camera Roll/Photos, not Files —
-  // expo-image-picker's library picker, not expo-document-picker.
   const handlePickPhoto = async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert('Photo access needed', 'Allow photo library access in Settings to choose a syllabus photo.');
-      return;
-    }
-    // quality: 1 (no compression) on a modern phone photo can be a 10-20+ MB
-    // file — base64-encoding something that size (both the disk read below
-    // and the network upload at Continue time) is heavy enough to visibly
-    // freeze the UI thread for a long stretch, not just "feel slow". 0.6 is
-    // still plenty readable for a document photo and cuts that dramatically.
-    // base64: true has the picker encode it directly, so Continue doesn't
-    // need a second full-file read through expo-file-system on top of this.
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      quality: 0.6,
-      base64: true,
-    });
-    if (result.canceled || !result.assets[0]) return;
-    const asset = result.assets[0];
-    const mimeType = asset.mimeType ?? 'image/jpeg';
-    // fileName can come back null with limited photo-library access — a
-    // syllabus.controller.ts-recognized extension is required either way,
-    // since the backend derives the real MIME type from the filename itself.
-    const name = asset.fileName ?? `syllabus-photo.${mimeType === 'image/png' ? 'png' : 'jpg'}`;
-    setPickedAsset({ uri: asset.uri, name, mimeType, size: asset.fileSize, base64: asset.base64 ?? undefined });
-    setStep('preview');
+    if (await pickPhoto()) setStep('preview');
   };
 
   const handleProcess = async () => {
@@ -458,7 +359,7 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
       {step === 'extracting' && (
         <View style={styles.centerBox}>
           <ActivityIndicator color={Colors.primary} size="large" />
-          <Text style={styles.centerText}>{EXTRACT_STATUS_MESSAGES[extractStatusIndex]}</Text>
+          <Text style={styles.centerText}>{extractStatusMessage}</Text>
           <View style={styles.extractProgressTrack}>
             <AnimatedProgressBar pct={extractProgress} color={Colors.primary} />
           </View>

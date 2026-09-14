@@ -18,4 +18,8 @@ export const FEATURE_MIN_TIER = {
   coach_goal: 'professional',
   exam_topics: 'professional',
   syllabus_extraction: 'student',
+  // Same bracket as syllabus_extraction — both are AI document-comprehension
+  // extraction features, and a full timetable is arguably a bigger single
+  // win than one syllabus, so this shouldn't be *more* freely available.
+  timetable_extraction: 'student',
 } as const satisfies Record<string, SubscriptionTier>;

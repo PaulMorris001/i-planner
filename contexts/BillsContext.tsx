@@ -4,6 +4,7 @@ import { auth } from '@/config/firebase';
 import { billService } from '@/services/bill.service';
 import { useSettings } from '@/hooks/useSettings';
 import { scheduleBillNotifications, cancelNotifications } from '@/utils/notifications';
+import { reconcileBillNotifications, markBillScheduled, clearBillSchedule } from '@/utils/notificationReconcile';
 import type { Bill, NewBillInput } from '@/types/bill.types';
 
 interface BillsContextValue {
@@ -30,7 +31,14 @@ export function BillsProvider({ children }: { children: ReactNode }) {
 
   const fetchBills = async () => {
     try {
-      setBills(sortByDueDate(await billService.list()));
+      const list = await billService.list();
+      // See utils/notificationReconcile.ts — picks up bills created, edited,
+      // or deleted on another device.
+      const reconciled = await reconcileBillNotifications(list, remindersEnabled).catch((err) => {
+        console.error('[BillsProvider] failed to reconcile bill notifications', err);
+        return list;
+      });
+      setBills(sortByDueDate(reconciled));
     } catch (err) {
       console.error('[BillsProvider] failed to load bills', err);
     }
@@ -58,6 +66,7 @@ export function BillsProvider({ children }: { children: ReactNode }) {
     try {
       const created = await billService.create(toCreate);
       setBills((prev) => sortByDueDate(prev.map((b) => (b.id === tempId ? created : b))));
+      await markBillScheduled(created, notificationIds);
     } catch (err) {
       setBills((prev) => prev.filter((b) => b.id !== tempId));
       throw err;
@@ -79,6 +88,7 @@ export function BillsProvider({ children }: { children: ReactNode }) {
         ...finalPatch,
         notificationIds: remindersEnabled ? await scheduleBillNotifications(merged) : [],
       };
+      await markBillScheduled({ ...current, ...finalPatch }, finalPatch.notificationIds ?? []);
     }
 
     setBills((prev) => sortByDueDate(prev.map((b) => (b.id === id ? { ...b, ...finalPatch } : b))));
@@ -120,6 +130,7 @@ export function BillsProvider({ children }: { children: ReactNode }) {
     }
     // Unconditional — same reasoning as updateBill above.
     if (target?.notificationIds) await cancelNotifications(target.notificationIds);
+    await clearBillSchedule(id);
   };
 
   return (

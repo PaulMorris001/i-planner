@@ -7,14 +7,26 @@ import { settingsService } from '@/services/settings.service';
 import { planService } from '@/services/plan.service';
 import { taskService } from '@/services/task.service';
 import { billService } from '@/services/bill.service';
+import { savingsGoalService } from '@/services/savingsGoal.service';
 import { syncClassToAppleCalendar, syncTaskToAppleCalendar } from '@/utils/appleCalendarSync';
 import {
   requestNotificationPermission,
   scheduleTaskNotifications,
   scheduleClassNotifications,
   scheduleBillNotifications,
+  scheduleSavingsGoalNotifications,
   cancelNotifications,
 } from '@/utils/notifications';
+import {
+  markTaskScheduled,
+  markClassScheduled,
+  markBillScheduled,
+  markSavingsGoalScheduled,
+  clearTaskSchedule,
+  clearClassSchedule,
+  clearBillSchedule,
+  clearSavingsGoalSchedule,
+} from '@/utils/notificationReconcile';
 import type { Settings } from '@/types/settings.types';
 import type { StudentPlan, ClassItem } from '@/types/plan.types';
 
@@ -66,12 +78,22 @@ async function backfillAppleCalendar() {
 
 // Same fetch-directly-via-services reasoning as backfillAppleCalendar above —
 // SettingsProvider is mounted above TasksProvider, so useTasks()/useBills() aren't in scope.
+//
+// Each mark*Scheduled call below keeps utils/notificationReconcile.ts's
+// per-device cache in sync with what this function just scheduled — without
+// it, the next reconcile pass (the very next foreground/pull-to-refresh)
+// would find a stale cache entry from *before* reminders were disabled,
+// see the item's other fields unchanged, and report those old (already-
+// cancelled) ids back into app state instead of the fresh ones just
+// scheduled here — leaving the real notification untracked and never
+// cancelled on a later edit/delete.
 async function backfillReminders() {
   try {
-    const [plan, tasks, bills] = await Promise.all([
+    const [plan, tasks, bills, savingsGoals] = await Promise.all([
       planService.get<StudentPlan>('student'),
       taskService.list(),
       billService.list(),
+      savingsGoalService.list(),
     ]);
 
     if (plan?.classes?.length) {
@@ -80,7 +102,10 @@ async function backfillReminders() {
         plan.classes.map(async (item) => {
           if (item.notificationIds?.length || !item.time) return;
           const notificationIds = await scheduleClassNotifications(item);
-          if (notificationIds.length) patches.set(item.id, { notificationIds });
+          if (notificationIds.length) {
+            patches.set(item.id, { notificationIds });
+            await markClassScheduled({ ...item, notificationIds }, notificationIds);
+          }
         })
       );
       await saveClassPatches(patches);
@@ -89,13 +114,28 @@ async function backfillReminders() {
     for (const task of tasks) {
       if (task.notificationIds?.length || task.done || !task.dueDate || !task.time) continue;
       const notificationIds = await scheduleTaskNotifications(task);
-      if (notificationIds.length) await taskService.update(task.id, { notificationIds });
+      if (notificationIds.length) {
+        await taskService.update(task.id, { notificationIds });
+        await markTaskScheduled({ ...task, notificationIds }, notificationIds);
+      }
     }
 
     for (const bill of bills) {
       if (bill.notificationIds?.length) continue;
       const notificationIds = await scheduleBillNotifications(bill);
-      if (notificationIds.length) await billService.update(bill.id, { notificationIds });
+      if (notificationIds.length) {
+        await billService.update(bill.id, { notificationIds });
+        await markBillScheduled({ ...bill, notificationIds }, notificationIds);
+      }
+    }
+
+    for (const goal of savingsGoals) {
+      if (goal.notificationIds?.length) continue;
+      const notificationIds = await scheduleSavingsGoalNotifications(goal);
+      if (notificationIds.length) {
+        await savingsGoalService.update(goal.id, { notificationIds });
+        await markSavingsGoalScheduled({ ...goal, notificationIds }, notificationIds);
+      }
     }
   } catch (err) {
     console.error('[SettingsProvider] reminder backfill failed', err);
@@ -104,10 +144,11 @@ async function backfillReminders() {
 
 async function cancelAllReminders() {
   try {
-    const [plan, tasks, bills] = await Promise.all([
+    const [plan, tasks, bills, savingsGoals] = await Promise.all([
       planService.get<StudentPlan>('student'),
       taskService.list(),
       billService.list(),
+      savingsGoalService.list(),
     ]);
 
     if (plan?.classes?.length) {
@@ -117,6 +158,7 @@ async function cancelAllReminders() {
           if (!item.notificationIds?.length) return;
           await cancelNotifications(item.notificationIds);
           patches.set(item.id, { notificationIds: [] });
+          await clearClassSchedule(item.id);
         })
       );
       await saveClassPatches(patches);
@@ -126,12 +168,21 @@ async function cancelAllReminders() {
       if (!task.notificationIds?.length) continue;
       await cancelNotifications(task.notificationIds);
       await taskService.update(task.id, { notificationIds: [] });
+      await clearTaskSchedule(task.id);
     }
 
     for (const bill of bills) {
       if (!bill.notificationIds?.length) continue;
       await cancelNotifications(bill.notificationIds);
       await billService.update(bill.id, { notificationIds: [] });
+      await clearBillSchedule(bill.id);
+    }
+
+    for (const goal of savingsGoals) {
+      if (!goal.notificationIds?.length) continue;
+      await cancelNotifications(goal.notificationIds);
+      await savingsGoalService.update(goal.id, { notificationIds: [] });
+      await clearSavingsGoalSchedule(goal.id);
     }
   } catch (err) {
     console.error('[SettingsProvider] failed to cancel reminders', err);

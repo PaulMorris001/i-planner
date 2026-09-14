@@ -2,11 +2,13 @@ import { IconSymbol, type IconSymbolName } from "@/components/ui/icon-symbol";
 import { Routes, type AppRoute } from "@/constants/routes";
 import { Colors, Spacing } from "@/constants/theme";
 import { useAuth } from "@/hooks/useAuth";
+import { useTimetableUploadModal } from "@/contexts/TimetableUploadModalContext";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useRef } from "react";
 import {
   Alert,
   Animated,
+  InteractionManager,
   Modal,
   Pressable,
   ScrollView,
@@ -82,13 +84,15 @@ export function ProfileInfoModal({
 }: ProfileInfoModalProps) {
   const router = useRouter();
   const { user, logout } = useAuth();
+  const { open: openTimetableUpload } = useTimetableUploadModal();
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const drawerWidth = Math.min(windowWidth * DRAWER_WIDTH_PCT, DRAWER_MAX_WIDTH);
 
   const displayName = user?.fullName?.trim() || user?.email || "";
   const initial = displayName.charAt(0).toUpperCase();
-  const path = PATH_META[toPathId(focusProfile)];
+  const pathId = toPathId(focusProfile);
+  const path = PATH_META[pathId];
 
   const translateX = useRef(new Animated.Value(drawerWidth)).current;
   const overlayOpacity = useRef(new Animated.Value(0)).current;
@@ -153,6 +157,36 @@ export function ProfileInfoModal({
     },
     [drawerWidth, translateX, overlayOpacity, onClose, router]
   );
+
+  // Same close-then-act shape as goTo above, but opening the (globally
+  // mounted, see app/_layout.tsx) Timetable Upload modal instead of
+  // navigating. Unlike goTo's router.push, this presents a second native
+  // <Modal> — RN (iOS especially) doesn't reliably present one while this
+  // drawer's own Modal is still mid-dismissal, even if onClose() and
+  // openTimetableUpload() are called back-to-back (React can batch both
+  // updates into the same commit, so the two native Modals' visible props
+  // would flip in the same tick). InteractionManager.runAfterInteractions
+  // defers the open until this Modal's own dismissal has actually settled —
+  // same tool already used elsewhere in this codebase for this class of
+  // native-animation-timing issue (see MonthCalendarView.tsx).
+  const handleUploadTimetable = useCallback(() => {
+    Animated.parallel([
+      Animated.timing(translateX, {
+        toValue: drawerWidth,
+        duration: ANIM_MS - 60,
+        useNativeDriver: true,
+      }),
+      Animated.timing(overlayOpacity, {
+        toValue: 0,
+        duration: ANIM_MS - 60,
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
+      if (!finished) return;
+      onClose();
+      InteractionManager.runAfterInteractions(() => openTimetableUpload());
+    });
+  }, [drawerWidth, translateX, overlayOpacity, onClose, openTimetableUpload]);
 
   // Same "confirm, then log out" copy/pattern as profile.tsx's own logout —
   // kept in sync deliberately, since this drawer is now a second entry point
@@ -284,6 +318,22 @@ export function ProfileInfoModal({
                   size={18}
                 />
               </Pressable>
+              {/* Timetable-parsing produces ClassItems — a Student-path concept
+                  (coursework/classes); Exam-candidate and Professional paths
+                  have no equivalent, so this row only makes sense here. */}
+              {pathId === 'student' && (
+                <Pressable style={styles.manageRow} onPress={handleUploadTimetable}>
+                  <View style={styles.manageLabelRow}>
+                    <IconSymbol name="calendar" color={Colors.primaryLight} size={18} />
+                    <Text style={styles.manageText}>Upload timetable</Text>
+                  </View>
+                  <IconSymbol
+                    name="chevron.right"
+                    color={Colors.primaryLight}
+                    size={18}
+                  />
+                </Pressable>
+              )}
             </View>
           </ScrollView>
 

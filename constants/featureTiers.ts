@@ -16,6 +16,7 @@ export const FEATURE_MIN_TIER = {
   coach_goal: 'professional',
   exam_topics: 'professional',
   syllabus_extraction: 'student',
+  timetable_extraction: 'student',
 } as const satisfies Record<string, SubscriptionTier>;
 
 // Mirrors backend/src/controllers/syllabus.controller.ts's FREE_SYLLABUS_COUNT

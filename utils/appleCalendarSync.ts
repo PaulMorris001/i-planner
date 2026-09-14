@@ -5,10 +5,6 @@ import { parseTimeToMinutes } from '@/utils/time';
 import type { ClassItem } from '@/types/plan.types';
 import type { TaskFrequency } from '@/types/task.types';
 
-// expo-calendar is a native module — there's no server-reachable "Apple Calendar
-// API," so this sync runs client-side, unlike the Google side which is entirely
-// backend-driven. Every function checks permission itself and no-ops cleanly when
-// not granted, so callers never need their own connected-check.
 
 async function hasPermission(): Promise<boolean> {
   const { status } = await Calendar.getCalendarPermissionsAsync();
@@ -56,6 +52,12 @@ interface RecurrenceInput {
   recurring: boolean;
   freq?: 'weekly' | 'weekdays' | 'daily' | 'monthly';
   dayIdxs?: number[];
+  // When set, terminates the recurrence at a real date — unlike
+  // expo-notifications' WEEKLY/DAILY/MONTHLY triggers (see
+  // utils/notifications.ts), expo-calendar's RecurrenceRule has a genuine
+  // `endDate`, so Apple Calendar can enforce this natively rather than
+  // needing this app to keep cancelling/recreating anything.
+  endDate?: string;
   notes?: string;
   location?: string;
 }
@@ -65,12 +67,18 @@ interface RecurrenceInput {
 // event per dayIdxs occurrence (hence the array return) rather than one event
 // with a compound rule. daily/monthly get a single event with a simple rule.
 async function createRecurringEvents(calendarId: string, input: RecurrenceInput): Promise<string[]> {
-  const { title, baseDateIso, time, durationMinutes, recurring, freq, dayIdxs, notes, location } = input;
+  const { title, baseDateIso, time, durationMinutes, recurring, freq, dayIdxs, endDate, notes, location } = input;
 
   if (!recurring || !freq) {
     const { start, end } = eventWindow(baseDateIso, time, durationMinutes);
     return [await Calendar.createEventAsync(calendarId, { title, startDate: start, endDate: end, notes, location })];
   }
+
+  // Recurrence *end* (e.g. the semester's last day), not the event's own
+  // start/end time window above — only meaningful when set and parseable;
+  // absent means recur indefinitely, same as before this existed.
+  const recurrenceEnd = endDate ? parseISODateLocal(endDate) : undefined;
+  const validRecurrenceEnd = recurrenceEnd && !Number.isNaN(recurrenceEnd.getTime()) ? recurrenceEnd : undefined;
 
   const eventIds: string[] = [];
 
@@ -85,7 +93,7 @@ async function createRecurringEvents(calendarId: string, input: RecurrenceInput)
           endDate: end,
           notes,
           location,
-          recurrenceRule: { frequency: Calendar.Frequency.WEEKLY },
+          recurrenceRule: { frequency: Calendar.Frequency.WEEKLY, endDate: validRecurrenceEnd },
         })
       );
     }
@@ -93,7 +101,10 @@ async function createRecurringEvents(calendarId: string, input: RecurrenceInput)
     const { start, end } = eventWindow(baseDateIso, time, durationMinutes);
     const frequency = freq === 'daily' ? Calendar.Frequency.DAILY : Calendar.Frequency.MONTHLY;
     eventIds.push(
-      await Calendar.createEventAsync(calendarId, { title, startDate: start, endDate: end, notes, location, recurrenceRule: { frequency } })
+      await Calendar.createEventAsync(calendarId, {
+        title, startDate: start, endDate: end, notes, location,
+        recurrenceRule: { frequency, endDate: validRecurrenceEnd },
+      })
     );
   }
 
@@ -114,6 +125,7 @@ export async function syncClassToAppleCalendar(item: ClassItem): Promise<string[
       recurring: item.recurring,
       freq: item.freq,
       dayIdxs: item.dayIdxs,
+      endDate: item.endDate,
       notes: item.professor ? `Professor: ${item.professor}` : undefined,
       location: item.venue,
     });

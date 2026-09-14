@@ -1,103 +1,96 @@
 // ── Student plan item types ────────────────────────────────────────────────
-export type ClassFrequency = 'weekly' | 'weekdays' | 'daily' | 'monthly';
+export type ClassFrequency = "weekly" | "weekdays" | "daily" | "monthly";
 
 export interface ClassItem {
-  id:         string;
+  id: string;
   courseName: string;
-  startDate:  string;   // ISO date this class starts / started
-  recurring:  boolean;
-  freq:       ClassFrequency;
-  dayIdxs:    number[];  // Monday-start weekday indices (0=Mon..6=Sun) this class occurs on
-  time:       string;
+  startDate: string;
+  // Only meaningful when recurring is true — the class stops actually
+  // occurring after this date (e.g. the semester's last day). Absent means
+  // it recurs indefinitely, the original (and still default) behavior.
+  // Notification triggers have no native way to expire themselves at this
+  // date (see utils/notifications.ts/scheduleClassNotifications) — this is
+  // enforced live for display (utils/date.ts's classOccursOnDate) and
+  // best-effort for already-scheduled reminders (cancelled the next time
+  // this device reconciles, see utils/notificationReconcile.ts).
+  endDate?: string;
+  recurring: boolean;
+  freq: ClassFrequency;
+  dayIdxs: number[]; // Monday-start weekday indices (0=Mon..6=Sun) this class occurs on
+  time: string;
   professor?: string;
-  venue?:     string;
-  // Louder/harder-to-miss delivery for the exact start-time notification —
-  // same treatment as a task's Alarm toggle (custom sound, DND-bypass,
-  // Dismiss/Snooze actions). Absent/false = a normal, gentle reminder.
+  venue?: string;
   alarmEnabled?: boolean;
-  // Calendar-sync event ids, one per synced entry (Apple gets one event per
-  // dayIdxs occurrence; Google gets a single event with a multi-day RRULE).
   appleEventIds?: string[];
   googleEventId?: string;
-  // Locally-scheduled expo-notifications reminder ids — one per dayIdxs
-  // occurrence for weekly/weekdays, same reasoning as appleEventIds.
   notificationIds?: string[];
 }
 
 export interface RecruitmentItem {
-  id:       string;
-  taskType: 'Apply' | 'Interview' | 'Network' | 'Update CV' | 'Other';
-  company:  string;
-  date:     string;
+  id: string;
+  taskType: "Apply" | "Interview" | "Network" | "Update CV" | "Other";
+  company: string;
+  date: string;
 }
 
 export interface SocialItem {
-  id:        string;
-  activity:  string;
-  frequency: 'One-off' | 'Weekly' | 'Monthly';
+  id: string;
+  activity: string;
+  frequency: "One-off" | "Weekly" | "Monthly";
 }
 
 export interface RoutineItem {
-  id:        string;
-  name:      string;
-  timeOfDay: 'Morning' | 'Afternoon' | 'Evening' | 'Night';
+  id: string;
+  name: string;
+  timeOfDay: "Morning" | "Afternoon" | "Evening" | "Night";
 }
 
 export interface OtherItem {
-  id:    string;
+  id: string;
   title: string;
-  date:  string;
+  date: string;
 }
 
 export interface StudentPlan {
-  classes:       ClassItem[];
-  recruitment:   RecruitmentItem[];
-  social_life:   SocialItem[];
+  classes: ClassItem[];
+  recruitment: RecruitmentItem[];
+  social_life: SocialItem[];
   daily_routine: RoutineItem[];
-  other:         OtherItem[];
+  other: OtherItem[];
 }
 
-// ── Legacy (keep for backward compat) ─────────────────────────────────────
+// Legacy (keep for backward compat)
 export interface PlanItem {
-  id:    string;
+  id: string;
   title: string;
-  date:  string;
+  date: string;
 }
 
 export type PlanCategory =
-  | 'classes'
-  | 'recruitment'
-  | 'social_life'
-  | 'daily_routine'
-  | 'other';
+  | "classes"
+  | "recruitment"
+  | "social_life"
+  | "daily_routine"
+  | "other";
 
-// ── Exam types ─────────────────────────────────────────────────────────────
+//Exam types
 export interface ExamTopic {
-  id:    string;
+  id: string;
   title: string;
-  week:  number; // 1-based, 1..weeksRemaining (as of generation time)
-  done:  boolean;
+  week: number;
+  done: boolean;
 }
 
 export interface Exam {
-  id:             string;
-  name:           string;
-  subject:        string;
-  examDate:       string;
-  hoursPerWeek:   number;
+  id: string;
+  name: string;
+  subject: string;
+  examDate: string;
+  hoursPerWeek: number;
   weeksRemaining: number;
-  // AI-generated week-by-week study topics — undefined/empty until generated
-  // (e.g. an exam saved before this feature existed, or generation failed).
   topics?: ExamTopic[];
-  // Cumulative count the user has explicitly logged via cert-tracker.tsx's
-  // "+ Log questions" entry — undefined means never logged, treat as 0.
   practiceQuestionsLogged?: number;
-  // Chronological list of real scores (0-100) the user entered via
-  // "+ Add score" — the most recent entry is what cert-tracker.tsx displays
-  // as "Last mock exam".
   mockScores?: number[];
-  // Self-reported readiness, 1-5 — set by tapping a confidence bar in
-  // cert-tracker.tsx.
   confidence?: number;
 }
 
@@ -105,24 +98,24 @@ export interface ExamPlan {
   exams: Exam[];
 }
 
-// ── Professional plan types ────────────────────────────────────────────────
+//Professional plan types
 export interface CareerGoal {
-  id:         string;
-  goal:       string;
+  id: string;
+  goal: string;
   targetYear: string;
 }
 
 export interface FinancialGoal {
-  id:           string;
-  goal:         string;
+  id: string;
+  goal: string;
   targetAmount: string;
-  targetYear:   string;
+  targetYear: string;
 }
 
 export interface ProfessionalPlan {
-  currentRole:     string;
+  currentRole: string;
   currentIndustry: string;
-  careerGoals:     CareerGoal[];
-  financialGoals:  FinancialGoal[];
-  certifications:  string[];
+  careerGoals: CareerGoal[];
+  financialGoals: FinancialGoal[];
+  certifications: string[];
 }

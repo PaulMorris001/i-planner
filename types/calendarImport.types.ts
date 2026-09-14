@@ -1,4 +1,4 @@
-export type CalendarSource = 'apple' | 'google' | 'outlook';
+export type CalendarSource = "apple" | "google" | "outlook";
 
 export interface ImportedCalendarEvent {
   id: string;
@@ -7,7 +7,7 @@ export interface ImportedCalendarEvent {
   externalId: string;
   source: CalendarSource;
   title: string;
-  startAt: string; // ISO instant
+  startAt: string;
   endAt: string;
   allDay: boolean;
   location?: string;

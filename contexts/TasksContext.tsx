@@ -5,6 +5,7 @@ import { taskService } from '@/services/task.service';
 import { useSettings } from '@/hooks/useSettings';
 import { syncTaskToAppleCalendar, deleteAppleEvents } from '@/utils/appleCalendarSync';
 import { scheduleTaskNotifications, cancelNotifications } from '@/utils/notifications';
+import { reconcileTaskNotifications, markTaskScheduled, clearTaskSchedule } from '@/utils/notificationReconcile';
 import { toDateKey } from '@/utils/date';
 import type { Task, NewTaskInput } from '@/types/task.types';
 
@@ -33,8 +34,17 @@ export function TasksProvider({ children }: { children: ReactNode }) {
   const fetchTasks = async (): Promise<Task[]> => {
     try {
       const list = await taskService.list();
-      setTasks(list);
-      return list;
+      // Reconciles this device's own local reminder schedule against
+      // whatever just came back from the server — picks up tasks created,
+      // edited, completed, or deleted on another device. A failure here
+      // shouldn't stop the actual task list from loading, so it's guarded
+      // separately from the fetch itself.
+      const reconciled = await reconcileTaskNotifications(list, remindersEnabled).catch((err) => {
+        console.error('[TasksProvider] failed to reconcile task notifications', err);
+        return list;
+      });
+      setTasks(reconciled);
+      return reconciled;
     } catch (err) {
       console.error('[TasksProvider] failed to load tasks', err);
       return [];
@@ -77,6 +87,10 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     try {
       const created = await taskService.create(toCreate);
       setTasks((prev) => prev.map((t) => (t.id === tempId ? created : t)));
+      // Record what this device just scheduled under the real (server-
+      // assigned) id, so the next reconcile pass recognizes it as already
+      // handled instead of scheduling a duplicate set.
+      await markTaskScheduled(created, notificationIds);
     } catch (err) {
       setTasks((prev) => prev.filter((t) => t.id !== tempId));
       throw err;
@@ -135,6 +149,7 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     }
 
     setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, done: nextDone, notificationIds } : t)));
+    await markTaskScheduled({ ...target, done: nextDone }, notificationIds ?? []);
     try {
       await taskService.update(id, { done: nextDone, notificationIds });
     } catch (err) {
@@ -171,6 +186,7 @@ export function TasksProvider({ children }: { children: ReactNode }) {
         ...finalPatch,
         notificationIds: remindersEnabled ? await scheduleTaskNotifications(merged) : [],
       };
+      await markTaskScheduled({ ...current, ...finalPatch }, finalPatch.notificationIds ?? []);
     }
 
     setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...finalPatch } : t)));
@@ -198,6 +214,7 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     try {
       const updated = await taskService.update(task.id, patch);
       setTasks((prev) => prev.map((t) => (t.id === task.id ? updated : t)));
+      await markTaskScheduled({ ...task, ...patch }, notificationIds);
     } catch (err) {
       console.error('[TasksProvider] failed to sync externally-created task', err);
     }
@@ -223,6 +240,7 @@ export function TasksProvider({ children }: { children: ReactNode }) {
       await deleteAppleEvents(target.appleEventIds);
     }
     if (target?.notificationIds) await cancelNotifications(target.notificationIds);
+    await clearTaskSchedule(id);
   };
 
   return (

@@ -1,17 +1,17 @@
 import { auth } from "@/config/firebase";
 import type {
-    AuthError,
-    AuthResponse,
-    LoginPayload,
-    RegisterPayload,
+  AuthError,
+  AuthResponse,
+  LoginPayload,
+  RegisterPayload,
 } from "@/types/auth.types";
 import type { User } from "@/types/user.types";
 import {
-    createUserWithEmailAndPassword,
-    sendPasswordResetEmail,
-    signInWithEmailAndPassword,
-    updateProfile,
-    type User as FirebaseUser,
+  createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
+  signInWithEmailAndPassword,
+  updateProfile,
+  type User as FirebaseUser,
 } from "firebase/auth";
 
 export function mapFirebaseUser(user: FirebaseUser): User {

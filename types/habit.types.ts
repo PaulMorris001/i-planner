@@ -1,6 +1,6 @@
-import type { TaskCategoryId } from '@/constants/taskMeta';
+import type { TaskCategoryId } from "@/constants/taskMeta";
 
-export type HabitFrequency = 'daily' | 'weekdays' | 'weekly' | 'monthly';
+export type HabitFrequency = "daily" | "weekdays" | "weekly" | "monthly";
 
 export interface Habit {
   id: string;
@@ -10,8 +10,6 @@ export interface Habit {
   createdAt: string;
   completedDates: string[];
   streak: number;
-  // This week's completion grid, Monday-start (index 0=Mon..6=Sun) — same
-  // weekday convention as ClassItem/Task's dayIdxs.
   week: boolean[];
   doneToday: boolean;
 }

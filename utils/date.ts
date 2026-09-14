@@ -88,6 +88,7 @@ export function classOccursOnDate(item: ClassItem, date: Date): boolean {
   const dateMs = localMidnight(date);
   const startMs = localMidnight(start);
   if (dateMs < startMs) return false; // hasn't started yet
+  if (classRecurrenceEnded(item, date)) return false;
 
   if (!item.recurring) return dateMs === startMs;
 
@@ -101,6 +102,22 @@ export function classOccursOnDate(item: ClassItem, date: Date): boolean {
     return date.getDate() === Math.min(start.getDate(), lastDayOfMonth);
   }
   return false;
+}
+
+// True once `item.endDate` (if any) has passed as of `now` — a recurring
+// class stops actually occurring after this date even though its native
+// WEEKLY/DAILY/MONTHLY notification trigger and Apple Calendar recurrence
+// have no shared way to know "as of now" (Apple's does get a real end date at
+// creation time, see utils/appleCalendarSync.ts; expo-notifications' weekly
+// trigger has no such field at all). Shared by classOccursOnDate (live,
+// always correct) and utils/notifications.ts/utils/notificationReconcile.ts
+// (best-effort — only actually cancels a stale local notification the next
+// time this device reconciles).
+export function classRecurrenceEnded(item: { endDate?: string }, now: Date = new Date()): boolean {
+  if (!item.endDate) return false;
+  const end = parseISODateLocal(item.endDate);
+  if (Number.isNaN(end.getTime())) return false;
+  return localMidnight(now) > localMidnight(end);
 }
 
 export function localMidnight(date: Date): number {

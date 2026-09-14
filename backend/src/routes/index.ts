@@ -10,6 +10,7 @@ import { settingsRouter } from './settings.routes';
 import { coachRouter } from './coach.routes';
 import { accountRouter } from './account.routes';
 import { syllabusRouter } from './syllabus.routes';
+import { timetableRouter } from './timetable.routes';
 import { googleOAuthRouter } from './googleOAuth.routes';
 import { microsoftOAuthRouter } from './microsoftOAuth.routes';
 import { subscriptionRouter } from './subscription.routes';
@@ -33,6 +34,7 @@ router.use('/settings', settingsRouter);
 router.use('/coach', coachRouter);
 router.use('/account', accountRouter);
 router.use('/syllabi', syllabusRouter);
+router.use('/timetables', timetableRouter);
 router.use('/subscription', subscriptionRouter);
 router.use('/calendar', calendarImportRouter);
 

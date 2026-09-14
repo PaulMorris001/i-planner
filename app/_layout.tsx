@@ -16,6 +16,8 @@ import { TasksProvider } from '@/contexts/TasksContext';
 import { SyllabiProvider } from '@/contexts/SyllabiContext';
 import { NewTaskModalProvider } from '@/contexts/NewTaskModalContext';
 import { NewTaskModal } from '@/components/task/NewTaskModal';
+import { TimetableUploadModalProvider } from '@/contexts/TimetableUploadModalContext';
+import { TimetableUploadModal } from '@/components/plan/TimetableUploadModal';
 import { RefetchOnForeground } from '@/components/RefetchOnForeground';
 import { initNotificationHandler, registerAlarmNotificationRouting } from '@/utils/notifications';
 
@@ -65,10 +67,13 @@ export default function RootLayout() {
                         <TasksProvider>
                           <SyllabiProvider>
                             <NewTaskModalProvider>
-                              <StatusBar style="dark" />
-                              <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }} />
-                              <NewTaskModal />
-                              <RefetchOnForeground />
+                              <TimetableUploadModalProvider>
+                                <StatusBar style="dark" />
+                                <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }} />
+                                <NewTaskModal />
+                                <TimetableUploadModal />
+                                <RefetchOnForeground />
+                              </TimetableUploadModalProvider>
                             </NewTaskModalProvider>
                           </SyllabiProvider>
                         </TasksProvider>

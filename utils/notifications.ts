@@ -2,7 +2,7 @@ import * as Notifications from 'expo-notifications';
 import { Platform, Alert } from 'react-native';
 import { router } from 'expo-router';
 import { parseTimeToMinutes } from '@/utils/time';
-import { parseISODateLocal } from '@/utils/date';
+import { parseISODateLocal, classRecurrenceEnded } from '@/utils/date';
 import { formatCurrency } from '@/utils/currency';
 import { Routes } from '@/constants/routes';
 import { taskService } from '@/services/task.service';
@@ -13,6 +13,15 @@ import type { StudentPlan } from '@/types/plan.types';
 // Shared by Tasks and Classes: each gets two notifications per occurrence — one
 // REMINDER_LEAD_MINUTES before, one exactly at the due/start time.
 const REMINDER_LEAD_MINUTES = 15;
+// iOS's hard, fixed pending-local-notification cap, shared across every
+// reminder this app has ever scheduled (lead+exact for every task/class/bill,
+// plus escalation extras for alarms) — anything scheduled past this ceiling
+// is silently never fired, with no error surfaced anywhere to catch it. Only
+// scheduleAlarmBurst's one-off escalation extras check this today; a
+// recurring class/task's plain WEEKLY/DAILY/MONTHLY notifications don't, so
+// callers that can schedule many of those at once (bulk timetable import —
+// see getNotificationHeadroom below) need to check for themselves first.
+const IOS_NOTIFICATION_CAP = 64;
 const ANDROID_CHANNEL_ID = 'planner-reminders';
 // Separate channel, not a change to the one above — Android channel settings
 // are effectively fixed once created, and this must not retroactively change
@@ -411,6 +420,26 @@ async function scheduleOccurrence(spec: OccurrenceSpec): Promise<string[]> {
   }
 }
 
+// Remaining pending-notification headroom against IOS_NOTIFICATION_CAP, or
+// null if it couldn't be determined (Android has no such cap, but the check
+// itself is cheap and harmless there too). Callers treat null as "assume
+// there's room" rather than blocking on a guess — same fallback this had
+// inline inside scheduleAlarmBurst before being pulled out here. Exported for
+// TimetableUploadModal's bulk-import pre-flight check: bulk-creating several
+// recurring classes at once is the one path in this app that can plausibly
+// schedule enough plain WEEKLY/DAILY/MONTHLY notifications in a single action
+// to hit this cap — every other create flow only ever adds one item at a
+// time, and only the one-off alarm-burst path above already guards itself.
+export async function getNotificationHeadroom(): Promise<number | null> {
+  try {
+    const pending = await Notifications.getAllScheduledNotificationsAsync();
+    return IOS_NOTIFICATION_CAP - pending.length;
+  } catch (err) {
+    console.error('[notifications] failed to check pending notification count', err);
+    return null;
+  }
+}
+
 // Schedules a one-off alarm as a short burst: fireAt itself, plus
 // ALARM_ESCALATION_COUNT more re-fires ALARM_ESCALATION_INTERVAL_MINUTES
 // apart, all sharing a custom-identifier group so any one of them (via
@@ -432,24 +461,16 @@ async function scheduleAlarmBurst(
   const channelId = Platform.OS === 'android' ? ANDROID_ALARM_CHANNEL_ID : undefined;
   const groupBase = `alarm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-  // iOS enforces a hard, fixed 64-pending-local-notification cap shared across
-  // every reminder this app has ever scheduled (lead+exact for every task/
-  // class/bill, plus now up to 4 per alarm) — anything scheduled past that
-  // ceiling is silently never fired, with no error surfaced anywhere to catch
-  // it. If the queue's already close to full, shrink (or drop) the escalation
+  // If the queue's already close to full, shrink (or drop) the escalation
   // extras rather than risk the burst as a whole silently failing outright:
   // one guaranteed ring beats a fuller burst that might not show up at all.
   // Android has no comparable cap, but the check itself is cheap and harmless
   // there — never platform-gated below.
   let escalationCount = ALARM_ESCALATION_COUNT;
-  try {
-    const pending = await Notifications.getAllScheduledNotificationsAsync();
-    const headroom = 64 - pending.length - 1; // -1 reserves the main alarm itself
-    if (headroom < escalationCount) escalationCount = Math.max(0, headroom);
-  } catch (err) {
-    // Can't introspect the pending count — proceed with the full burst rather
-    // than degrade on a guess.
-    console.error('[notifications] failed to check pending notification count', err);
+  const headroom = await getNotificationHeadroom();
+  if (headroom !== null) {
+    const escalationHeadroom = headroom - 1; // -1 reserves the main alarm itself
+    if (escalationHeadroom < escalationCount) escalationCount = Math.max(0, escalationHeadroom);
   }
 
   // id and fire offset computed together, index-for-index, in one array — not
@@ -594,12 +615,22 @@ export async function scheduleClassNotifications(item: {
   id?: string;
   courseName: string;
   startDate: string;
+  endDate?: string;
   time: string;
   recurring: boolean;
   freq: RecurFreq;
   dayIdxs: number[];
   alarmEnabled?: boolean;
 }): Promise<string[]> {
+  // A recurring class's WEEKLY/DAILY/MONTHLY trigger has no native way to
+  // stop itself once endDate (e.g. the semester's last day) passes — refusing
+  // to (re)schedule one that's already ended is the one enforcement point
+  // that's fully in this function's control; see utils/date.ts's
+  // classRecurrenceEnded for the rest of the story (Apple Calendar sync gets
+  // a real recurrence end date; an already-scheduled local notification is
+  // only cancelled the next time this device reconciles).
+  if (classRecurrenceEnded(item)) return [];
+
   // Same rule as tasks: only the exact start-time notification (leadMinutes:
   // 0) ever gets isAlarm — the 15-min lead stays a gentle heads-up either way.
   const spec = (leadMinutes: number, isAlarm?: boolean): OccurrenceSpec => ({
@@ -740,6 +771,43 @@ export async function scheduleBillNotifications(bill: {
     scheduleOccurrence(monthlySpec(bill.dueDate, dueBodyText)),
   ]);
   return [...weekLead, ...threeDayLead, ...dueIds];
+}
+
+// Fixed weekly slot for every savings goal's check-in nudge — a habit
+// reminder ("log a contribution"), not tied to targetDate the way bills'
+// due-date reminders are, so there's no per-item date/time to derive a
+// trigger from. Sunday morning, ahead of the week starting — dayIdx uses the
+// same Monday-start convention as Task/Class's dayIdxs (0=Mon..6=Sun).
+const SAVINGS_GOAL_CHECKIN_DAY_IDX = 6; // Sunday
+const SAVINGS_GOAL_CHECKIN_TIME = '10:00 AM';
+
+export async function scheduleSavingsGoalNotifications(goal: {
+  name: string;
+  targetAmount: number;
+  savedAmount: number;
+}): Promise<string[]> {
+  // Already there — no point nagging someone to keep contributing to a goal
+  // they've already fully funded.
+  if (goal.savedAmount >= goal.targetAmount) return [];
+  if (!(await hasPermission())) return [];
+
+  const { hour, minute } = leadHourMinute(SAVINGS_GOAL_CHECKIN_TIME, 0);
+  const weekday = toExpoWeekday(SAVINGS_GOAL_CHECKIN_DAY_IDX);
+  const channelId = Platform.OS === 'android' ? ANDROID_CHANNEL_ID : undefined;
+
+  try {
+    const id = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'Savings check-in',
+        body: `Time to log this week's contribution toward "${goal.name}".`,
+      },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.WEEKLY, weekday, hour, minute, channelId },
+    });
+    return [id];
+  } catch (err) {
+    console.error('[notifications] failed to schedule savings goal check-in', err);
+    return [];
+  }
 }
 
 export async function cancelNotifications(notificationIds: string[] | undefined): Promise<void> {

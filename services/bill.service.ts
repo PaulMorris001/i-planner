@@ -1,14 +1,15 @@
-import { authedRequest } from './authedRequest';
-import type { Bill, NewBillInput } from '@/types/bill.types';
+import type { Bill, NewBillInput } from "@/types/bill.types";
+import { authedRequest } from "./authedRequest";
 
 export const billService = {
-  list: () => authedRequest<Bill[]>('/bills'),
+  list: () => authedRequest<Bill[]>("/bills"),
 
   create: (input: NewBillInput) =>
-    authedRequest<Bill>('/bills', { method: 'POST', body: input }),
+    authedRequest<Bill>("/bills", { method: "POST", body: input }),
 
   update: (id: string, patch: Partial<NewBillInput>) =>
-    authedRequest<Bill>(`/bills/${id}`, { method: 'PATCH', body: patch }),
+    authedRequest<Bill>(`/bills/${id}`, { method: "PATCH", body: patch }),
 
-  remove: (id: string) => authedRequest<void>(`/bills/${id}`, { method: 'DELETE' }),
+  remove: (id: string) =>
+    authedRequest<void>(`/bills/${id}`, { method: "DELETE" }),
 };

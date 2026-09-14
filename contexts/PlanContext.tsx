@@ -2,6 +2,8 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '@/config/firebase';
 import { planService } from '@/services/plan.service';
+import { settingsService } from '@/services/settings.service';
+import { reconcileClassNotifications } from '@/utils/notificationReconcile';
 import type { StudentPlan, ExamPlan, ProfessionalPlan } from '@/types/plan.types';
 
 const EMPTY_PLAN: StudentPlan = {
@@ -50,12 +52,28 @@ export function PlanProvider({ children }: { children: ReactNode }) {
 
   const fetchPlans = async () => {
     try {
-      const [studentData, examData, professionalData] = await Promise.all([
+      // Fetched directly via the service, not useSettings() — PlanProvider is
+      // mounted above SettingsProvider in the tree (see app/_layout.tsx), so
+      // that context isn't available here. Best-effort: a failure here just
+      // means classes reconcile as if reminders were off, same as before this
+      // existed — it never blocks the plan itself from loading.
+      const [studentData, examData, professionalData, settings] = await Promise.all([
         planService.get<StudentPlan>('student'),
         planService.get<ExamPlan>('exam'),
         planService.get<ProfessionalPlan>('professional'),
+        settingsService.get().catch(() => null),
       ]);
-      if (studentData)      setPlan(studentData);
+      if (studentData) {
+        // Reconciles this device's own local class reminder schedule against
+        // whatever just came back from the server — picks up classes
+        // created, edited, or deleted on another device. See
+        // utils/notificationReconcile.ts.
+        const classes = await reconcileClassNotifications(studentData.classes, settings?.remindersEnabled ?? false).catch((err) => {
+          console.error('[PlanProvider] failed to reconcile class notifications', err);
+          return studentData.classes;
+        });
+        setPlan({ ...studentData, classes });
+      }
       if (examData)         setExamPlan(examData);
       if (professionalData) setProfessionalPlan(professionalData);
     } catch (err) {
