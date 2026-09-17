@@ -19,6 +19,7 @@ export const Routes = {
   HABITS:     '/habits',
   NOTES:      '/notes',
   NOTE_EDITOR: '/note-editor',
+  NOTES_FOLDER: '/notes-folder',
   PLANS:      '/plans',
   CERT_TRACKER: '/cert-tracker',
   CLASSES:    '/classes',

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { View, Text, Pressable, Alert, StyleSheet } from "react-native";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { ScreenWrapper } from "@/components/layout/ScreenWrapper";
 import { Button } from "@/components/ui/Button";
 import { IconSymbol } from "@/components/ui/icon-symbol";
@@ -8,17 +8,23 @@ import { Colors, Spacing, Typography, Radius } from "@/constants/theme";
 import { Routes } from "@/constants/routes";
 import { useSettings } from "@/hooks/useSettings";
 
-// Shown once, right after a fresh sign-up/sign-in (see register.tsx and
-// login.tsx's "not yet onboarded" branch) — before Focus, so notification
-// permission is asked while the user is still mid-setup rather than left
-// undiscoverable behind a Profile & Settings toggle they might never find.
-// A returning user logging back in on an already-onboarded device skips
-// straight to Dashboard and never sees this again (see login.tsx).
+// Shown right after a fresh sign-up/sign-in (see register.tsx and login.tsx's
+// "not yet onboarded" branch) — before Focus, so notification permission is
+// asked while the user is still mid-setup rather than left undiscoverable
+// behind a Profile & Settings toggle they might never find.
+//
+// Also re-shown to an *already-onboarded* returning account when this
+// specific device's OS notification permission is still undetermined (a
+// delete-and-reinstall wipes that even though the account itself already
+// finished onboarding — see login.tsx) — `next=dashboard` distinguishes that
+// case so it lands back on Dashboard instead of re-running Focus, which a
+// returning user has already been through and shouldn't see again.
 export default function NotificationsPrompt() {
   const { enableReminders } = useSettings();
   const [requesting, setRequesting] = useState(false);
+  const { next } = useLocalSearchParams<{ next?: string }>();
 
-  const proceed = () => router.replace(Routes.FOCUS);
+  const proceed = () => router.replace(next === 'dashboard' ? Routes.DASHBOARD : Routes.FOCUS);
 
   const handleEnable = async () => {
     setRequesting(true);

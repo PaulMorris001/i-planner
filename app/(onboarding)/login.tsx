@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useState } from 'react';
 import { router } from 'expo-router';
+import * as Notifications from 'expo-notifications';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -43,7 +44,20 @@ export default function Login() {
       if (settings.focusProfile) {
         await setFocusProfile(settings.focusProfile);
         await completeOnboarding();
-        router.replace(Routes.DASHBOARD);
+        // An account having already finished onboarding server-side says
+        // nothing about *this device's* OS notification permission — a
+        // delete-and-reinstall wipes that back to "undetermined" even for a
+        // returning account, and this branch used to skip straight to
+        // Dashboard regardless, silently leaving reminders/alarms off with
+        // no prompt ever shown again. Route through the prompt once more
+        // whenever it's still undetermined; a device that's already granted
+        // or denied it goes straight through, unchanged from before.
+        const { status } = await Notifications.getPermissionsAsync();
+        if (status === Notifications.PermissionStatus.UNDETERMINED) {
+          router.replace({ pathname: Routes.NOTIFICATIONS_PROMPT, params: { next: 'dashboard' } });
+        } else {
+          router.replace(Routes.DASHBOARD);
+        }
       } else {
         router.replace(Routes.NOTIFICATIONS_PROMPT);
       }
@@ -101,12 +115,15 @@ export default function Login() {
         </View>
 
         {/* Footer */}
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>Don't have an account? </Text>
-          <TouchableOpacity onPress={() => router.replace(Routes.REGISTER)}>
-            <Text style={styles.footerLink}>Create one</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          style={styles.footer}
+          onPress={() => router.replace(Routes.REGISTER)}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.footerText}>
+            Don&apos;t have an account? <Text style={styles.footerLink}>Create one</Text>
+          </Text>
+        </TouchableOpacity>
 
       </View>
     </ScreenWrapper>

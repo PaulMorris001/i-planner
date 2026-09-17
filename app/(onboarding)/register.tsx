@@ -6,12 +6,12 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { PRIVACY_URL, TERMS_URL } from "@/constants/legal";
 import { Routes } from "@/constants/routes";
-import { Colors, Radius, Spacing, Typography } from "@/constants/theme";
+import { Colors, Spacing, Typography } from "@/constants/theme";
 import { useAuth } from "@/hooks/useAuth";
 import { router } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useState } from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 export default function Register() {
   const { register, loading } = useAuth();
@@ -57,9 +57,11 @@ export default function Register() {
           title="Create your account"
           subtitle="Start planning in under two minutes."
         >
-          <View style={styles.logoMark}>
-            <Text style={styles.logoText}>i</Text>
-          </View>
+          <Image
+            source={require("@/assets/images/icon.png")}
+            style={styles.logoMark}
+            resizeMode="contain"
+          />
         </AuthHeader>
 
         <FormErrorBanner message={errors.general} />
@@ -125,12 +127,15 @@ export default function Register() {
         </Text>
 
         {/* Footer */}
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>Already have an account? </Text>
-          <TouchableOpacity onPress={() => router.replace(Routes.LOGIN)}>
-            <Text style={styles.footerLink}>Sign in</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          style={styles.footer}
+          onPress={() => router.replace(Routes.LOGIN)}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.footerText}>
+            Already have an account? <Text style={styles.footerLink}>Sign in</Text>
+          </Text>
+        </TouchableOpacity>
       </View>
     </ScreenWrapper>
   );
@@ -177,16 +182,6 @@ const styles = StyleSheet.create({
   logoMark: {
     width: 52,
     height: 52,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
     marginBottom: Spacing.lg,
-  },
-  logoText: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: Colors.accent,
-    lineHeight: 34,
   },
 });

@@ -7,7 +7,9 @@ import type { Note, NewNoteInput } from '@/types/note.types';
 interface NotesContextValue {
   notes: Note[];
   loading: boolean;
-  createNote: (input: NewNoteInput) => Promise<void>;
+  // Returns the created note — note-editor.tsx's autosave needs the real id
+  // back immediately, to switch a not-yet-saved draft over to updateNote calls.
+  createNote: (input: NewNoteInput) => Promise<Note>;
   updateNote: (id: string, patch: Partial<NewNoteInput>) => Promise<void>;
   deleteNote: (id: string) => Promise<void>;
   refetch: () => Promise<void>;
@@ -51,10 +53,16 @@ export function NotesProvider({ children }: { children: ReactNode }) {
   const createNote = async (input: NewNoteInput) => {
     const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const now = new Date().toISOString();
-    setNotes((prev) => sortByUpdated([...prev, { ...input, id: tempId, createdAt: now, updatedAt: now }]));
+    // Same null->undefined normalization as updateNote below — a brand-new
+    // note is never created directly into "explicitly no folder," so this
+    // only ever narrows `string | null | undefined` down to `string | undefined`.
+    const { folderId, ...rest } = input;
+    const localNote: Note = { ...rest, id: tempId, createdAt: now, updatedAt: now, folderId: folderId ?? undefined };
+    setNotes((prev) => sortByUpdated([...prev, localNote]));
     try {
       const created = await noteService.create(input);
       setNotes((prev) => sortByUpdated(prev.map((n) => (n.id === tempId ? created : n))));
+      return created;
     } catch (err) {
       setNotes((prev) => prev.filter((n) => n.id !== tempId));
       throw err;
@@ -63,10 +71,17 @@ export function NotesProvider({ children }: { children: ReactNode }) {
 
   const updateNote = async (id: string, patch: Partial<NewNoteInput>) => {
     const prevNotes = notes;
-    // Bumps updatedAt locally so the list re-sorts immediately, ahead of the server
-    // round trip — list order is derived from updatedAt, unlike Habit.
+    // Note.folderId is never literally `null` (a note is either filed under a
+    // real folder id, or the key is absent entirely — see toPublicNote's
+    // projection) — only NewNoteInput's patch shape allows explicit null, to
+    // express "un-file this note" distinctly from "leave its folder alone."
+    // Normalized here so the optimistic local copy matches what the server
+    // will actually send back, rather than briefly holding a `folderId: null`
+    // that Note's own type says can't happen.
+    const { folderId, ...rest } = patch;
+    const localPatch = folderId === undefined ? rest : { ...rest, folderId: folderId ?? undefined };
     setNotes((prev) =>
-      sortByUpdated(prev.map((n) => (n.id === id ? { ...n, ...patch, updatedAt: new Date().toISOString() } : n)))
+      sortByUpdated(prev.map((n) => (n.id === id ? { ...n, ...localPatch, updatedAt: new Date().toISOString() } : n)))
     );
     try {
       const updated = await noteService.update(id, patch);

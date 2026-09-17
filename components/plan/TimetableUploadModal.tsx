@@ -58,12 +58,19 @@ function parse24HourTime(hhmm: string): Date | null {
   return d;
 }
 
-// Stamps every row with the same recurrence window — used both when the
+// Stamps every RECURRING row with the same window — used both when the
 // document itself stated term dates and when the user enters them on the
-// 'semester-dates' step. Only startDate/endDate change; everything else
-// about each row (days, time, professor, venue) is left alone.
+// 'semester-dates' step. Non-recurring rows (one-off dated items — exams,
+// single sessions, see extraction.oneOffEvents below) are deliberately left
+// untouched: they already carry their own real, specific date, and this
+// would otherwise silently overwrite it with the term's start date. This
+// guard is what makes it safe to always call this on the *combined*
+// rows array rather than needing to track meetings/one-off rows separately
+// through the whole flow.
 function applySemesterWindow(rows: DraftClassRow[], start: Date, end: Date): DraftClassRow[] {
-  return rows.map((r) => ({ ...r, fields: { ...r.fields, startDate: start, endDate: end } }));
+  return rows.map((r) =>
+    r.fields.recurring ? { ...r, fields: { ...r.fields, startDate: start, endDate: end } } : r
+  );
 }
 
 interface SuccessSummary {
@@ -76,6 +83,14 @@ interface SuccessSummary {
 // pick/preview/extracting/review/creating/success flow) but for classes
 // instead of deadlines — see the plan doc (timetable upload feature) for the
 // full reasoning behind the extraction schema and the bulk-save path.
+//
+// The AI extracts two kinds of items — recurring weekly "meetings" and
+// dated "oneOffEvents" (exams, single sessions: anything tied to one
+// specific calendar date rather than a repeating slot) — but both become
+// ClassItems here: a recurring class, or a non-recurring one-time class for
+// a one-off event (ClassItem already supports recurring:false — the same
+// path a syllabus-derived class uses). Nothing in this feature ever creates
+// a Task; every row in the review list is a class, full stop.
 //
 // Takes no props, unlike SyllabusUploadModal — mounted once at the root
 // layout (see app/_layout.tsx) and driven by TimetableUploadModalContext, the
@@ -96,10 +111,11 @@ export function TimetableUploadModal() {
   const [rows, setRows] = useState<DraftClassRow[]>([]);
   // The term's date range — either read straight off the document by the AI,
   // or (when it couldn't find one) picked by the user on the 'semester-dates'
-  // step below. Applied to every row's startDate/endDate so each class
-  // recurs for exactly the weeks of the term instead of forever; kept here
-  // too (not just baked into the rows) so a manually "+ Add class" row during
-  // review gets the same window automatically.
+  // step below. Applied to every RECURRING row's startDate/endDate (see
+  // applySemesterWindow) so each class recurs for exactly the weeks of the
+  // term instead of forever; kept here too (not just baked into the rows) so
+  // a manually "+ Add class" row during review gets the same window
+  // automatically once it's toggled to recurring.
   const [semesterStart, setSemesterStart] = useState<Date | null>(null);
   const [semesterEnd, setSemesterEnd] = useState<Date | null>(null);
   // Which row's date/time picker is open, and which of the three — only one
@@ -178,7 +194,7 @@ export function TimetableUploadModal() {
       const extraction = await timetableService.extract({ fileBase64, filename: asset.name });
       if (processGenerationRef.current !== generation) return;
 
-      const draftRows: DraftClassRow[] = extraction.meetings.map((m, i) => {
+      const meetingRows: DraftClassRow[] = extraction.meetings.map((m, i) => {
         const days = Array.from(new Set(m.days.filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))).sort(
           (a, b) => a - b
         );
@@ -194,11 +210,39 @@ export function TimetableUploadModal() {
           },
         };
       });
-      const seededRows = draftRows.length > 0 ? draftRows : [{ key: `custom-${Date.now()}`, fields: defaultClassFields() }];
+      // One-off dated items (exam timetables are entirely made of these) —
+      // a non-recurring class, same as a syllabus-derived placeholder class:
+      // one real date, no weekday grid, no term window needed.
+      const eventRows: DraftClassRow[] = extraction.oneOffEvents.map((e, i) => {
+        const d = parseISODateLocal(e.date);
+        return {
+          key: `evt-${i}`,
+          fields: {
+            ...defaultClassFields(),
+            className: e.title,
+            startDate: !Number.isNaN(d.getTime()) ? d : new Date(),
+            recurring: false,
+            selectedDays: [],
+            time: e.startTime ? parse24HourTime(e.startTime) : null,
+            venue: e.venue ?? '',
+          },
+        };
+      });
+      const combinedRows = [...meetingRows, ...eventRows];
 
-      // The document stated its own term dates — apply them to every class
-      // and skip straight to review. Otherwise ask the user once, up front,
-      // rather than leaving every class recurring indefinitely by default.
+      // A semester window only matters if there's an actual recurring class
+      // to bound — if the document has none (e.g. a pure exam timetable),
+      // skip straight to review regardless of term dates.
+      if (meetingRows.length === 0) {
+        setRows(combinedRows);
+        setStep('review');
+        return;
+      }
+
+      // The document stated its own term dates — apply them (to the
+      // recurring rows only — see applySemesterWindow) and skip straight to
+      // review. Otherwise ask the user once, up front, rather than leaving
+      // every recurring class indefinitely unbounded by default.
       const foundStart = extraction.semesterStartDate ? parseISODateLocal(extraction.semesterStartDate) : null;
       const foundEnd = extraction.semesterEndDate ? parseISODateLocal(extraction.semesterEndDate) : null;
       const validFoundStart = foundStart && !Number.isNaN(foundStart.getTime()) ? foundStart : null;
@@ -207,10 +251,10 @@ export function TimetableUploadModal() {
       if (validFoundStart && validFoundEnd) {
         setSemesterStart(validFoundStart);
         setSemesterEnd(validFoundEnd);
-        setRows(applySemesterWindow(seededRows, validFoundStart, validFoundEnd));
+        setRows(applySemesterWindow(combinedRows, validFoundStart, validFoundEnd));
         setStep('review');
       } else {
-        setRows(seededRows);
+        setRows(combinedRows);
         setStep('semester-dates');
       }
     } catch (err) {
@@ -242,9 +286,10 @@ export function TimetableUploadModal() {
 
   const addRow = () => {
     // A manually-added row during review gets the same term window as every
-    // extracted one, not an indefinitely-recurring default — otherwise the
-    // one class the AI missed would quietly behave differently from the rest
-    // of the batch.
+    // extracted recurring one, not an indefinitely-recurring default —
+    // otherwise the one class the AI missed would quietly behave
+    // differently from the rest of the batch. (Toggling Recurring off on
+    // this row, same as any other, makes it a one-off class instead.)
     setRows((prev) => [
       ...prev,
       {
@@ -301,11 +346,16 @@ export function TimetableUploadModal() {
     // that comparison into NaN.
     const items: ClassItem[] = validRows.map((r, i) => buildClassItem(r.fields, String(Date.now() + i)));
 
-    // Bulk-creating several recurring classes at once is the one flow in this
-    // app that can plausibly schedule enough notifications in a single action
-    // to hit iOS's 64-pending cap silently (every other create flow only ever
-    // adds one item at a time) — warn instead of letting some classes'
-    // reminders just never show up with no indication why.
+    if (items.length === 0) {
+      Alert.alert('Nothing to add', 'Add at least one class first.');
+      return;
+    }
+
+    // Bulk-creating several classes at once is the one flow in this app that
+    // can plausibly schedule enough notifications in a single action to hit
+    // iOS's 64-pending cap silently (every other create flow only ever adds
+    // one item at a time) — warn instead of letting some classes' reminders
+    // just never show up with no indication why.
     if (remindersEnabled) {
       const headroom = await getNotificationHeadroom();
       const estimatedNeeded = items.reduce((sum, item) => sum + estimateNotificationCount(item), 0);
@@ -336,7 +386,8 @@ export function TimetableUploadModal() {
         <>
           <Text style={styles.title}>Upload timetable</Text>
           <Text style={styles.sub}>
-            Upload your class schedule and AI will pull out every class, its days, and its time.
+            Upload your class schedule or exam timetable — tabular or written out — and AI will pull out
+            every class.
           </Text>
 
           <View style={styles.pickTypeRow}>
@@ -433,8 +484,8 @@ export function TimetableUploadModal() {
         <View>
           <Text style={styles.title}>When does this term run?</Text>
           <Text style={styles.sub}>
-            We couldn&apos;t find a term date range on this document — enter it so your classes repeat for
-            the right weeks instead of forever.
+            We couldn&apos;t find a term date range on this document — enter it so your recurring classes
+            repeat for the right weeks instead of forever.
           </Text>
 
           <Text style={styles.sheetEyebrow}>Term starts</Text>
@@ -497,8 +548,12 @@ export function TimetableUploadModal() {
             {rows.map((row) => (
               <View key={row.key} style={styles.rowCard}>
                 <View style={styles.rowHeaderRow}>
-                  <Text style={styles.rowEyebrow}>Class</Text>
-                  <Pressable onPress={() => removeRow(row.key)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Text style={styles.rowEyebrow}>{row.fields.recurring ? 'Recurring class' : 'One-time class'}</Text>
+                  <Pressable
+                    style={styles.removeButton}
+                    onPress={() => removeRow(row.key)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
                     <Text style={styles.removeText}>✕</Text>
                   </Pressable>
                 </View>
@@ -760,10 +815,18 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
+  removeButton: {
+    width: 26,
+    height: 26,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.offWhite,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   removeText: {
     fontSize: 13,
+    fontWeight: '700',
     color: Colors.textMuted,
-    padding: 4,
   },
   emptyText: {
     fontSize: 13,

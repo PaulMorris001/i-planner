@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import * as Calendar from 'expo-calendar';
+import * as Notifications from 'expo-notifications';
 import * as WebBrowser from 'expo-web-browser';
 import { auth } from '@/config/firebase';
 import { settingsService } from '@/services/settings.service';
@@ -233,8 +234,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         setLoading(false);
         return;
       }
+      let fetched: Settings | null = null;
       try {
-        setSettings(await settingsService.get());
+        fetched = await settingsService.get();
+        setSettings(fetched);
       } catch (err) {
         console.error('[SettingsProvider] failed to load settings', err);
       } finally {
@@ -248,6 +251,29 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         if (timeZone) settingsService.patch({ timeZone });
       } catch (err) {
         console.error('[SettingsProvider] failed to report timezone', err);
+      }
+      // Self-heals a specific desync: the OS notification permission is
+      // actually granted, but remindersEnabled never got saved server-side —
+      // e.g. a transient network failure moments after the user granted
+      // permission during onboarding (enableReminders below rolls the flag
+      // back to false on any save failure, and notifications-prompt.tsx
+      // proceeds with onboarding regardless of whether it succeeded). Left
+      // uncorrected, every task/class/bill/goal created afterward silently
+      // gets zero reminders scheduled — with nothing telling the user why —
+      // until they happen to discover and manually toggle Reminders off and
+      // back on in Profile & Settings. Checked on every login/launch, not
+      // just once, so it corrects itself the next time the app opens rather
+      // than needing that manual toggle at all.
+      if (fetched && !fetched.remindersEnabled) {
+        try {
+          const { granted } = await Notifications.getPermissionsAsync();
+          if (granted) {
+            setSettings(await settingsService.patch({ remindersEnabled: true }));
+            backfillReminders();
+          }
+        } catch (err) {
+          console.error('[SettingsProvider] failed to reconcile reminders permission', err);
+        }
       }
     });
     return unsubscribe;

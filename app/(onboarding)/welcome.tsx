@@ -162,7 +162,7 @@ export default function Welcome() {
             hitSlop={8}
           >
             <Text style={styles.secondaryText}>
-              I already have an <Text style={styles.secondaryLink}>account</Text>
+              Already have an account? <Text style={styles.secondaryLink}>Sign In</Text>
             </Text>
           </Pressable>
         </View>

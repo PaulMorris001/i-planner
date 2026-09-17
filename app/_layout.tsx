@@ -7,6 +7,7 @@ import { PurchasesProvider } from '@/contexts/PurchasesContext';
 import { OnboardingProvider } from '@/contexts/OnboardingContext';
 import { HabitsProvider } from '@/contexts/HabitsContext';
 import { NotesProvider } from '@/contexts/NotesContext';
+import { FoldersProvider } from '@/contexts/FoldersContext';
 import { BillsProvider } from '@/contexts/BillsContext';
 import { SavingsGoalsProvider } from '@/contexts/SavingsGoalsContext';
 import { PlanProvider } from '@/contexts/PlanContext';
@@ -61,25 +62,27 @@ export default function RootLayout() {
             <SettingsProvider>
               <HabitsProvider>
                 <NotesProvider>
-                  <BillsProvider>
-                    <SavingsGoalsProvider>
-                      <GoalsProvider>
-                        <TasksProvider>
-                          <SyllabiProvider>
-                            <NewTaskModalProvider>
-                              <TimetableUploadModalProvider>
-                                <StatusBar style="dark" />
-                                <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }} />
-                                <NewTaskModal />
-                                <TimetableUploadModal />
-                                <RefetchOnForeground />
-                              </TimetableUploadModalProvider>
-                            </NewTaskModalProvider>
-                          </SyllabiProvider>
-                        </TasksProvider>
-                      </GoalsProvider>
-                    </SavingsGoalsProvider>
-                  </BillsProvider>
+                  <FoldersProvider>
+                    <BillsProvider>
+                      <SavingsGoalsProvider>
+                        <GoalsProvider>
+                          <TasksProvider>
+                            <SyllabiProvider>
+                              <NewTaskModalProvider>
+                                <TimetableUploadModalProvider>
+                                  <StatusBar style="dark" />
+                                  <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }} />
+                                  <NewTaskModal />
+                                  <TimetableUploadModal />
+                                  <RefetchOnForeground />
+                                </TimetableUploadModalProvider>
+                              </NewTaskModalProvider>
+                            </SyllabiProvider>
+                          </TasksProvider>
+                        </GoalsProvider>
+                      </SavingsGoalsProvider>
+                    </BillsProvider>
+                  </FoldersProvider>
                 </NotesProvider>
               </HabitsProvider>
             </SettingsProvider>

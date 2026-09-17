@@ -12,4 +12,9 @@ export const noteService = {
 
   remove: (id: string) =>
     authedRequest<void>(`/notes/${id}`, { method: "DELETE" }),
+
+  // Stateless AI cleanup for speech-to-text artifacts — not tied to a saved
+  // note id, see backend/src/controllers/note.controller.ts's cleanNote.
+  cleanText: (text: string) =>
+    authedRequest<{ cleaned: string }>("/notes/clean", { method: "POST", body: { text } }),
 };

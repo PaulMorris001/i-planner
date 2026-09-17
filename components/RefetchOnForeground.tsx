@@ -5,6 +5,7 @@ import { waitForNoPendingMutations } from '@/utils/pendingMutations';
 import { useTasks } from '@/hooks/useTasks';
 import { useHabits } from '@/hooks/useHabits';
 import { useNotes } from '@/hooks/useNotes';
+import { useFolders } from '@/hooks/useFolders';
 import { useBills } from '@/hooks/useBills';
 import { useSavingsGoals } from '@/hooks/useSavingsGoals';
 import { useGoals } from '@/hooks/useGoals';
@@ -29,6 +30,7 @@ export function RefetchOnForeground() {
   const { refetch: refetchTasks } = useTasks();
   const { refetch: refetchHabits } = useHabits();
   const { refetch: refetchNotes } = useNotes();
+  const { refetch: refetchFolders } = useFolders();
   const { refetch: refetchBills } = useBills();
   const { refetch: refetchSavingsGoals } = useSavingsGoals();
   const { refetch: refetchGoals } = useGoals();
@@ -40,11 +42,11 @@ export function RefetchOnForeground() {
   // the AppState subscription itself never needs to be torn down and rebuilt
   // just because a context re-rendered or the user logged in/out meanwhile.
   const latest = useRef({
-    user, refetchTasks, refetchHabits, refetchNotes, refetchBills,
+    user, refetchTasks, refetchHabits, refetchNotes, refetchFolders, refetchBills,
     refetchSavingsGoals, refetchGoals, refetchPlan, refetchSyllabi,
   });
   latest.current = {
-    user, refetchTasks, refetchHabits, refetchNotes, refetchBills,
+    user, refetchTasks, refetchHabits, refetchNotes, refetchFolders, refetchBills,
     refetchSavingsGoals, refetchGoals, refetchPlan, refetchSyllabi,
   };
 
@@ -70,7 +72,7 @@ export function RefetchOnForeground() {
           // the user; the next foreground or pull-to-refresh will just try
           // again.
           Promise.all([
-            r.refetchTasks(), r.refetchHabits(), r.refetchNotes(), r.refetchBills(),
+            r.refetchTasks(), r.refetchHabits(), r.refetchNotes(), r.refetchFolders(), r.refetchBills(),
             r.refetchSavingsGoals(), r.refetchGoals(), r.refetchPlan(), r.refetchSyllabi(),
           ])
         ).catch((err) => console.error('[RefetchOnForeground] failed to refetch on foreground', err));

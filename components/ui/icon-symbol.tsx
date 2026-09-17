@@ -51,6 +51,11 @@ const MAPPING = {
   'banknote.fill': 'account-balance-wallet',
   'rectangle.portrait.and.arrow.right': 'logout',
   'square.and.arrow.up': 'ios-share',
+  'folder.fill': 'folder',
+  'list.bullet': 'view-list',
+  'square.grid.2x2': 'grid-view',
+  'magnifyingglass': 'search',
+  'mic.fill': 'mic',
 } as IconMapping;
 
 /**
