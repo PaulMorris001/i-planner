@@ -1,7 +1,7 @@
 import { beginMutation, endMutation } from '@/utils/pendingMutations';
 
 const DEV_API_URL = 'http://localhost:4000/api';
-const PRODUCTION_API_URL = 'https://i-planner-planner-env.up.railway.app/api';
+const PRODUCTION_API_URL = 'https://i-planner-production.up.railway.app/api';
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? (__DEV__ ? DEV_API_URL : PRODUCTION_API_URL);
 
