@@ -9,6 +9,9 @@ export const sharedNoteService = {
   getPreview: (token: string) =>
     authedRequest<{ title: string; body: string }>(`/shared-notes/${token}`),
 
+  // `alreadyImported` is true when this account already imported this exact
+  // share before (including the sharer reopening their own link) — `note` is
+  // the existing copy in that case, not a freshly created one.
   importNote: (token: string) =>
-    authedRequest<Note>(`/shared-notes/${token}/import`, { method: "POST" }),
+    authedRequest<{ alreadyImported: boolean; note: Note }>(`/shared-notes/${token}/import`, { method: "POST" }),
 };

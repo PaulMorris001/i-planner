@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { View, Pressable, StyleSheet } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { ItemActionSheet } from '@/components/ui/ItemActionSheet';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -55,6 +56,18 @@ export default function NotesFolder() {
       setRefreshing(false);
     }
   };
+
+  // Same reasoning as app/notes.tsx's own useFocusEffect — a belt-and-suspenders
+  // guarantee that returning here always shows current data, not just relying
+  // on NotesContext's state already being correct by the time this refocuses.
+  useFocusEffect(
+    useCallback(() => {
+      Promise.all([refetchNotes(), refetchFolders()]).catch((err) =>
+        console.error('[NotesFolder] failed to refetch on focus', err)
+      );
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+  );
 
   return (
     <ScreenWrapper

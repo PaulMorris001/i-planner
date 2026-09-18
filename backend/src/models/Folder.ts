@@ -1,4 +1,5 @@
 import { Schema, model, Document } from 'mongoose';
+import { FOLDER_NAME_MAX_LENGTH } from '../constants/noteLimits';
 
 export interface FolderDocument extends Document {
   firebaseUid: string;
@@ -15,7 +16,9 @@ export interface FolderDocument extends Document {
 const folderSchema = new Schema<FolderDocument>(
   {
     firebaseUid: { type: String, required: true, index: true },
-    name: { type: String, required: true, trim: true },
+    // Defense-in-depth backstop — see Note.ts's title/body maxlength for why
+    // this is redundant with folder.controller.ts's own validation.
+    name: { type: String, required: true, trim: true, maxlength: FOLDER_NAME_MAX_LENGTH },
     parentId: { type: String },
   },
   { timestamps: { createdAt: true, updatedAt: true } }

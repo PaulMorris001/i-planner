@@ -5,6 +5,7 @@ import { useNavigation, usePreventRemove } from '@react-navigation/native';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { FolderPickerModal } from '@/components/notes/FolderPickerModal';
+import { ShareOptionsModal } from '@/components/notes/ShareOptionsModal';
 import { Colors, Spacing, Radius } from '@/constants/theme';
 import { useNotes } from '@/hooks/useNotes';
 import { useFolders } from '@/hooks/useFolders';
@@ -15,49 +16,20 @@ import { confirmDelete } from '@/utils/confirmDelete';
 import { formatShortDate, formatTimeLabel } from '@/utils/date';
 import { shareNote } from '@/utils/exportNote';
 
-// Keep in sync with backend/src/controllers/note.controller.ts's
-// NOTE_BODY_MAX_LENGTH — this bounds it at entry (nicer UX, an inline cap
-// instead of a save-time rejection), the backend enforces it regardless (a
-// stale/old client build, or the API called directly, shouldn't be able to
-// bypass it). Generous for any real note, but bounds how large a single
-// note's text can ever get — see notes.tsx's previewText for why that matters:
-// an unbounded body rendered into a <Text> builds a proportionally large
-// AttributedString/text-fragment tree, and a large enough one has caused a
-// real, confirmed stack-overflow crash when that tree was later torn down.
-//
-// `maxLength` alone isn't a hard enough stop for this: a confirmed crash came
-// from a ~1.5hr keyboard-dictation session that (per the crash log) kept
-// feeding text into this field well past what a single onChangeText/clip
-// cycle can reliably keep up with under load. handleBodyChange below adds an
-// active stop — truncate, blur (which ends iOS/Android dictation, since it
-// needs focus), and tell the user — instead of just trusting the prop.
-const NOTE_BODY_MAX_LENGTH = 20_000;
 
-// How often the in-progress note is saved in the background, so a crash (or
-// just navigating back without tapping Save) loses at most one interval's
-// worth of typing/dictation instead of the whole note — see the crash where a
-// ~1.5hr dictation session was lost entirely because nothing was persisted
-// until the user explicitly hit Save.
+const NOTE_BODY_MAX_LENGTH = 20_000;
+// Keep in sync with backend/src/constants/noteLimits.ts's NOTE_TITLE_MAX_LENGTH.
+const NOTE_TITLE_MAX_LENGTH = 200;
+
 const AUTOSAVE_INTERVAL_MS = 8_000;
 
-// A title is required to save at all (see canSave/backend validation), but an
-// autosave shouldn't be blocked just because the user dictated straight into
-// the body and never touched the title field — that's exactly the scenario
-// that caused the original data loss. Falls back to the first line of the
-// body, matching the convention most notes apps use for an untitled note.
 function deriveFallbackTitle(body: string): string {
   const firstLine = body.trim().split('\n')[0]?.trim() ?? '';
   if (!firstLine) return '';
   return firstLine.length > 60 ? firstLine.slice(0, 60) : firstLine;
 }
 
-// Full page, not a sheet — a note deserves the whole screen to write in, unlike
-// the short forms every other "New X" flow in this app uses. `id` (querystring,
-// not a dynamic route segment) is absent when creating a new note.
 export default function NoteEditor() {
-  // `folderId` is only read on the create path (from notes-folder.tsx's "New
-  // note" button) — once a note exists, its own `folderId` field is the
-  // source of truth instead.
   const { id, folderId: folderIdParam } = useLocalSearchParams<{ id?: string; folderId?: string }>();
   const { notes, createNote, updateNote, deleteNote } = useNotes();
   const { folders } = useFolders();
@@ -69,12 +41,8 @@ export default function NoteEditor() {
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [sharing, setSharing] = useState(false);
-  // 'loading': AI request in flight. 'reviewing': cleaned text is showing in
-  // `body` and the user hasn't yet chosen to keep it or revert.
+  const [shareMenuOpen, setShareMenuOpen] = useState(false);
   const [cleanupState, setCleanupState] = useState<'idle' | 'loading' | 'reviewing'>('idle');
-  // Starts as the route param (editing an existing note) and is filled in by
-  // the first autosave once a brand-new note gets its real id — from then on
-  // this, not the route param, is what every save/delete/share/move targets.
   const [savedId, setSavedId] = useState<string | undefined>(id);
   const [autosaveStatus, setAutosaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const editing = savedId ? notes.find((n) => n.id === savedId) ?? null : null;
@@ -127,6 +95,11 @@ export default function NoteEditor() {
   // setState on the next render, one render too late for that case.
   const runAutosave = async (override?: { body?: string }) => {
     if (busyRef.current) return;
+    // Never silently commit an unconfirmed AI-cleanup decision — the body
+    // TextInput is also locked (editable={false}) during review, so nothing
+    // else can change while this holds, but the 8s interval itself has no
+    // other reason to skip a tick.
+    if (cleanupState === 'reviewing') return;
     const b = override?.body ?? bodyRef.current;
     const t = titleRef.current.trim() || deriveFallbackTitle(b);
     if (!t) return; // nothing worth persisting yet
@@ -273,6 +246,13 @@ export default function NoteEditor() {
 
   const handleSave = async () => {
     if (!canSave || busyRef.current) return;
+    // Tapping Save while an AI-cleanup decision is still unresolved implicitly
+    // means "keep this version" — clear the review state *before* saving so
+    // usePreventRemove's guard doesn't intercept this save's own router.back()
+    // and re-litigate a decision Save already made (it previously did, and by
+    // the time the user picked anything in that redundant prompt, this save
+    // had already persisted the cleaned text regardless of their answer).
+    setCleanupState('idle');
     busyRef.current = true;
     setSubmitting(true);
     try {
@@ -357,11 +337,7 @@ export default function NoteEditor() {
 
   const handleShare = () => {
     if (!editing || sharing) return;
-    Alert.alert('Share note', undefined, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Share as PDF', onPress: handleSharePdf },
-      { text: 'Share link', onPress: handleShareLink },
-    ]);
+    setShareMenuOpen(true);
   };
 
   return (
@@ -412,24 +388,26 @@ export default function NoteEditor() {
           style={styles.titleInput}
           multiline
           autoFocus={!editing}
+          maxLength={NOTE_TITLE_MAX_LENGTH}
         />
 
         <View style={styles.divider} />
 
-        {!!editing && (
-          <Text style={styles.metaText}>
-            Edited {formatShortDate(editing.updatedAt)} · {formatTimeLabel(new Date(editing.updatedAt))}
-            {autosaveStatus === 'saving' ? ' · Saving…' : autosaveStatus === 'saved' ? ' · Saved' : ''}
-          </Text>
-        )}
-
-        <Pressable style={styles.folderRow} onPress={() => setFolderPickerOpen(true)} hitSlop={6}>
-          <IconSymbol name="folder.fill" color={Colors.textMuted} size={15} />
-          <Text style={styles.folderRowText} numberOfLines={1}>
-            {currentFolderName ?? 'No folder'}
-          </Text>
-          <IconSymbol name="chevron.right" color={Colors.textMuted} size={14} />
-        </Pressable>
+        <View style={styles.metaRow}>
+          {!!editing && (
+            <Text style={styles.metaText} numberOfLines={1}>
+              Edited {formatShortDate(editing.updatedAt)} · {formatTimeLabel(new Date(editing.updatedAt))}
+              {autosaveStatus === 'saving' ? ' · Saving…' : autosaveStatus === 'saved' ? ' · Saved' : ''}
+            </Text>
+          )}
+          <Pressable style={styles.folderChip} onPress={() => setFolderPickerOpen(true)} hitSlop={6}>
+            <IconSymbol name="folder.fill" color={Colors.primaryLight} size={12} />
+            <Text style={styles.folderChipText} numberOfLines={1}>
+              {currentFolderName ?? 'No folder'}
+            </Text>
+            <IconSymbol name="chevron.right" color={Colors.primaryLight} size={11} />
+          </Pressable>
+        </View>
 
         <TextInput
           ref={bodyInputRef}
@@ -437,10 +415,14 @@ export default function NoteEditor() {
           onChangeText={handleBodyChange}
           placeholder="Write something…"
           placeholderTextColor={Colors.textMuted}
-          style={styles.bodyInput}
+          style={[styles.bodyInput, cleanupState === 'reviewing' && styles.bodyInputReviewing]}
           multiline
           textAlignVertical="top"
           maxLength={NOTE_BODY_MAX_LENGTH}
+          // Locked during review — Revert restores an exact snapshot taken
+          // before Clean ran, so a manual edit made while reviewing would
+          // otherwise get silently discarded by Revert with no warning.
+          editable={cleanupState !== 'reviewing'}
         />
 
         {cleanupState === 'reviewing' ? (
@@ -484,6 +466,13 @@ export default function NoteEditor() {
         folders={folders}
         selectedId={currentFolderId}
         onSelect={handleSelectFolder}
+      />
+
+      <ShareOptionsModal
+        visible={shareMenuOpen}
+        onClose={() => setShareMenuOpen(false)}
+        onSharePdf={handleSharePdf}
+        onShareLink={handleShareLink}
       />
 
       {cleanupState === 'loading' && (
@@ -603,23 +592,34 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.border,
     marginTop: 14,
   },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginTop: 12,
+  },
   metaText: {
+    flex: 1,
     fontSize: 12,
     fontWeight: '600',
     color: Colors.textMuted,
-    marginTop: 10,
   },
-  folderRow: {
+  folderChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
     alignSelf: 'flex-start',
-    marginTop: 10,
+    backgroundColor: Colors.infoSoft,
+    borderRadius: Radius.full,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
   },
-  folderRowText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.textMuted,
+  folderChipText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: Colors.primaryLight,
+    maxWidth: 120,
   },
   bodyInput: {
     flex: 1,
@@ -628,6 +628,9 @@ const styles = StyleSheet.create({
     lineHeight: 23,
     color: Colors.textPrimary,
     padding: 0,
+  },
+  bodyInputReviewing: {
+    color: Colors.textSecondary,
   },
   micFab: {
     position: 'absolute',

@@ -5,6 +5,9 @@ import { ModalCloseButton } from '@/components/ui/ModalCloseButton';
 import { Colors } from '@/constants/theme';
 import type { Folder } from '@/types/folder.types';
 
+// Keep in sync with backend/src/constants/noteLimits.ts's FOLDER_NAME_MAX_LENGTH.
+const FOLDER_NAME_MAX_LENGTH = 100;
+
 interface NewFolderModalProps {
   visible: boolean;
   onClose: () => void;
@@ -60,6 +63,7 @@ export function NewFolderModal({ visible, onClose, onSave, editingFolder }: NewF
         placeholderTextColor={Colors.textMuted}
         style={styles.input}
         autoFocus
+        maxLength={FOLDER_NAME_MAX_LENGTH}
       />
 
       <Pressable

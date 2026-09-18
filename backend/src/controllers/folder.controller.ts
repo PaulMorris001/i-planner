@@ -4,6 +4,18 @@ import { Note } from '../models/Note';
 import { AuthedRequest } from '../middleware/requireAuth';
 import { ApiError } from '../utils/ApiError';
 import { findOwnedOrThrow } from '../utils/ownedDoc';
+import { FOLDER_NAME_MAX_LENGTH } from '../constants/noteLimits';
+
+function requireValidName(name: unknown): string {
+  if (!name || typeof name !== 'string' || !name.trim()) {
+    throw new ApiError(400, 'Folder name is required.', 'general');
+  }
+  const trimmed = name.trim();
+  if (trimmed.length > FOLDER_NAME_MAX_LENGTH) {
+    throw new ApiError(400, `Folder name is too long (max ${FOLDER_NAME_MAX_LENGTH.toLocaleString()} characters).`, 'general');
+  }
+  return trimmed;
+}
 
 // Alphabetical, unlike notes' recency sort (Note.find().sort({updatedAt:-1}))
 // — a small, human-curated list of folders reads better sorted by name than
@@ -15,9 +27,7 @@ export async function listFolders(req: AuthedRequest, res: Response) {
 
 export async function createFolder(req: AuthedRequest, res: Response) {
   const { name, parentId } = req.body ?? {};
-  if (!name || typeof name !== 'string' || !name.trim()) {
-    throw new ApiError(400, 'Folder name is required.', 'general');
-  }
+  const trimmedName = requireValidName(name);
   // Same ownership check as a note's folderId — a folder can never be created
   // under another user's folder, or one that no longer exists.
   if (typeof parentId === 'string' && parentId) {
@@ -26,7 +36,7 @@ export async function createFolder(req: AuthedRequest, res: Response) {
 
   const folder = await Folder.create({
     firebaseUid: req.userId,
-    name: name.trim(),
+    name: trimmedName,
     ...(typeof parentId === 'string' && parentId ? { parentId } : {}),
   });
   res.status(201).json(toPublicFolder(folder));
@@ -37,10 +47,7 @@ export async function updateFolder(req: AuthedRequest, res: Response) {
 
   const { name } = req.body ?? {};
   if (name !== undefined) {
-    if (!name || typeof name !== 'string' || !name.trim()) {
-      throw new ApiError(400, 'Folder name is required.', 'general');
-    }
-    folder.name = name.trim();
+    folder.name = requireValidName(name);
   }
 
   await folder.save();

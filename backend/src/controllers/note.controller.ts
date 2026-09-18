@@ -5,14 +5,7 @@ import { AuthedRequest } from '../middleware/requireAuth';
 import { ApiError } from '../utils/ApiError';
 import { findOwnedOrThrow } from '../utils/ownedDoc';
 import { cleanNoteText } from '../services/noteCleanup';
-
-// Keep in sync with app/note-editor.tsx's NOTE_BODY_MAX_LENGTH — that caps it
-// at entry for a nicer UX, this enforces it regardless so a stale client
-// build (or the API called directly) can't bypass it. An unbounded body
-// rendered into a <Text> builds a proportionally large native text-fragment
-// tree, and a large enough one has caused a real, confirmed stack-overflow
-// crash when that tree was later torn down — see notes.tsx's previewText.
-const NOTE_BODY_MAX_LENGTH = 20_000;
+import { NOTE_BODY_MAX_LENGTH, NOTE_TITLE_MAX_LENGTH } from '../constants/noteLimits';
 
 export async function listNotes(req: AuthedRequest, res: Response) {
   const notes = await Note.find({ firebaseUid: req.userId }).sort({ updatedAt: -1 });
@@ -24,6 +17,10 @@ export async function createNote(req: AuthedRequest, res: Response) {
 
   if (!title || typeof title !== 'string' || !title.trim()) {
     throw new ApiError(400, 'Title is required.', 'general');
+  }
+  const trimmedTitle = title.trim();
+  if (trimmedTitle.length > NOTE_TITLE_MAX_LENGTH) {
+    throw new ApiError(400, `Title is too long (max ${NOTE_TITLE_MAX_LENGTH.toLocaleString()} characters).`, 'general');
   }
   if (typeof body === 'string' && body.length > NOTE_BODY_MAX_LENGTH) {
     throw new ApiError(400, `Note is too long (max ${NOTE_BODY_MAX_LENGTH.toLocaleString()} characters).`, 'general');
@@ -37,7 +34,11 @@ export async function createNote(req: AuthedRequest, res: Response) {
 
   const note = await Note.create({
     firebaseUid: req.userId,
-    title: title.trim(),
+    title: trimmedTitle,
+    // A brand-new note's body is optional — anything other than a real
+    // string (including simply omitted) just starts empty. updateNote below
+    // is stricter: a wrong type there is far more likely a client bug acting
+    // on an *existing* note than an intentional "clear the body."
     body: typeof body === 'string' ? body : '',
     ...(typeof folderId === 'string' && folderId ? { folderId } : {}),
   });
@@ -53,10 +54,24 @@ export async function updateNote(req: AuthedRequest, res: Response) {
     if (!title || typeof title !== 'string' || !title.trim()) {
       throw new ApiError(400, 'Title is required.', 'general');
     }
-    note.title = title.trim();
+    const trimmedTitle = title.trim();
+    if (trimmedTitle.length > NOTE_TITLE_MAX_LENGTH) {
+      throw new ApiError(400, `Title is too long (max ${NOTE_TITLE_MAX_LENGTH.toLocaleString()} characters).`, 'general');
+    }
+    note.title = trimmedTitle;
   }
   if (body !== undefined) {
-    if (typeof body === 'string' && body.length > NOTE_BODY_MAX_LENGTH) {
+    // Unlike createNote, a wrong type here is rejected outright rather than
+    // silently coerced — coercing to '' on an *update* would silently wipe
+    // an existing note's content, and passing anything else straight to
+    // Mongoose would let it get cast/stringified at save() with no length
+    // check at all (the `typeof body === 'string'` guard this replaces only
+    // skipped the check below for a non-string value, it never stopped the
+    // assignment itself).
+    if (typeof body !== 'string') {
+      throw new ApiError(400, 'Body must be text.', 'general');
+    }
+    if (body.length > NOTE_BODY_MAX_LENGTH) {
       throw new ApiError(400, `Note is too long (max ${NOTE_BODY_MAX_LENGTH.toLocaleString()} characters).`, 'general');
     }
     note.body = body;

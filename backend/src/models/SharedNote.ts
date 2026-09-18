@@ -21,4 +21,11 @@ const sharedNoteSchema = new Schema<SharedNoteDocument>(
   { timestamps: { createdAt: true, updatedAt: false } }
 );
 
+// Lets createShare (see sharedNote.controller.ts) rely on a duplicate-key
+// error as the atomic "does a share already exist for this note" check,
+// instead of a plain findOne-then-create that two concurrent share requests
+// for the same note could both pass before either creates — yielding two
+// live tokens for one note.
+sharedNoteSchema.index({ noteId: 1, firebaseUid: 1 }, { unique: true });
+
 export const SharedNote = model<SharedNoteDocument>('SharedNote', sharedNoteSchema);

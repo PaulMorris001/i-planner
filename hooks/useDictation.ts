@@ -69,13 +69,24 @@ export function useDictation({ onTranscriptChange, onEnd }: UseDictationOptions)
 
   useSpeechRecognitionEvent('result', (event) => {
     const now = Date.now();
-    if (currentSegmentRef.current && now - lastEventAtRef.current > SEGMENT_GAP_MS) {
-      finalTranscriptRef.current = joinDictationText(finalTranscriptRef.current, currentSegmentRef.current);
+    const segment = event.results[0]?.transcript ?? '';
+    const prevSegment = currentSegmentRef.current;
+    // A gap this long usually means the recognizer silently abandoned the old
+    // segment for a new one (see the big comment above) — *except* when the
+    // gap is simply the natural pause right before finalizing that same
+    // segment: `event.isFinal`'s own transcript for it is typically identical
+    // or lightly revised, not new content. Comparing the two catches that
+    // case (one contains the other, e.g. a straight prefix match either way)
+    // so the segment doesn't get baked in twice — once here, once more via
+    // the isFinal branch below for the very same words.
+    const looksLikeSameSegment =
+      !!prevSegment && (segment.startsWith(prevSegment) || prevSegment.startsWith(segment));
+    if (prevSegment && !looksLikeSameSegment && now - lastEventAtRef.current > SEGMENT_GAP_MS) {
+      finalTranscriptRef.current = joinDictationText(finalTranscriptRef.current, prevSegment);
       currentSegmentRef.current = '';
     }
     lastEventAtRef.current = now;
 
-    const segment = event.results[0]?.transcript ?? '';
     currentSegmentRef.current = segment;
 
     if (event.isFinal) {

@@ -2,11 +2,14 @@ import { useEffect, useState } from 'react';
 import { View, Text, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
-import { PageHeader } from '@/components/ui/PageHeader';
+import { IconSymbol, type IconSymbolName } from '@/components/ui/icon-symbol';
+import { BottomSheetModal } from '@/components/ui/BottomSheetModal';
 import { useAuth } from '@/hooks/useAuth';
+import { useNotes } from '@/hooks/useNotes';
 import { sharedNoteService } from '@/services/sharedNote.service';
 import { Routes } from '@/constants/routes';
 import { Colors, Spacing, Radius } from '@/constants/theme';
+import type { Note } from '@/types/note.types';
 
 type Status = 'loading' | 'ready' | 'unavailable' | 'error';
 
@@ -20,9 +23,11 @@ type Status = 'loading' | 'ready' | 'unavailable' | 'error';
 export default function SharedNote() {
   const { token } = useLocalSearchParams<{ token?: string }>();
   const { user, initializing } = useAuth();
+  const { refetch: refetchNotes } = useNotes();
   const [status, setStatus] = useState<Status>('loading');
   const [preview, setPreview] = useState<{ title: string; body: string } | null>(null);
   const [importing, setImporting] = useState(false);
+  const [alreadyImportedNote, setAlreadyImportedNote] = useState<Note | null>(null);
 
   useEffect(() => {
     if (initializing || !user || !token) return;
@@ -44,12 +49,27 @@ export default function SharedNote() {
     };
   }, [initializing, user, token]);
 
+  const openNote = async (noteId: string) => {
+    // The note was just created/found server-side, but NotesContext's own
+    // local `notes` array (what note-editor.tsx's `editing` lookup reads
+    // from) has no idea it exists yet — this bypassed NotesContext's own
+    // createNote entirely, so nothing updated it. Without this, note-editor
+    // opens to an id it can't find locally and just renders blank.
+    await refetchNotes();
+    router.replace(`${Routes.NOTE_EDITOR}?id=${noteId}`);
+  };
+
   const handleImport = async () => {
     if (!token || importing) return;
     setImporting(true);
     try {
-      const created = await sharedNoteService.importNote(token);
-      router.replace(`${Routes.NOTE_EDITOR}?id=${created.id}`);
+      const { alreadyImported, note } = await sharedNoteService.importNote(token);
+      if (alreadyImported) {
+        setImporting(false);
+        setAlreadyImportedNote(note);
+        return;
+      }
+      await openNote(note.id);
     } catch (err) {
       console.error('[SharedNote] failed to import note', err);
       setStatus('error');
@@ -63,19 +83,11 @@ export default function SharedNote() {
 
   if (!token) {
     return (
-      <ScreenWrapper backgroundColor={Colors.offWhite}>
-        <View style={styles.centerState}>
-          <Text style={styles.stateTitle}>Invalid link</Text>
-          <Text style={styles.stateSub}>This share link looks incomplete.</Text>
-          <Pressable style={styles.primaryBtn} onPress={goToNotes}>
-            <Text style={styles.primaryBtnText}>Go to Notes</Text>
-          </Pressable>
-        </View>
-      </ScreenWrapper>
+      <StateScreen icon="link" title="Invalid link" subtitle="This share link looks incomplete." onPress={goToNotes} />
     );
   }
 
-  if (initializing) {
+  if (initializing || (user && status === 'loading')) {
     return (
       <ScreenWrapper backgroundColor={Colors.offWhite}>
         <View style={styles.centerState}>
@@ -87,56 +99,47 @@ export default function SharedNote() {
 
   if (!user) {
     return (
-      <ScreenWrapper backgroundColor={Colors.offWhite}>
-        <View style={styles.centerState}>
-          <Text style={styles.stateTitle}>Log in to add this note</Text>
-          <Text style={styles.stateSub}>
-            Once you&apos;re logged in, reopen this link to add the note to your account.
-          </Text>
-          <Pressable style={styles.primaryBtn} onPress={() => router.replace(Routes.LOGIN)}>
-            <Text style={styles.primaryBtnText}>Log In</Text>
-          </Pressable>
-        </View>
-      </ScreenWrapper>
-    );
-  }
-
-  if (status === 'loading') {
-    return (
-      <ScreenWrapper backgroundColor={Colors.offWhite}>
-        <View style={styles.centerState}>
-          <ActivityIndicator color={Colors.primaryLight} size="large" />
-        </View>
-      </ScreenWrapper>
+      <StateScreen
+        icon="person.fill"
+        title="Log in to add this note"
+        subtitle="Once you're logged in, reopen this link to add the note to your account."
+        actionLabel="Log In"
+        onPress={() => router.replace(Routes.LOGIN)}
+      />
     );
   }
 
   if (status === 'unavailable' || status === 'error') {
     return (
-      <ScreenWrapper backgroundColor={Colors.offWhite}>
-        <View style={styles.centerState}>
-          <Text style={styles.stateTitle}>
-            {status === 'unavailable' ? 'This note is no longer available' : "Couldn't load this note"}
-          </Text>
-          <Text style={styles.stateSub}>
-            {status === 'unavailable'
-              ? 'It may have been deleted, or the link may be incorrect.'
-              : 'Check your connection and try again.'}
-          </Text>
-          <Pressable style={styles.primaryBtn} onPress={goToNotes}>
-            <Text style={styles.primaryBtnText}>Go to Notes</Text>
-          </Pressable>
-        </View>
-      </ScreenWrapper>
+      <StateScreen
+        icon="info.circle"
+        tone="muted"
+        title={status === 'unavailable' ? 'This note is no longer available' : "Couldn't load this note"}
+        subtitle={
+          status === 'unavailable'
+            ? 'It may have been deleted, or the link may be incorrect.'
+            : 'Check your connection and try again.'
+        }
+        onPress={goToNotes}
+      />
     );
   }
 
   return (
     <ScreenWrapper backgroundColor={Colors.offWhite} scroll style={styles.scrollContent}>
-      <PageHeader title="Shared note" subtitle="Add a copy to your own notes" />
+      <View style={styles.eyebrowRow}>
+        <View style={styles.eyebrowIcon}>
+          <IconSymbol name="link" color={Colors.primaryLight} size={14} />
+        </View>
+        <Text style={styles.eyebrowText}>Shared note</Text>
+      </View>
 
       <View style={styles.card}>
+        <View style={styles.cardIconBadge}>
+          <IconSymbol name="note.text" color={Colors.primaryLight} size={24} />
+        </View>
         <Text style={styles.title}>{preview!.title}</Text>
+        <View style={styles.divider} />
         {preview!.body.trim() ? (
           <Text style={styles.body}>{preview!.body}</Text>
         ) : (
@@ -145,11 +148,76 @@ export default function SharedNote() {
       </View>
 
       <Pressable style={styles.primaryBtn} onPress={handleImport} disabled={importing}>
-        <Text style={styles.primaryBtnText}>{importing ? 'Adding…' : 'Add to My Notes'}</Text>
+        {importing ? (
+          <ActivityIndicator color={Colors.white} size="small" />
+        ) : (
+          <>
+            <IconSymbol name="plus" color={Colors.white} size={16} />
+            <Text style={styles.primaryBtnText}>Add to My Notes</Text>
+          </>
+        )}
       </Pressable>
       <Pressable style={styles.secondaryBtn} onPress={goToNotes}>
         <Text style={styles.secondaryBtnText}>Not now</Text>
       </Pressable>
+
+      <BottomSheetModal visible={!!alreadyImportedNote} onClose={() => setAlreadyImportedNote(null)}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalIconBadge}>
+            <IconSymbol name="checkmark" color={Colors.success} size={22} />
+          </View>
+          <Text style={styles.modalTitle}>Already added</Text>
+          <Text style={styles.modalSub}>You&apos;ve already added this note to your notes.</Text>
+          <View style={styles.modalActions}>
+            <Pressable style={styles.modalCloseBtn} onPress={() => setAlreadyImportedNote(null)}>
+              <Text style={styles.modalCloseText}>Close</Text>
+            </Pressable>
+            <Pressable
+              style={styles.modalOpenBtn}
+              onPress={() => {
+                const note = alreadyImportedNote;
+                setAlreadyImportedNote(null);
+                if (note) openNote(note.id);
+              }}
+            >
+              <Text style={styles.modalOpenText}>Open Note</Text>
+            </Pressable>
+          </View>
+        </View>
+      </BottomSheetModal>
+    </ScreenWrapper>
+  );
+}
+
+// Shared shell for the invalid-link / login-required / unavailable / error
+// states — a centered icon badge, title/subtitle, and one CTA pill.
+function StateScreen({
+  icon,
+  tone = 'brand',
+  title,
+  subtitle,
+  actionLabel = 'Go to Notes',
+  onPress,
+}: {
+  icon: IconSymbolName;
+  tone?: 'brand' | 'muted';
+  title: string;
+  subtitle: string;
+  actionLabel?: string;
+  onPress: () => void;
+}) {
+  return (
+    <ScreenWrapper backgroundColor={Colors.offWhite}>
+      <View style={styles.centerState}>
+        <View style={[styles.stateIconBadge, tone === 'muted' && styles.stateIconBadgeMuted]}>
+          <IconSymbol name={icon} color={tone === 'muted' ? Colors.textMuted : Colors.primaryLight} size={26} />
+        </View>
+        <Text style={styles.stateTitle}>{title}</Text>
+        <Text style={styles.stateSub}>{subtitle}</Text>
+        <Pressable style={styles.primaryBtn} onPress={onPress}>
+          <Text style={styles.primaryBtnText}>{actionLabel}</Text>
+        </Pressable>
+      </View>
     </ScreenWrapper>
   );
 }
@@ -157,6 +225,7 @@ export default function SharedNote() {
 const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 40,
+    paddingTop: Spacing.lg,
   },
   centerState: {
     flex: 1,
@@ -165,37 +234,89 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     gap: 10,
   },
+  stateIconBadge: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    backgroundColor: Colors.infoSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  stateIconBadgeMuted: {
+    backgroundColor: Colors.border,
+  },
   stateTitle: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: '800',
     color: Colors.textPrimary,
     textAlign: 'center',
+    letterSpacing: -0.2,
   },
   stateSub: {
     fontSize: 14,
     color: Colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
+    marginBottom: 6,
+  },
+  eyebrowRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: Spacing.md,
+    marginBottom: 14,
+  },
+  eyebrowIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 8,
+    backgroundColor: Colors.infoSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  eyebrowText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
   },
   card: {
-    marginTop: 16,
     marginHorizontal: Spacing.md,
     backgroundColor: Colors.white,
-    borderWidth: 1,
-    borderColor: Colors.border,
     borderRadius: Radius.xl,
-    padding: Spacing.md,
+    padding: Spacing.lg,
+    shadowColor: Colors.textPrimary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.06,
+    shadowRadius: 20,
+    elevation: 3,
+  },
+  cardIconBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: Colors.infoSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
   },
   title: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '800',
     color: Colors.textPrimary,
-    letterSpacing: -0.3,
+    letterSpacing: -0.4,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: Colors.border,
+    marginTop: 14,
   },
   body: {
-    marginTop: 10,
+    marginTop: 14,
     fontSize: 15,
-    lineHeight: 22,
+    lineHeight: 23,
     color: Colors.textPrimary,
   },
   bodyEmpty: {
@@ -203,13 +324,20 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   primaryBtn: {
-    marginTop: 24,
-    marginHorizontal: Spacing.md,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
+    marginTop: 24,
+    marginHorizontal: Spacing.md,
     backgroundColor: Colors.primaryLight,
     borderRadius: Radius.full,
-    paddingVertical: 15,
+    paddingVertical: 16,
+    shadowColor: Colors.primaryLight,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 4,
   },
   primaryBtnText: {
     fontSize: 15,
@@ -217,7 +345,7 @@ const styles = StyleSheet.create({
     color: Colors.white,
   },
   secondaryBtn: {
-    marginTop: 12,
+    marginTop: 14,
     marginHorizontal: Spacing.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -227,5 +355,64 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: Colors.textSecondary,
+  },
+  modalContent: {
+    alignItems: 'center',
+    paddingBottom: 4,
+  },
+  modalIconBadge: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: Colors.successSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+    letterSpacing: -0.2,
+  },
+  modalSub: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginTop: 6,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 22,
+    width: '100%',
+  },
+  modalCloseBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: Radius.full,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+  },
+  modalCloseText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  modalOpenBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.primaryLight,
+  },
+  modalOpenText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.white,
   },
 });
