@@ -20,6 +20,14 @@ export function joinDictationText(base: string, addition: string): string {
   return `${base}${needsSpace ? ' ' : ''}${addition}`;
 }
 
+// If this long passes with no `result` event, the next one to arrive is
+// treated as a new segment rather than a revision of the in-progress one —
+// see the big comment below for why. Below the ~1-2s pause length reported to
+// actually trigger data loss, comfortably above the gap between consecutive
+// interim updates during continuous active speech (typically well under a
+// second), so it shouldn't false-positive mid-sentence.
+const SEGMENT_GAP_MS = 800;
+
 interface UseDictationOptions {
   // Called with the full text recognized so far *this recording session*
   // (previous sessions' text is the caller's concern, not this hook's) —
@@ -38,20 +46,41 @@ interface UseDictationOptions {
 // open issue: github.com/jamsch/expo-speech-recognition/issues/87, "After
 // little pause in speech Android is replacing old transcript"). Naively
 // trusting `results[0].transcript` as "the whole session so far" silently
-// drops everything said before the most recent pause. `finalTranscriptRef`
-// accumulates each segment only once it's confirmed final (`event.isFinal`),
-// so a mid-sentence pause never loses anything — this also happens to be
-// correct for iOS's documented behavior (one final result at the very end of
-// the session), since `finalTranscriptRef` just stays empty throughout and
-// the interim segment IS the whole session so far in that case.
+// drops everything said before the most recent pause.
+//
+// The first attempt at fixing this only baked a segment into
+// `finalTranscriptRef` once `event.isFinal` arrived for it — that assumed
+// Android always finalizes a segment before abandoning it for a new one.
+// In practice (confirmed by a user hitting data loss on a plain ~1-2s pause)
+// it doesn't: the recognizer can drop a segment with no `isFinal` event at
+// all, so there's nothing for that logic to catch. `lastEventAtRef` adds a
+// second, independent signal that doesn't depend on `isFinal` firing
+// correctly: if too long has passed since the last `result` event, whatever
+// segment was in progress is baked in as a precaution *before* processing the
+// new event, on the theory that a real gap this size means the recognizer
+// already silently moved on. This is still correct for iOS's documented
+// behavior (one final result at the very end of the whole session, no
+// mid-session gaps) since the timer only ever fires between actual events.
 export function useDictation({ onTranscriptChange, onEnd }: UseDictationOptions) {
   const [recording, setRecording] = useState(false);
   const finalTranscriptRef = useRef('');
+  const currentSegmentRef = useRef('');
+  const lastEventAtRef = useRef(0);
 
   useSpeechRecognitionEvent('result', (event) => {
+    const now = Date.now();
+    if (currentSegmentRef.current && now - lastEventAtRef.current > SEGMENT_GAP_MS) {
+      finalTranscriptRef.current = joinDictationText(finalTranscriptRef.current, currentSegmentRef.current);
+      currentSegmentRef.current = '';
+    }
+    lastEventAtRef.current = now;
+
     const segment = event.results[0]?.transcript ?? '';
+    currentSegmentRef.current = segment;
+
     if (event.isFinal) {
       finalTranscriptRef.current = joinDictationText(finalTranscriptRef.current, segment);
+      currentSegmentRef.current = '';
       onTranscriptChange(finalTranscriptRef.current);
     } else {
       onTranscriptChange(joinDictationText(finalTranscriptRef.current, segment));
@@ -84,6 +113,8 @@ export function useDictation({ onTranscriptChange, onEnd }: UseDictationOptions)
       return;
     }
     finalTranscriptRef.current = '';
+    currentSegmentRef.current = '';
+    lastEventAtRef.current = 0;
     setRecording(true);
     ExpoSpeechRecognitionModule.start({
       lang: DICTATION_LANG,

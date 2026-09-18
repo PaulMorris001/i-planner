@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, TextInput, Pressable, StyleSheet, Alert, Keyboard, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, Pressable, StyleSheet, Alert, Keyboard, ActivityIndicator, Share } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useNavigation, usePreventRemove } from '@react-navigation/native';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
@@ -10,6 +10,7 @@ import { useNotes } from '@/hooks/useNotes';
 import { useFolders } from '@/hooks/useFolders';
 import { useDictation, joinDictationText } from '@/hooks/useDictation';
 import { noteService } from '@/services/note.service';
+import { sharedNoteService } from '@/services/sharedNote.service';
 import { confirmDelete } from '@/utils/confirmDelete';
 import { formatShortDate, formatTimeLabel } from '@/utils/date';
 import { shareNote } from '@/utils/exportNote';
@@ -317,7 +318,7 @@ export default function NoteEditor() {
     });
   };
 
-  const handleShare = async () => {
+  const handleSharePdf = async () => {
     if (!editing || sharing) return;
     setSharing(true);
     try {
@@ -330,8 +331,45 @@ export default function NoteEditor() {
     }
   };
 
+  // Unlike the PDF export above, this goes through the backend — the link it
+  // returns always resolves the note's *current* content live (see
+  // backend/src/models/SharedNote.ts), so it can't export stale on-screen
+  // edits the way the PDF path deliberately avoids. Needs a saved note to
+  // point the link at, hence gating on `editing` (derived from `savedId`)
+  // rather than just checking `title`/`body` are non-empty.
+  const handleShareLink = async () => {
+    if (!editing || sharing) return;
+    setSharing(true);
+    try {
+      const { url } = await sharedNoteService.share(editing.id);
+      // `url` is what iOS's share sheet actually treats as a link (offering
+      // Messages/Mail's native link preview); `message` is what Android uses
+      // instead and what iOS falls back to if `url` weren't set — passing
+      // both covers each platform's preferred field in one call.
+      await Share.share({ message: url, url });
+    } catch (err) {
+      console.error('[NoteEditor] failed to create share link', err);
+      Alert.alert("Couldn't create link", 'Check your connection and try again.');
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  const handleShare = () => {
+    if (!editing || sharing) return;
+    Alert.alert('Share note', undefined, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Share as PDF', onPress: handleSharePdf },
+      { text: 'Share link', onPress: handleShareLink },
+    ]);
+  };
+
   return (
-    <ScreenWrapper backgroundColor={Colors.offWhite} edges={['top', 'right', 'left']}>
+    // 'bottom' matters here specifically because of the mic/Clean FABs and the
+    // review banner pinned to the bottom of the page card — without it, they
+    // sit flush against the physical screen edge and get covered by Android's
+    // on-screen nav bar (3-button or gesture pill) on edge-to-edge devices.
+    <ScreenWrapper backgroundColor={Colors.offWhite} edges={['top', 'right', 'bottom', 'left']}>
       <View style={styles.headerRow}>
         <Pressable hitSlop={10} onPress={() => router.back()} style={styles.backBtn}>
           <IconSymbol name="chevron.left" color={Colors.textPrimary} size={20} />
