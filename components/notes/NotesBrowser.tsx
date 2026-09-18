@@ -144,7 +144,7 @@ export function NotesBrowser({ parentId, emptyNotesText, searchPlaceholder, show
         })}
       </View>
     ) : (
-      <View style={[styles.grid, { columnGap: gap, rowGap: gap + 6 }]}>
+      <View style={[styles.grid, { columnGap: gap, rowGap: gap + 10 }]}>
         {list.map((folder) => (
           <GridTile
             key={folder.id}

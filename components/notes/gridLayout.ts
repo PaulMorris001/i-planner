@@ -1,8 +1,8 @@
 import { useWindowDimensions } from 'react-native';
 import { Spacing } from '@/constants/theme';
 
-const COLUMNS = 3;
-const TILE_GAP = 14;
+const COLUMNS = 2;
+const TILE_GAP = 16;
 
 // Shared by NoteGridSection and app/notes.tsx's folder grid, so both grids
 // line up with identical columns/gap. Computed from the actual screen width

@@ -22,7 +22,7 @@ export function NoteGridSection({ notes, onOpenNote, onShowActions, emptyText }:
   }
 
   return (
-    <View style={[styles.grid, { columnGap: gap, rowGap: gap + 6 }]}>
+    <View style={[styles.grid, { columnGap: gap, rowGap: gap + 10 }]}>
       {notes.map((note) => (
         <GridTile
           key={note.id}

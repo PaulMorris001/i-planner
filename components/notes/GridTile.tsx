@@ -15,14 +15,29 @@ interface GridTileProps {
   onLongPress?: () => void;
 }
 
+// Icon badge sized relative to the tile's own width rather than a fixed
+// pixel value — with only 2 columns now, tiles are wide enough that a small
+// fixed icon would look lost in all the extra space; scaling with `width`
+// keeps the badge looking "big," matching the tile, on any screen size.
+const ICON_BOX_RATIO = 0.62;
+const ICON_RATIO = 0.42; // of the icon box, not of the tile
+
 // One grid cell — icon badge, name below — shared by note tiles (a file icon)
 // and folder tiles (a folder icon) so both look consistent, even though they
 // come from two different screens/data sources.
 export function GridTile({ label, iconName, width, onPress, onLongPress }: GridTileProps) {
+  const iconBoxSize = Math.round(width * ICON_BOX_RATIO);
+  const iconSize = Math.round(iconBoxSize * ICON_RATIO);
+
   return (
     <Pressable style={[styles.tile, { width }]} onPress={onPress} onLongPress={onLongPress}>
-      <View style={styles.iconBox}>
-        <IconSymbol name={iconName} color={Colors.primaryLight} size={26} />
+      <View
+        style={[
+          styles.iconBox,
+          { width: iconBoxSize, height: iconBoxSize, borderRadius: iconBoxSize * 0.22 },
+        ]}
+      >
+        <IconSymbol name={iconName} color={Colors.primaryLight} size={iconSize} />
       </View>
       <Text style={styles.label} numberOfLines={2}>
         {label}
@@ -36,19 +51,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   iconBox: {
-    width: 64,
-    height: 64,
-    borderRadius: 16,
     backgroundColor: Colors.infoSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
   label: {
-    marginTop: 8,
-    fontSize: 12.5,
+    marginTop: 10,
+    fontSize: 14.5,
     fontWeight: '600',
     color: Colors.textPrimary,
     textAlign: 'center',
-    lineHeight: 16,
+    lineHeight: 19,
   },
 });

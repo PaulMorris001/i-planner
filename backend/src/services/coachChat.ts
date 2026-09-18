@@ -5,10 +5,14 @@ import { CREATE_TASK_TOOL, createTasksFromDrafts } from './coachTools';
 
 const openai = new OpenAI({ apiKey: env.openaiApiKey });
 
-// "-chat-latest" is OpenAI's conversational-tuned alias — better fit for a
-// back-and-forth coach than the reasoning model used for structured JSON output
-// elsewhere (goalMilestones.ts/examTopics.ts).
-const OPENAI_MODEL = 'gpt-5.3-chat-latest';
+// Was 'gpt-5.3-chat-latest' (a conversational-tuned alias, meant as a better
+// fit for a back-and-forth coach than the model used for structured JSON
+// output elsewhere) — that alias doesn't exist for this OpenAI account/org
+// (confirmed via a live model_not_found error, meaning Coach chat had been
+// silently falling back to FALLBACK_REPLY for every message). Using the same
+// model timetableExtraction.ts/syllabusExtraction.ts already use successfully
+// instead, until/unless a working "-chat-latest" alias is confirmed to exist.
+const OPENAI_MODEL = 'gpt-5.4';
 
 const MODE_PERSONA: Record<CoachModeId, string> = {
   study:

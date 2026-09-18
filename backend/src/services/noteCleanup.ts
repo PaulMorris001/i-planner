@@ -3,11 +3,12 @@ import { env } from '../config/env';
 
 const openai = new OpenAI({ apiKey: env.openaiApiKey });
 
-// Same conversational-tuned model coachChat.ts uses for free-form text rather
-// than the reasoning model used for structured JSON extraction elsewhere
-// (goalMilestones.ts/examTopics.ts) — this is a light copyedit pass, not
-// extraction.
-const OPENAI_MODEL = 'gpt-5.3-chat-latest';
+// Same model timetableExtraction.ts/syllabusExtraction.ts already use
+// successfully — coachChat.ts's 'gpt-5.3-chat-latest' (which this originally
+// copied) turned out not to exist for this OpenAI account/org at all
+// (confirmed via a live model_not_found error), so this was broken from the
+// start too; see coachChat.ts's own comment for the full story.
+const OPENAI_MODEL = 'gpt-5.4';
 
 const INSTRUCTIONS =
   'The following text was produced by speech-to-text dictation and may contain mis-transcribed words, ' +

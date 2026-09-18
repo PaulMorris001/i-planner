@@ -481,8 +481,14 @@ const styles = StyleSheet.create({
   },
   headerTitleWrap: {
     position: 'absolute',
+    // Not symmetric on purpose: backBtn alone is ~50pt, but headerActions can
+    // hold up to 3 buttons (Share+Delete+Save) when editing, ~150pt+padding.
+    // A centered title box with equal insets sits closer to the wider side's
+    // buttons than to the back button — this keeps the title genuinely
+    // centered in the actual free space between the two, not just centered
+    // on screen.
     left: 50,
-    right: 50,
+    right: 150,
     top: 0,
     bottom: 0,
     alignItems: 'center',
