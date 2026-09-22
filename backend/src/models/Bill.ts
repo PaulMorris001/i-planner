@@ -7,17 +7,10 @@ export interface BillDocument extends Document {
   firebaseUid: string;
   name: string;
   amount: number;
-  dueDate: string; // "YYYY-MM-DD" — day-of-month is what matters for a recurring bill.
+  dueDate: string; 
   recurring: boolean;
   category: BillCategory;
-  // Local expo-notifications reminder ids — two leads (1 week before, 3 days
-  // before) + one on the due date. See scheduleBillNotifications.
   notificationIds?: string[];
-  // "YYYY-MM-DD" date-key of the cycle last marked paid (for a recurring bill,
-  // that cycle's computed due date via nextRecurringDueDate — for a one-time
-  // bill this never applies, since paying it deletes the record instead).
-  // Naturally "resets" every month: once the computed current cycle's date-key
-  // no longer matches, the bill reads as unpaid again — no cleanup needed.
   lastPaidCycle?: string;
 }
 

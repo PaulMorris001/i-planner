@@ -45,4 +45,11 @@ export const env = {
   googlePlayServiceAccountJson: process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON,
   // Matches app.json's expo.android.package.
   googlePlayPackageName: process.env.GOOGLE_PLAY_PACKAGE_NAME,
+  // resend.com dashboard → API Keys. Optional: unset just makes sendEmail
+  // (utils/email.ts) throw a clean "not configured" error per-call instead of
+  // crashing startup, same shape as the Microsoft OAuth/IAP vars above.
+  resendApiKey: process.env.RESEND_API_KEY,
+  // resend.com dashboard → Domains — must be a verified sending domain/address,
+  // not an arbitrary address, or Resend will reject the send.
+  resendFromEmail: process.env.RESEND_FROM_EMAIL,
 };

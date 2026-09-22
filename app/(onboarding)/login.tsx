@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/Input';
 import { BackButton } from '@/components/ui/BackButton';
 import { AuthHeader } from '@/components/onboarding/AuthHeader';
 import { FormErrorBanner } from '@/components/onboarding/FormErrorBanner';
+import { SocialAuthButtons } from '@/components/onboarding/SocialAuthButtons';
 import { useAuth } from '@/hooks/useAuth';
 import { useOnboarding } from '@/hooks/useOnboarding';
 import { settingsService } from '@/services/settings.service';
@@ -112,6 +113,8 @@ export default function Login() {
             loading={loading}
             style={styles.cta}
           />
+
+          <SocialAuthButtons />
         </View>
 
         {/* Footer */}

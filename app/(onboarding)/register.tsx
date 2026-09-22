@@ -1,6 +1,7 @@
 import { ScreenWrapper } from "@/components/layout/ScreenWrapper";
 import { AuthHeader } from "@/components/onboarding/AuthHeader";
 import { FormErrorBanner } from "@/components/onboarding/FormErrorBanner";
+import { SocialAuthButtons } from "@/components/onboarding/SocialAuthButtons";
 import { BackButton } from "@/components/ui/BackButton";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -105,6 +106,8 @@ export default function Register() {
             loading={loading}
             style={styles.cta}
           />
+
+          <SocialAuthButtons />
         </View>
 
         {/* Legal */}

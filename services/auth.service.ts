@@ -1,4 +1,5 @@
 import { auth } from "@/config/firebase";
+import { authEmailService } from "@/services/authEmail.service";
 import type {
   AuthError,
   AuthResponse,
@@ -8,7 +9,6 @@ import type {
 import type { User } from "@/types/user.types";
 import {
   createUserWithEmailAndPassword,
-  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   updateProfile,
   type User as FirebaseUser,
@@ -70,6 +70,11 @@ export const authService = {
         payload.email,
         payload.password,
       );
+      // Not awaited — a Resend/backend hiccup here must never block or fail
+      // an otherwise-successful sign-in.
+      authEmailService
+        .sendLoginNotify(cred.user.displayName ?? undefined)
+        .catch((err) => console.error("[auth] failed to send login-notify email", err));
       return { user: mapFirebaseUser(cred.user) };
     } catch (err) {
       throw mapFirebaseError(err);
@@ -84,18 +89,21 @@ export const authService = {
         payload.password,
       );
       await updateProfile(cred.user, { displayName: payload.fullName });
+      // Not awaited — same reasoning as login's sendLoginNotify above.
+      authEmailService
+        .sendWelcome(payload.fullName)
+        .catch((err) => console.error("[auth] failed to send welcome email", err));
       return { user: mapFirebaseUser(cred.user) };
     } catch (err) {
       throw mapFirebaseError(err);
     }
   },
 
-  forgotPassword: async (email: string) => {
-    try {
-      await sendPasswordResetEmail(auth, email);
-      return { message: "Reset link sent." };
-    } catch (err) {
-      throw mapFirebaseError(err);
-    }
-  },
+  // Routed through our backend (Resend) instead of Firebase's own
+  // sendPasswordResetEmail, so the reset email comes from our sender/branding
+  // instead of Firebase's default template — see
+  // backend/src/controllers/authEmail.controller.ts's forgotPassword, which
+  // still generates the same kind of Firebase-hosted reset link under the
+  // hood via the Admin SDK.
+  forgotPassword: (email: string) => authEmailService.forgotPassword(email),
 };

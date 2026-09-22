@@ -252,23 +252,35 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       } catch (err) {
         console.error('[SettingsProvider] failed to report timezone', err);
       }
-      // Self-heals a specific desync: the OS notification permission is
-      // actually granted, but remindersEnabled never got saved server-side —
-      // e.g. a transient network failure moments after the user granted
-      // permission during onboarding (enableReminders below rolls the flag
-      // back to false on any save failure, and notifications-prompt.tsx
-      // proceeds with onboarding regardless of whether it succeeded). Left
-      // uncorrected, every task/class/bill/goal created afterward silently
-      // gets zero reminders scheduled — with nothing telling the user why —
-      // until they happen to discover and manually toggle Reminders off and
-      // back on in Profile & Settings. Checked on every login/launch, not
-      // just once, so it corrects itself the next time the app opens rather
-      // than needing that manual toggle at all.
-      if (fetched && !fetched.remindersEnabled) {
+      // Self-heals two related desyncs, both checked on every login/launch
+      // (not just once) so they correct themselves the next time the app
+      // opens rather than needing a manual toggle at all:
+      //  1. The OS notification permission is actually granted, but
+      //     remindersEnabled never got saved server-side — e.g. a transient
+      //     network failure moments after the user granted permission during
+      //     onboarding (enableReminders below rolls the flag back to false on
+      //     any save failure, and notifications-prompt.tsx proceeds with
+      //     onboarding regardless of whether it succeeded).
+      //  2. remindersEnabled is already true, but some task/class/bill/goal
+      //     still ended up with an empty notificationIds — e.g. it was
+      //     created or edited while permission was momentarily off, or
+      //     scheduling failed transiently (utils/notifications.ts's
+      //     scheduleOccurrence fails silent-and-empty on purpose, by design,
+      //     so nothing else catches this). A confirmed real complaint: a
+      //     user's task alarm simply never fired, with the app showing
+      //     nothing wrong. Only case 1 used to run backfillReminders() — case
+      //     2 needs it just as much, and backfillReminders() is safe to call
+      //     unconditionally here regardless of which case (or neither)
+      //     applies: every item it touches is skipped unless its own
+      //     notificationIds is already empty, so it can never double-schedule
+      //     something that's already correctly set up.
+      if (fetched) {
         try {
           const { granted } = await Notifications.getPermissionsAsync();
           if (granted) {
-            setSettings(await settingsService.patch({ remindersEnabled: true }));
+            if (!fetched.remindersEnabled) {
+              setSettings(await settingsService.patch({ remindersEnabled: true }));
+            }
             backfillReminders();
           }
         } catch (err) {
