@@ -1,16 +1,39 @@
 import { getLocales } from 'expo-localization';
 import { parseISODateLocal } from './date';
 
-// Device Region setting (Language & Region on iOS, locale on Android) — not
+// expo-localization's own docs (Localization.types.d.ts) call this out
+// explicitly: "On Android, [currencyCode is] the currency specific to the
+// locale in the list, as there are no separate settings for selecting a
+// region" — i.e. on Android it tracks the user's chosen language VARIANT
+// (e.g. "English (United Kingdom)"), not their actual Region setting. A
+// Nigeria-region Android device with language set to English (UK) resolves
+// currencyCode to GBP even though regionCode correctly reports "NG". iOS
+// doesn't have this problem (currencyCode there does follow Region), but we
+// have to assume the worse (Android) behavior. regionCode is documented as
+// reliably sourced from the real Region setting on both platforms, so this
+// table maps it straight to a currency instead of trusting currencyCode.
+// Deliberately not exhaustive — only markets an i-planner user is plausibly
+// in; anything missing falls back to currencyCode, then USD.
+const REGION_CURRENCY: Record<string, string> = {
+  NG: 'NGN', GH: 'GHS', KE: 'KES', ZA: 'ZAR', EG: 'EGP', TZ: 'TZS', UG: 'UGX',
+  RW: 'RWF', ET: 'ETB', MA: 'MAD', DZ: 'DZD', TN: 'TND', SN: 'XOF', CI: 'XOF',
+  CM: 'XAF', US: 'USD', CA: 'CAD', MX: 'MXN', BR: 'BRL', AR: 'ARS', GB: 'GBP',
+  IE: 'EUR', FR: 'EUR', DE: 'EUR', ES: 'EUR', IT: 'EUR', PT: 'EUR', NL: 'EUR',
+  BE: 'EUR', AT: 'EUR', FI: 'EUR', GR: 'EUR', CH: 'CHF', SE: 'SEK', NO: 'NOK',
+  DK: 'DKK', PL: 'PLN', TR: 'TRY', RU: 'RUB', UA: 'UAH', IN: 'INR', PK: 'PKR',
+  BD: 'BDT', CN: 'CNY', JP: 'JPY', KR: 'KRW', SG: 'SGD', MY: 'MYR', ID: 'IDR',
+  PH: 'PHP', TH: 'THB', VN: 'VND', AE: 'AED', SA: 'SAR', QA: 'QAR', IL: 'ILS',
+  AU: 'AUD', NZ: 'NZD',
+};
+
+// Device Region setting (Language & Region on iOS, Region on Android) — not
 // real geolocation, just the same signal Apple/Google's own storefronts use
 // to localize subscription pricing (see app/plans.tsx's displayPrice). Read
 // once at module load: the device region doesn't change mid-session, and
 // this would otherwise re-resolve on every single formatCurrency call.
-// currencyCode/languageTag are null only on web (unsupported here) or a
-// locale Expo couldn't resolve — USD/en-US matches this file's old hardcoded
-// behavior, so that's the fallback either way.
 const deviceLocale = getLocales()[0];
-const CURRENCY_CODE = deviceLocale?.currencyCode ?? 'USD';
+const CURRENCY_CODE =
+  (deviceLocale?.regionCode && REGION_CURRENCY[deviceLocale.regionCode]) || deviceLocale?.currencyCode || 'USD';
 // NOT deviceLocale.languageTag — Language and Region are independently
 // configurable on iOS (e.g. Language "English (U.S.)" with Region "Nigeria"
 // is a completely normal setup), and languageTag reflects the Language half.
@@ -21,7 +44,7 @@ const CURRENCY_CODE = deviceLocale?.currencyCode ?? 'USD';
 // correctly knew the currency was NGN but rendered "NGN 2,100" instead of
 // "₦2,100" because "en-US" has no Naira symbol mapping. Reconstructing the
 // tag from languageCode + regionCode keeps the user's language but forces
-// the region half to match what currencyCode was actually resolved from.
+// the region half to match CURRENCY_CODE above.
 const LOCALE_TAG =
   deviceLocale?.languageCode && deviceLocale?.regionCode
     ? `${deviceLocale.languageCode}-${deviceLocale.regionCode}`

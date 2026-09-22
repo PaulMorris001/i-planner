@@ -4,6 +4,7 @@ import { ApiError } from '../utils/ApiError';
 
 export interface AuthedRequest extends Request {
   userId?: string;
+  userEmail?: string;
 }
 
 export async function requireAuth(req: AuthedRequest, _res: Response, next: NextFunction) {
@@ -17,6 +18,7 @@ export async function requireAuth(req: AuthedRequest, _res: Response, next: Next
   try {
     const decoded = await firebaseAuth.verifyIdToken(token);
     req.userId = decoded.uid;
+    req.userEmail = decoded.email;
     next();
   } catch {
     next(new ApiError(401, 'Invalid or expired session.', 'general'));

@@ -64,6 +64,14 @@ export default function NoteEditor() {
   const pendingNavActionRef = useRef<Parameters<Parameters<typeof usePreventRemove>[1]>[0]['data']['action'] | null>(
     null
   );
+  // Set by handleSave right before it finishes, instead of calling
+  // router.back() itself — see the comment on handleSave for why: by the time
+  // its save actually resolves, updating lastSavedRef isn't enough on its own
+  // to make usePreventRemove's *current* render see isDirty go false, since
+  // nothing re-renders between that ref update and a same-tick router.back()
+  // call. The replay effect below actually navigates once a real render has
+  // caught up.
+  const wantsToLeaveAfterSaveRef = useRef(false);
   // Refs mirror the latest state for the autosave interval/callbacks below,
   // which are set up once and would otherwise close over stale values.
   const titleRef = useRef(title);
@@ -139,6 +147,14 @@ export default function NoteEditor() {
   }, []);
 
   const canSave = title.trim().length > 0 && !submitting;
+  // True whenever there's something on screen that isn't reflected in the
+  // last confirmed save (autosave included) — i.e. a crash, force-quit, or
+  // leaving before the next 8s autosave tick would actually lose something.
+  // Computed fresh every render directly against the ref, not tracked as its
+  // own state — lastSavedRef only ever changes right alongside a title/body
+  // state update or a re-render-triggering state change nearby (see
+  // handleSave's own comment for the one case that needed extra care).
+  const isDirty = title.trim() !== lastSavedRef.current.title || body !== lastSavedRef.current.body;
   // While editing, the note's own folderId is the source of truth (kept live
   // by NotesContext's optimistic update) — newNoteFolderId only matters
   // before the note exists yet.
@@ -219,39 +235,94 @@ export default function NoteEditor() {
     setCleanupState('idle');
   };
 
-  // Replays whatever navigation attempt usePreventRemove blocked, but only
-  // after `cleanupState` has actually finished flushing to 'idle' — dispatching
-  // it synchronously inside handleKeepCleaned/handleRevertCleaned would still
-  // see the hook's stale (not-yet-re-rendered) `reviewing` closure and could
+  // Shares the review flow's pendingNavActionRef — same "forced choice on the
+  // way out" shape, just for unsaved edits instead of an unresolved AI-cleanup
+  // decision. Discarding just rolls title/body back to the last confirmed
+  // save, which makes isDirty false by construction — nothing to separately
+  // "undo" server-side, since nothing here was ever persisted.
+  const handleDiscardChanges = () => {
+    setTitle(lastSavedRef.current.title);
+    setBody(lastSavedRef.current.body);
+  };
+
+  // Same fallback-title behavior runAutosave already uses — a user who
+  // dictated straight into the body and never touched the title shouldn't
+  // hit a dead end tapping "Save" here just because the header Save button's
+  // own (stricter, title-required) canSave would otherwise block it.
+  const handleSaveBeforeLeaving = async () => {
+    if (busyRef.current) return;
+    const t = title.trim() || deriveFallbackTitle(body);
+    if (!t) {
+      // Nothing meaningful typed on either field — nothing to lose either way.
+      handleDiscardChanges();
+      return;
+    }
+    busyRef.current = true;
+    setSubmitting(true);
+    try {
+      if (savedId) {
+        await updateNote(savedId, { title: t, body });
+      } else {
+        const created = await createNote({ title: t, body, folderId: newNoteFolderId });
+        setSavedId(created.id);
+      }
+      lastSavedRef.current = { title: t, body };
+    } catch (err) {
+      console.error('[NoteEditor] failed to save note before leaving', err);
+      Alert.alert("Couldn't save", 'Check your connection and try again.');
+    } finally {
+      setSubmitting(false);
+      busyRef.current = false;
+    }
+  };
+
+  // Replays whatever navigation attempt usePreventRemove blocked, or finishes
+  // a plain Save-button tap's own exit (see handleSave) — either way, only
+  // once a real render has caught up to both cleanupState and isDirty going
+  // clear. Dispatching synchronously from inside the various handlers above
+  // would still see this hook's stale (not-yet-re-rendered) closure and could
   // block the very same action a second time.
   useEffect(() => {
-    if (cleanupState === 'idle' && pendingNavActionRef.current) {
+    if (cleanupState !== 'idle' || isDirty) return;
+    if (pendingNavActionRef.current) {
       const action = pendingNavActionRef.current;
       pendingNavActionRef.current = null;
       navigation.dispatch(action);
+    } else if (wantsToLeaveAfterSaveRef.current) {
+      wantsToLeaveAfterSaveRef.current = false;
+      router.back();
     }
-  }, [cleanupState, navigation]);
+  }, [cleanupState, isDirty, navigation]);
 
-  usePreventRemove(cleanupState === 'reviewing', ({ data }) => {
+  usePreventRemove(cleanupState === 'reviewing' || isDirty, ({ data }) => {
     pendingNavActionRef.current = data.action;
-    Alert.alert(
-      'Keep or revert?',
-      'You cleaned this note with AI. Choose which version to keep before leaving.',
-      [
-        { text: 'Revert to original', onPress: handleRevertCleaned },
-        { text: 'Keep cleaned version', onPress: handleKeepCleaned },
-      ]
-    );
+    if (cleanupState === 'reviewing') {
+      Alert.alert(
+        'Keep or revert?',
+        'You cleaned this note with AI. Choose which version to keep before leaving.',
+        [
+          { text: 'Revert to original', onPress: handleRevertCleaned },
+          { text: 'Keep cleaned version', onPress: handleKeepCleaned },
+        ]
+      );
+    } else {
+      Alert.alert(
+        'Save changes?',
+        "This note hasn't finished saving yet. Save your changes before leaving, or discard them?",
+        [
+          { text: 'Discard', style: 'destructive', onPress: handleDiscardChanges },
+          { text: 'Save', onPress: handleSaveBeforeLeaving },
+        ]
+      );
+    }
   });
 
   const handleSave = async () => {
     if (!canSave || busyRef.current) return;
     // Tapping Save while an AI-cleanup decision is still unresolved implicitly
-    // means "keep this version" — clear the review state *before* saving so
-    // usePreventRemove's guard doesn't intercept this save's own router.back()
-    // and re-litigate a decision Save already made (it previously did, and by
-    // the time the user picked anything in that redundant prompt, this save
-    // had already persisted the cleaned text regardless of their answer).
+    // means "keep this version" — clear the review state so the guard above
+    // doesn't intercept this save's own exit and re-litigate a decision Save
+    // already made.
     setCleanupState('idle');
     busyRef.current = true;
     setSubmitting(true);
@@ -263,7 +334,13 @@ export default function NoteEditor() {
         await createNote({ title: t, body, folderId: newNoteFolderId });
       }
       lastSavedRef.current = { title: t, body };
-      router.back();
+      // Not router.back() directly: updating the ref above doesn't make this
+      // render's `isDirty` (still true, from before this save) go false —
+      // nothing re-renders between that update and here to catch it up, so
+      // the guard above would immediately intercept this exact router.back()
+      // call. The replay effect actually navigates once a real render has
+      // caught up to isDirty going false.
+      wantsToLeaveAfterSaveRef.current = true;
     } catch (err) {
       console.error('[NoteEditor] failed to save note', err);
     } finally {
@@ -288,10 +365,15 @@ export default function NoteEditor() {
   const handleDelete = () => {
     if (!editing) return;
     confirmDelete(editing.title, () => {
-      // A deleted note has nothing left to keep or revert — clear this first
-      // so the usePreventRemove guard below doesn't fire for the router.back()
-      // this delete is about to trigger.
+      // A deleted note has nothing left to keep, revert, or save — clear both
+      // guards before this delete's own router.back() fires. Unlike
+      // handleSave, this is safe to do synchronously right here: deleteNote
+      // below is a real async call, so cleanupState's flush to 'idle' (and
+      // isDirty's own recompute, since lastSavedRef is updated in this same
+      // synchronous breath) both land well before .then(() => router.back())
+      // ever runs.
       setCleanupState('idle');
+      lastSavedRef.current = { title, body };
       deleteNote(editing.id)
         .then(() => router.back())
         .catch((err) => console.error('[NoteEditor] failed to delete note', err));

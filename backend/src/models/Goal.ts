@@ -14,8 +14,6 @@ export interface GoalDocument extends Document {
   color: string;
   pct: number;
   milestones: Types.DocumentArray<MilestoneDocument>;
-  // Career-goal-specific context (unused by other goal types) — shown as the
-  // "{role} · {industry} · {date}" subtitle on the Dashboard's Career Goal card.
   targetRole?: string;
   targetIndustry?: string;
   targetDate?: string;
@@ -24,22 +22,15 @@ export interface GoalDocument extends Document {
 const milestoneSchema = new Schema<MilestoneDocument>({
   title: { type: String, required: true, trim: true },
   done: { type: Boolean, default: false },
-  // Free-text relative timeframe (e.g. "This month", "Mid-way") rather than a real
-  // date — matches what AI-generated milestones naturally produce.
   dueLabel: { type: String, default: '' },
 });
 
 const goalSchema = new Schema<GoalDocument>({
   firebaseUid: { type: String, required: true, index: true },
-  // type is the canonical GoalTypeId ('study'|'career'|'personal'|'habit'). tag/color
-  // are stored at creation time rather than re-derived, so past goals don't shift if
-  // the frontend's type palette changes later.
   type: { type: String, required: true },
   tag: { type: String, required: true },
   title: { type: String, required: true, trim: true },
   color: { type: String, required: true },
-  // Derived from milestones (doneCount/total) — never set directly by the client.
-  // See goal.controller.ts.
   pct: { type: Number, default: 0 },
   milestones: { type: [milestoneSchema], default: [] },
   targetRole: { type: String },
