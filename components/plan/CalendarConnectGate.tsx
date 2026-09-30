@@ -6,10 +6,11 @@ import { Colors } from '@/constants/theme';
 interface CalendarConnectGateProps {
   onConnectApple: () => void;
   onConnectGoogle: () => void;
+  onConnectOutlook: () => void;
   onSkip: () => void;
 }
 
-export function CalendarConnectGate({ onConnectApple, onConnectGoogle, onSkip }: CalendarConnectGateProps) {
+export function CalendarConnectGate({ onConnectApple, onConnectGoogle, onConnectOutlook, onSkip }: CalendarConnectGateProps) {
   return (
     <GateCard
       icon="calendar"
@@ -19,6 +20,11 @@ export function CalendarConnectGate({ onConnectApple, onConnectGoogle, onSkip }:
       <Pressable style={styles.googleBtn} onPress={onConnectGoogle}>
         <Text style={styles.googleIcon}>G</Text>
         <Text style={styles.googleBtnText}>Connect Google Calendar</Text>
+      </Pressable>
+
+      <Pressable style={styles.secondaryBtn} onPress={onConnectOutlook}>
+        <Text style={styles.outlookIcon}>O</Text>
+        <Text style={styles.appleBtnText}>Connect Outlook Calendar</Text>
       </Pressable>
 
       <Pressable style={styles.appleBtn} onPress={onConnectApple}>
@@ -61,6 +67,31 @@ const styles = StyleSheet.create({
     fontSize: 14.5,
     fontWeight: '700',
     color: Colors.white,
+  },
+  secondaryBtn: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 9,
+    backgroundColor: Colors.white,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    borderRadius: 13,
+    paddingVertical: 14,
+    marginBottom: 10,
+  },
+  outlookIcon: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: Colors.white,
+    backgroundColor: '#0078D4',
+    width: 20,
+    height: 20,
+    borderRadius: 5,
+    textAlign: 'center',
+    lineHeight: 20,
+    overflow: 'hidden',
   },
   appleBtn: {
     width: '100%',

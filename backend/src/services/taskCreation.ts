@@ -1,9 +1,8 @@
 import { Task, TaskDocument } from '../models/Task';
-import { Settings } from '../models/Settings';
-import { deleteTaskEvent, upsertTaskEvent } from './googleCalendarSync';
+import { syncTaskToCalendars } from './calendarSync';
 
 // Shared by task.controller.ts's REST endpoint and coachTools.ts's create_task
-// tool — one place for day/hour defaults and Google Calendar sync.
+// tool — one place for day/hour defaults and cloud calendar sync.
 
 export interface CreateTaskInput {
   title: string;
@@ -23,42 +22,10 @@ export interface CreateTaskInput {
   // event (see calendarImport's "convert to task" flow) — the task should
   // point at that event, not get a brand new one created for it.
   googleEventId?: string;
-  // Same "converted from an existing event" idea as googleEventId, but for
-  // Outlook — read-only, so there's no equivalent sync-skip to gate here.
+  // Same "converted from an existing event" idea as googleEventId, but for Outlook.
   outlookEventId?: string;
   calendarLinkExternal?: boolean;
   alarmEnabled?: boolean;
-}
-
-export async function syncTaskToGoogle(
-  firebaseUid: string,
-  task: {
-    title: string;
-    dueDate: string;
-    time?: string;
-    notes?: string;
-    recurring: boolean;
-    freq?: 'weekly' | 'weekdays' | 'daily';
-    dayIdxs?: number[];
-    googleEventId?: string;
-  }
-) {
-  const settings = await Settings.findOne({ firebaseUid });
-  if (!settings?.googleCalendarConnected) return undefined;
-  // An edit that clears dueDate leaves nothing to sync — delete any existing
-  // event instead of leaving it orphaned on the calendar.
-  if (!task.dueDate) {
-    if (task.googleEventId) await deleteTaskEvent(settings, task);
-    return undefined;
-  }
-  return upsertTaskEvent(settings, task);
-}
-
-export async function unsyncTaskFromGoogle(firebaseUid: string, task: { googleEventId?: string }) {
-  if (!task.googleEventId) return;
-  const settings = await Settings.findOne({ firebaseUid });
-  if (!settings?.googleCalendarConnected) return;
-  await deleteTaskEvent(settings, task);
 }
 
 export async function createTaskDoc(firebaseUid: string, input: CreateTaskInput): Promise<TaskDocument> {
@@ -83,12 +50,10 @@ export async function createTaskDoc(firebaseUid: string, input: CreateTaskInput)
     alarmEnabled: !!input.alarmEnabled,
   });
 
-  // Already pointing at an existing event (converted from an imported
-  // calendar event) — syncing now would create a second, duplicate event.
-  if (!input.googleEventId) {
-    task.googleEventId = await syncTaskToGoogle(firebaseUid, task);
-    if (task.isModified('googleEventId')) await task.save();
-  }
+  // Skips tasks converted from an imported calendar event (calendarLinkExternal)
+  // — they already point at a real event, and syncing would duplicate it.
+  await syncTaskToCalendars(firebaseUid, task);
+  if (task.isModified('googleEventId') || task.isModified('outlookEventId')) await task.save();
 
   return task;
 }

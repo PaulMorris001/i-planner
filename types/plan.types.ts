@@ -23,6 +23,7 @@ export interface ClassItem {
   alarmEnabled?: boolean;
   appleEventIds?: string[];
   googleEventId?: string;
+  outlookEventId?: string;
   notificationIds?: string[];
 }
 

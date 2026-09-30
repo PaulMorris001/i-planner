@@ -65,6 +65,15 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // The auth listener above keeps the first render's fetch closure, and
+  // remindersEnabled is always false on that render (settings load async), so
+  // its reconcile pass is a no-op on every cold start. Re-run it once the real
+  // value arrives — and whenever reminders are switched back on.
+  useEffect(() => {
+    if (remindersEnabled && auth.currentUser) fetchTasks();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [remindersEnabled]);
+
   const createTask = async (input: NewTaskInput) => {
     // Random suffix, not just Date.now() — SyllabusUploadModal fires createTask for
     // several deadlines synchronously (Promise.allSettled), so a timestamp alone
@@ -184,7 +193,9 @@ export function TasksProvider({ children }: { children: ReactNode }) {
       await cancelNotifications(current.notificationIds);
       finalPatch = {
         ...finalPatch,
-        notificationIds: remindersEnabled ? await scheduleTaskNotifications(merged) : [],
+        // Same eligibility rule as toggleDone/reconcile: a completed one-time
+        // task gets no reminders, even when an edit touches its date/time.
+        notificationIds: remindersEnabled && (merged.recurring || !merged.done) ? await scheduleTaskNotifications(merged) : [],
       };
       await markTaskScheduled({ ...current, ...finalPatch }, finalPatch.notificationIds ?? []);
     }

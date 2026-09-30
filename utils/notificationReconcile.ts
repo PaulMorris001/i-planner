@@ -5,6 +5,10 @@ import {
   scheduleBillNotifications,
   scheduleSavingsGoalNotifications,
   cancelNotifications,
+  cancelAllScheduledReminders,
+  getPendingNotificationIds,
+  recurrenceNotStarted,
+  monthlyRefreshBucket,
 } from '@/utils/notifications';
 import { classRecurrenceEnded } from '@/utils/date';
 import type { Task } from '@/types/task.types';
@@ -65,6 +69,9 @@ function taskSignature(t: Task): string {
   return JSON.stringify([
     t.title, t.dueDate, t.time, t.recurring, t.freq ?? null,
     t.dayIdxs ?? null, t.alarmEnabled ?? false, t.recurring ? null : t.done,
+    // Flips on the start date, swapping first-week one-offs for the real
+    // repeating triggers (see recurrenceNotStarted).
+    recurrenceNotStarted(t.recurring, t.dueDate),
   ]);
 }
 
@@ -76,13 +83,19 @@ function classSignature(c: ClassItem): string {
     // its (already-scheduled, now-stale) reminder — same reasoning as
     // savingsGoalSignature's "already fully saved" threshold below.
     classRecurrenceEnded(c),
+    recurrenceNotStarted(c.recurring, c.startDate),
+    monthlyRefreshBucket(c.recurring, c.freq, c.startDate),
   ]);
 }
 
 // Mirrors scheduleBillNotifications' inputs — name/amount feed into the
 // scheduled body text, dueDate/recurring drive the trigger itself.
 function billSignature(b: Bill): string {
-  return JSON.stringify([b.name, b.amount, b.dueDate, b.recurring]);
+  return JSON.stringify([
+    b.name, b.amount, b.dueDate, b.recurring,
+    // Month-end due days are scheduled a few months at a time — see monthlyRefreshBucket.
+    monthlyRefreshBucket(b.recurring, 'monthly', b.dueDate),
+  ]);
 }
 
 // savedAmount is included even though it isn't a scheduling *input* the way
@@ -111,6 +124,7 @@ async function reconcile<T extends { id: string; notificationIds?: string[] }>(
 
   return withCacheLock(cacheKey, async () => {
     const cache = await readCache(cacheKey);
+    const pending = await getPendingNotificationIds();
     const nextIds = new Set(next.map((item) => item.id));
     const staleIds = Object.keys(cache).filter((id) => !nextIds.has(id));
     if (staleIds.length) {
@@ -122,7 +136,14 @@ async function reconcile<T extends { id: string; notificationIds?: string[] }>(
       next.map(async (item) => {
         const sig = signatureOf(item);
         const cached = cache[item.id];
-        if (cached && cached.sig === sig) {
+        // Every id this device recorded for the item is gone from the OS's
+        // pending list — restored from a backup (the cache comes back, the
+        // notifications don't), dropped by iOS's 64 cap, or a scheduling
+        // attempt that came back empty. A partly-fired item (lead already
+        // shown, due-time still pending) never matches, so nothing re-fires;
+        // one whose last reminder already fired just reschedules to [] again.
+        const lost = !!pending && (!cached?.ids.length || cached.ids.every((id) => !pending.has(id)));
+        if (cached && cached.sig === sig && !lost) {
           // Nothing schedule-relevant changed since this device last saw it —
           // report this device's own known-good ids, not whatever the server
           // copy happens to hold (that may belong to a different device).
@@ -243,4 +264,22 @@ export async function clearSavingsGoalSchedule(goalId: string): Promise<void> {
       await writeCache(SAVINGS_GOAL_CACHE_KEY, cache);
     }
   });
+}
+
+// Logout and "turn reminders off": cancel everything on the device and forget
+// every schedule, so nothing keeps firing for a signed-out account and the
+// next reconcile (after sign-in / re-enabling) rebuilds the schedule cleanly.
+export async function cancelAllDeviceReminders(): Promise<void> {
+  await cancelAllScheduledReminders();
+  await Promise.all(
+    [TASK_CACHE_KEY, CLASS_CACHE_KEY, BILL_CACHE_KEY, SAVINGS_GOAL_CACHE_KEY].map((key) =>
+      withCacheLock(key, async () => {
+        try {
+          await AsyncStorage.removeItem(key);
+        } catch (err) {
+          console.error('[notificationReconcile] failed to clear schedule cache', err);
+        }
+      })
+    )
+  );
 }

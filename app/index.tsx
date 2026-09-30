@@ -10,11 +10,7 @@ export default function Index() {
   const { hasOnboarded } = useOnboarding();
   const { user, initializing } = useAuth();
 
-  // hasOnboarded (AsyncStorage) and user (Firebase session) are independent and both
-  // async — wait for both, or an onboarded device with no live session lands on
-  // Dashboard unauthenticated and every backend call silently 401s. Shows the app's
-  // own logo (same artwork as the native splash screen) instead of a bare spinner,
-  // so this reads as a continuation of the splash rather than a generic loading state.
+
   if (hasOnboarded === null || initializing) {
     return (
       <View style={styles.loading}>

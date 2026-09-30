@@ -10,23 +10,13 @@ import { taskService } from '@/services/task.service';
 import { billService } from '@/services/bill.service';
 import { savingsGoalService } from '@/services/savingsGoal.service';
 import { syncClassToAppleCalendar, syncTaskToAppleCalendar } from '@/utils/appleCalendarSync';
+import { requestNotificationPermission } from '@/utils/notifications';
 import {
-  requestNotificationPermission,
-  scheduleTaskNotifications,
-  scheduleClassNotifications,
-  scheduleBillNotifications,
-  scheduleSavingsGoalNotifications,
-  cancelNotifications,
-} from '@/utils/notifications';
-import {
-  markTaskScheduled,
-  markClassScheduled,
-  markBillScheduled,
-  markSavingsGoalScheduled,
-  clearTaskSchedule,
-  clearClassSchedule,
-  clearBillSchedule,
-  clearSavingsGoalSchedule,
+  reconcileTaskNotifications,
+  reconcileClassNotifications,
+  reconcileBillNotifications,
+  reconcileSavingsGoalNotifications,
+  cancelAllDeviceReminders,
 } from '@/utils/notificationReconcile';
 import type { Settings } from '@/types/settings.types';
 import type { StudentPlan, ClassItem } from '@/types/plan.types';
@@ -80,14 +70,13 @@ async function backfillAppleCalendar() {
 // Same fetch-directly-via-services reasoning as backfillAppleCalendar above —
 // SettingsProvider is mounted above TasksProvider, so useTasks()/useBills() aren't in scope.
 //
-// Each mark*Scheduled call below keeps utils/notificationReconcile.ts's
-// per-device cache in sync with what this function just scheduled — without
-// it, the next reconcile pass (the very next foreground/pull-to-refresh)
-// would find a stale cache entry from *before* reminders were disabled,
-// see the item's other fields unchanged, and report those old (already-
-// cancelled) ids back into app state instead of the fresh ones just
-// scheduled here — leaving the real notification untracked and never
-// cancelled on a later edit/delete.
+// Goes through the same reconcile functions the providers use on every fetch,
+// not its own scheduling loop: they hold a per-kind lock and a per-device
+// schedule cache, so this running at the same moment as a provider's own
+// reconcile (both happen at launch) can never schedule a duplicate set — the
+// second pass just finds what the first one scheduled. It also covers every
+// case the old empty-notificationIds check did (never scheduled, scheduling
+// failed) plus reminders that vanished from the OS.
 async function backfillReminders() {
   try {
     const [plan, tasks, bills, savingsGoals] = await Promise.all([
@@ -97,94 +86,56 @@ async function backfillReminders() {
       savingsGoalService.list(),
     ]);
 
+    // Mirror this device's ids onto the server copy only where it has none —
+    // it's just a fallback record (see persistSnoozeIds); each device keeps its
+    // own authoritative ids in the reconcile cache.
+    const newlyScheduled = <T extends { id: string; notificationIds?: string[] }>(before: T[], after: T[]) => {
+      const byId = new Map(before.map((item) => [item.id, item]));
+      return after.filter((item) => item.notificationIds?.length && !byId.get(item.id)?.notificationIds?.length);
+    };
+
     if (plan?.classes?.length) {
-      const patches = new Map<string, Partial<ClassItem>>();
-      await Promise.all(
-        plan.classes.map(async (item) => {
-          if (item.notificationIds?.length || !item.time) return;
-          const notificationIds = await scheduleClassNotifications(item);
-          if (notificationIds.length) {
-            patches.set(item.id, { notificationIds });
-            await markClassScheduled({ ...item, notificationIds }, notificationIds);
-          }
-        })
+      const reconciled = await reconcileClassNotifications(plan.classes, true);
+      await saveClassPatches(
+        new Map(newlyScheduled(plan.classes, reconciled).map((c) => [c.id, { notificationIds: c.notificationIds }]))
       );
-      await saveClassPatches(patches);
     }
-
-    for (const task of tasks) {
-      if (task.notificationIds?.length || task.done || !task.dueDate || !task.time) continue;
-      const notificationIds = await scheduleTaskNotifications(task);
-      if (notificationIds.length) {
-        await taskService.update(task.id, { notificationIds });
-        await markTaskScheduled({ ...task, notificationIds }, notificationIds);
-      }
-    }
-
-    for (const bill of bills) {
-      if (bill.notificationIds?.length) continue;
-      const notificationIds = await scheduleBillNotifications(bill);
-      if (notificationIds.length) {
-        await billService.update(bill.id, { notificationIds });
-        await markBillScheduled({ ...bill, notificationIds }, notificationIds);
-      }
-    }
-
-    for (const goal of savingsGoals) {
-      if (goal.notificationIds?.length) continue;
-      const notificationIds = await scheduleSavingsGoalNotifications(goal);
-      if (notificationIds.length) {
-        await savingsGoalService.update(goal.id, { notificationIds });
-        await markSavingsGoalScheduled({ ...goal, notificationIds }, notificationIds);
-      }
+    const [reconciledTasks, reconciledBills, reconciledGoals] = await Promise.all([
+      reconcileTaskNotifications(tasks, true),
+      reconcileBillNotifications(bills, true),
+      reconcileSavingsGoalNotifications(savingsGoals, true),
+    ]);
+    for (const t of newlyScheduled(tasks, reconciledTasks)) await taskService.update(t.id, { notificationIds: t.notificationIds });
+    for (const b of newlyScheduled(bills, reconciledBills)) await billService.update(b.id, { notificationIds: b.notificationIds });
+    for (const g of newlyScheduled(savingsGoals, reconciledGoals)) {
+      await savingsGoalService.update(g.id, { notificationIds: g.notificationIds });
     }
   } catch (err) {
     console.error('[SettingsProvider] reminder backfill failed', err);
   }
 }
 
+// Cancels everything scheduled on this device — not just the ids the server
+// copy happens to list, which can miss ones only this device knows about
+// (reconcile-scheduled ids aren't always written back, snooze bursts never
+// are) and leave them firing after reminders were switched off.
 async function cancelAllReminders() {
   try {
+    await cancelAllDeviceReminders();
     const [plan, tasks, bills, savingsGoals] = await Promise.all([
       planService.get<StudentPlan>('student'),
       taskService.list(),
       billService.list(),
       savingsGoalService.list(),
     ]);
-
     if (plan?.classes?.length) {
-      const patches = new Map<string, Partial<ClassItem>>();
-      await Promise.all(
-        plan.classes.map(async (item) => {
-          if (!item.notificationIds?.length) return;
-          await cancelNotifications(item.notificationIds);
-          patches.set(item.id, { notificationIds: [] });
-          await clearClassSchedule(item.id);
-        })
+      await saveClassPatches(
+        new Map(plan.classes.filter((c) => c.notificationIds?.length).map((c) => [c.id, { notificationIds: [] }]))
       );
-      await saveClassPatches(patches);
     }
-
-    for (const task of tasks) {
-      if (!task.notificationIds?.length) continue;
-      await cancelNotifications(task.notificationIds);
-      await taskService.update(task.id, { notificationIds: [] });
-      await clearTaskSchedule(task.id);
-    }
-
-    for (const bill of bills) {
-      if (!bill.notificationIds?.length) continue;
-      await cancelNotifications(bill.notificationIds);
-      await billService.update(bill.id, { notificationIds: [] });
-      await clearBillSchedule(bill.id);
-    }
-
-    for (const goal of savingsGoals) {
-      if (!goal.notificationIds?.length) continue;
-      await cancelNotifications(goal.notificationIds);
-      await savingsGoalService.update(goal.id, { notificationIds: [] });
-      await clearSavingsGoalSchedule(goal.id);
-    }
+    for (const t of tasks) if (t.notificationIds?.length) await taskService.update(t.id, { notificationIds: [] });
+    for (const b of bills) if (b.notificationIds?.length) await billService.update(b.id, { notificationIds: [] });
+    for (const g of savingsGoals) if (g.notificationIds?.length) await savingsGoalService.update(g.id, { notificationIds: [] });
   } catch (err) {
     console.error('[SettingsProvider] failed to cancel reminders', err);
   }
@@ -351,8 +302,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Read-only import, unlike Google above — otherwise the identical
-  // backend-relay dance (open the authorize URL, wait for the iplanner://
+  // Identical backend-relay dance to Google above (open the authorize URL, wait for the iplanner://
   // deep link back, then re-fetch settings rather than guessing the outcome).
   const connectOutlookCalendar = async (): Promise<boolean> => {
     try {

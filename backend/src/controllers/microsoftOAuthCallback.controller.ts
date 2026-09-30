@@ -3,10 +3,11 @@ import { Settings } from '../models/Settings';
 import { env } from '../config/env';
 import { verifyState } from '../utils/googleOAuthState';
 import { encryptToken } from '../utils/tokenCrypto';
+import { GRAPH_SCOPE } from '../services/microsoftCalendarSync';
+import { backfillCalendar } from '../services/calendarSync';
 
 const APP_REDIRECT = 'iplanner://oauth2redirect';
 const TOKEN_URL = 'https://login.microsoftonline.com/common/oauth2/v2.0/token';
-const GRAPH_SCOPE = 'offline_access https://graph.microsoft.com/Calendars.Read';
 
 interface MicrosoftTokenResponse {
   access_token: string;
@@ -16,11 +17,10 @@ interface MicrosoftTokenResponse {
   error_description?: string;
 }
 
-// Read-only counterpart to googleOAuthCallback.controller.ts — no backfill
-// step, since Outlook import has nothing to write back (see
-// microsoftCalendarSync.ts). Same plain-browser-redirect shape as Google's:
-// no auth header, identity carried in the signed `state` param (the signer
-// is shared, not provider-specific — see utils/googleOAuthState.ts).
+// Outlook counterpart to googleOAuthCallback.controller.ts — same
+// plain-browser-redirect shape: no auth header, identity carried in the signed
+// `state` param (the signer is shared, not provider-specific — see
+// utils/googleOAuthState.ts).
 export async function handleMicrosoftCalendarCallback(req: Request, res: Response) {
   const { code, state, error } = req.query;
 
@@ -61,6 +61,7 @@ export async function handleMicrosoftCalendarCallback(req: Request, res: Respons
       {
         $set: {
           outlookCalendarConnected: true,
+          outlookReauthRequired: false,
           outlookAccessToken: encryptToken(tokenData.access_token),
           ...(tokenData.refresh_token ? { outlookRefreshToken: encryptToken(tokenData.refresh_token) } : {}),
           outlookTokenExpiresAt: new Date(Date.now() + tokenData.expires_in * 1000),
@@ -70,6 +71,9 @@ export async function handleMicrosoftCalendarCallback(req: Request, res: Respons
     );
 
     res.redirect(`${APP_REDIRECT}?status=success`);
+
+    // After the redirect so the browser isn't held up — see the Google callback.
+    void backfillCalendar(uid, 'outlook');
   } catch (err) {
     console.error('[microsoftOAuthCallback] token exchange failed', err);
     res.redirect(`${APP_REDIRECT}?status=error`);

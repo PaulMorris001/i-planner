@@ -111,10 +111,12 @@ export default function Planner() {
   const {
     appleCalendarConnected,
     googleCalendarConnected,
+    outlookCalendarConnected,
     calendarGateDismissed,
     loading: settingsLoading,
     connectAppleCalendar,
     connectGoogleCalendar,
+    connectOutlookCalendar,
     dismissCalendarGate,
   } = useSettings();
 
@@ -298,7 +300,7 @@ export default function Planner() {
     </Pressable>
   );
 
-  const calendarConnected = appleCalendarConnected || googleCalendarConnected;
+  const calendarConnected = appleCalendarConnected || googleCalendarConnected || outlookCalendarConnected;
   if (!settingsLoading && !calendarConnected && !calendarGateDismissed) {
     return (
       <ScreenWrapper backgroundColor={Colors.offWhite} edges={['top', 'right', 'left']}>
@@ -317,6 +319,12 @@ export default function Planner() {
             const ok = await connectGoogleCalendar();
             if (!ok) {
               Alert.alert("Couldn't connect calendar", 'Something went wrong finishing the Google sign-in. Try again.');
+            }
+          }}
+          onConnectOutlook={async () => {
+            const ok = await connectOutlookCalendar();
+            if (!ok) {
+              Alert.alert("Couldn't connect calendar", 'Something went wrong finishing the Microsoft sign-in. Try again.');
             }
           }}
           onSkip={dismissCalendarGate}

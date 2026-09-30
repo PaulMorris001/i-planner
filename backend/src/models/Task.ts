@@ -23,11 +23,10 @@ export interface TaskDocument extends Document {
   notes: string;
   appleEventIds?: string[];
   googleEventId?: string;
-  // Set only when converted from an imported Outlook event (see
-  // calendarImport.controller.ts's importOutlookEvents) — unlike
-  // googleEventId/appleEventIds this never drives a write-sync (Outlook
-  // import is read-only), it exists purely so a re-import can exclude an
-  // event the user already converted, instead of resurrecting it every time.
+  // Same dual role as googleEventId: normally the id of the app's own event in
+  // the user's Outlook "i-Planner" calendar (services/calendarSync.ts); when
+  // calendarLinkExternal is set, the id of the imported default-calendar event
+  // this task was converted from (so a re-import doesn't resurrect it).
   outlookEventId?: string;
   // Client-scheduled expo-notifications reminder ids — backend just persists them
   // so the app can find and cancel/reschedule later. One per weekday occurrence.

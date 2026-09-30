@@ -15,13 +15,19 @@ export interface SettingsDocument extends Document {
   // Id of the dedicated secondary "i-Planner" Google Calendar synced events go to,
   // keeping them isolated from the user's primary calendar. Internal only.
   googleCalendarId?: string;
-  // Outlook Calendar import (read-only, no write-back — see
-  // services/microsoftCalendarSync.ts). No calendarId field: unlike Google
-  // there's no dedicated secondary calendar to track, since nothing is written.
+  // Outlook Calendar sync — same shape as the Google fields above (see
+  // services/microsoftCalendarSync.ts). outlookCalendarId is the dedicated
+  // "i-Planner" calendar in the user's Outlook account. Internal only.
   outlookCalendarConnected: boolean;
   outlookAccessToken?: string;
   outlookRefreshToken?: string;
   outlookTokenExpiresAt?: Date;
+  outlookCalendarId?: string;
+  // Set when the provider rejected the stored refresh token (revoked access,
+  // expired grant) — the connection was flipped off automatically, and the app
+  // shows "Reconnect needed" instead of a plain "Not connected".
+  googleReauthRequired?: boolean;
+  outlookReauthRequired?: boolean;
   // IANA timezone from the device — synced events land at the correct local hour
   // instead of UTC.
   timeZone?: string;
@@ -59,6 +65,9 @@ const settingsSchema = new Schema<SettingsDocument>({
   outlookAccessToken: { type: String },
   outlookRefreshToken: { type: String },
   outlookTokenExpiresAt: { type: Date },
+  outlookCalendarId: { type: String },
+  googleReauthRequired: { type: Boolean, default: false },
+  outlookReauthRequired: { type: Boolean, default: false },
   timeZone: { type: String },
   aiAccessTasks: { type: Boolean, default: true },
   aiAccessGoals: { type: Boolean, default: true },
@@ -73,6 +82,8 @@ export function toPublicSettings(doc: SettingsDocument | null) {
     appleCalendarConnected: doc?.appleCalendarConnected ?? false,
     googleCalendarConnected: doc?.googleCalendarConnected ?? false,
     outlookCalendarConnected: doc?.outlookCalendarConnected ?? false,
+    googleReauthRequired: doc?.googleReauthRequired ?? false,
+    outlookReauthRequired: doc?.outlookReauthRequired ?? false,
     calendarGateDismissed: doc?.calendarGateDismissed ?? false,
     remindersEnabled: doc?.remindersEnabled ?? false,
     aiAccessTasks: doc?.aiAccessTasks ?? true,

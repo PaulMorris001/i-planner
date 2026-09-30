@@ -1,105 +1,67 @@
-import { SettingsDocument } from '../models/Settings';
+import { Settings, SettingsDocument } from '../models/Settings';
 import { env } from '../config/env';
 import { encryptToken, decryptToken } from '../utils/tokenCrypto';
+import {
+  buildEventWindow,
+  endOfLocalDayUtc,
+  CalendarReauthRequiredError,
+  SyncableClassItem,
+  SyncableTaskItem,
+  SyncFreq,
+} from './calendarEventTime';
 
-// Hand-rolled fetch calls against Calendar API v3. Every exported function no-ops
+export type { SyncableClassItem, SyncableTaskItem } from './calendarEventTime';
+
+// Hand-rolled fetch calls against Calendar API v3. Every write function no-ops
 // cleanly when the user hasn't connected Google Calendar, so callers never need
 // their own connected-check.
 
 const CALENDAR_API = 'https://www.googleapis.com/calendar/v3';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
+const REVOKE_URL = 'https://oauth2.googleapis.com/revoke';
+const SYNC_CALENDAR_NAME = 'i-Planner';
 const BYDAY = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'];
+// Import safety cap — 10 pages x 250 is far beyond any real 60-day window.
+const MAX_LIST_PAGES = 10;
 
-// Minimal shapes this service needs — Classes are a schemaless blob (Plan.data.classes)
-// and this backend doesn't share a types package with the app.
-export interface SyncableClassItem {
-  courseName: string;
-  startDate: string;
-  recurring: boolean;
-  freq: 'weekly' | 'weekdays' | 'daily' | 'monthly';
-  dayIdxs: number[];
-  time: string;
-  professor?: string;
-  venue?: string;
-  googleEventId?: string;
-}
-
-export interface SyncableTaskItem {
-  title: string;
-  dueDate: string;
-  time?: string;
-  notes?: string;
-  recurring?: boolean;
-  freq?: 'weekly' | 'weekdays' | 'daily';
-  dayIdxs?: number[];
-  googleEventId?: string;
-}
-
-// Parses "9:00 AM"-style strings; unparseable/empty falls back to 9:00 AM.
-function parseTime(time: string | undefined): { hour: number; minute: number } {
-  const match = time?.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
-  if (!match) return { hour: 9, minute: 0 };
-  let hour = parseInt(match[1], 10) % 12;
-  if (match[3]?.toUpperCase() === 'PM') hour += 12;
-  return { hour, minute: parseInt(match[2], 10) };
-}
-
-function pad(n: number): string {
-  return String(n).padStart(2, '0');
-}
-
-// Formats a UTC-arithmetic instant back into a floating "wall clock" string with no
-// offset — Date.UTC/getUTC* here is just deterministic minute arithmetic, not a real
-// instant, so this is unaffected by the server's own TZ.
-function formatFloating(ms: number): string {
-  const d = new Date(ms);
-  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}T${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:00`;
-}
-
-// dueDate/startDate is either a plain "YYYY-MM-DD" (digits ARE the calendar day)
-// or a full timestamp from a date picker (an arbitrary real moment). Naive
-// slicing only works for the first case — for the second, those digits are the
-// instant's UTC day, which can differ from the user's local day (e.g. a
-// late-evening pick rolls into the next UTC day). Resolve via stored timeZone.
-function localDatePart(dateIso: string, timeZone: string): string {
-  if (!dateIso.includes('T')) return dateIso.slice(0, 10);
-  const date = new Date(dateIso);
-  if (Number.isNaN(date.getTime())) return dateIso.slice(0, 10);
-  // en-CA formats as YYYY-MM-DD, exactly what this needs.
-  return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
-}
-
-// Builds floating (no-offset) local datetime strings. Paired with an explicit IANA
-// timeZone in toGoogleEventTime, Google interprets the hour/minute literally in the
-// user's timezone rather than as a UTC instant — "9:00 AM" lands at 9 AM local.
-function buildEventWindow(dateIso: string, time: string | undefined, durationMinutes: number, timeZone: string) {
-  const { hour, minute } = parseTime(time);
-  const datePart = localDatePart(dateIso, timeZone);
-  const startMs = Date.UTC(
-    Number(datePart.slice(0, 4)),
-    Number(datePart.slice(5, 7)) - 1,
-    Number(datePart.slice(8, 10)),
-    hour,
-    minute
-  );
-  const endMs = startMs + durationMinutes * 60_000;
-  return { start: formatFloating(startMs), end: formatFloating(endMs) };
-}
-
-// Falls back to UTC when the device hasn't reported its timezone yet (e.g. an
-// existing user who hasn't opened the app since this was added).
 function toGoogleEventTime(floatingDateTime: string, timeZone: string): { dateTime: string; timeZone: string } {
   return { dateTime: floatingDateTime, timeZone };
 }
 
-function buildRRule(freq: SyncableClassItem['freq'], dayIdxs: number[]): string | undefined {
+// RFC 5545 UTC form (YYYYMMDDTHHMMSSZ) — required for UNTIL when DTSTART has a TZID.
+function toRRuleUntil(date: Date): string {
+  return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+}
+
+function buildRRule(freq: SyncFreq, dayIdxs: number[], until?: Date): string | undefined {
+  let rule: string | undefined;
   if (freq === 'weekly' || freq === 'weekdays') {
     const days = dayIdxs.map(i => BYDAY[i]).filter(Boolean).join(',');
-    return days ? `RRULE:FREQ=WEEKLY;BYDAY=${days}` : undefined;
+    rule = days ? `RRULE:FREQ=WEEKLY;BYDAY=${days}` : undefined;
+  } else if (freq === 'daily') {
+    rule = 'RRULE:FREQ=DAILY';
+  } else if (freq === 'monthly') {
+    rule = 'RRULE:FREQ=MONTHLY';
   }
-  if (freq === 'daily') return 'RRULE:FREQ=DAILY';
-  if (freq === 'monthly') return 'RRULE:FREQ=MONTHLY';
-  return undefined;
+  return rule && until ? `${rule};UNTIL=${toRRuleUntil(until)}` : rule;
+}
+
+// The stored refresh token was rejected for good — flip the connection off and
+// flag it so the app can show "Reconnect needed" instead of pretending to sync.
+async function markReauthRequired(settings: SettingsDocument): Promise<void> {
+  console.warn('[googleCalendarSync] refresh token rejected — marking reconnect required', settings.firebaseUid);
+  settings.googleCalendarConnected = false;
+  settings.googleReauthRequired = true;
+  settings.googleAccessToken = undefined;
+  settings.googleRefreshToken = undefined;
+  settings.googleTokenExpiresAt = undefined;
+  await Settings.updateOne(
+    { _id: settings._id },
+    {
+      $set: { googleCalendarConnected: false, googleReauthRequired: true },
+      $unset: { googleAccessToken: '', googleRefreshToken: '', googleTokenExpiresAt: '' },
+    }
+  );
 }
 
 async function refreshAccessTokenIfNeeded(settings: SettingsDocument): Promise<string | null> {
@@ -109,7 +71,10 @@ async function refreshAccessTokenIfNeeded(settings: SettingsDocument): Promise<s
     return currentAccessToken;
   }
   const refreshToken = decryptToken(settings.googleRefreshToken);
-  if (!refreshToken) return null;
+  if (!refreshToken) {
+    await markReauthRequired(settings);
+    return null;
+  }
 
   const res = await fetch(TOKEN_URL, {
     method: 'POST',
@@ -122,9 +87,12 @@ async function refreshAccessTokenIfNeeded(settings: SettingsDocument): Promise<s
     }).toString(),
   });
 
-  const data = (await res.json()) as { access_token?: string; expires_in?: number };
+  const data = (await res.json().catch(() => ({}))) as { access_token?: string; expires_in?: number; error?: string };
   if (!res.ok || !data.access_token) {
-    console.error('[googleCalendarSync] token refresh failed', data);
+    console.error('[googleCalendarSync] token refresh failed', res.status, data);
+    // invalid_grant = revoked/expired refresh token; anything else (5xx, network
+    // blips) is transient and shouldn't disconnect the user.
+    if (data.error === 'invalid_grant') await markReauthRequired(settings);
     return null;
   }
 
@@ -134,47 +102,89 @@ async function refreshAccessTokenIfNeeded(settings: SettingsDocument): Promise<s
   return data.access_token;
 }
 
+// Reuses an existing "i-Planner" calendar (e.g. from before a disconnect →
+// reconnect) instead of piling up duplicates, and only creates one if missing.
 async function ensureSyncCalendar(settings: SettingsDocument, accessToken: string): Promise<string | null> {
   if (settings.googleCalendarId) return settings.googleCalendarId;
 
-  const res = await fetch(`${CALENDAR_API}/calendars`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ summary: 'i-Planner', description: 'Synced from the i-Planner app.' }),
+  let calendarId: string | undefined;
+  const listRes = await fetch(`${CALENDAR_API}/users/me/calendarList?minAccessRole=owner&maxResults=250`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
   });
-
-  const data = (await res.json()) as { id?: string };
-  if (!res.ok || !data.id) {
-    console.error('[googleCalendarSync] failed to create sync calendar', data);
-    return null;
+  if (listRes.ok) {
+    const list = (await listRes.json()) as { items?: { id: string; summary?: string; deleted?: boolean }[] };
+    calendarId = list.items?.find((c) => c.summary === SYNC_CALENDAR_NAME && !c.deleted)?.id;
   }
 
-  settings.googleCalendarId = data.id;
+  if (!calendarId) {
+    const res = await fetch(`${CALENDAR_API}/calendars`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        summary: SYNC_CALENDAR_NAME,
+        description: 'Synced from the i-Planner app.',
+        timeZone: settings.timeZone || undefined,
+      }),
+    });
+    const data = (await res.json()) as { id?: string };
+    if (!res.ok || !data.id) {
+      console.error('[googleCalendarSync] failed to create sync calendar', data);
+      return null;
+    }
+    calendarId = data.id;
+  }
+
+  settings.googleCalendarId = calendarId;
   await settings.save();
-  return data.id;
+  return calendarId;
 }
 
-async function prepareSync(settings: SettingsDocument): Promise<{ accessToken: string; calendarId: string } | null> {
+interface SyncContext {
+  settings: SettingsDocument;
+  accessToken: string;
+  calendarId: string;
+}
+
+async function prepareSync(settings: SettingsDocument): Promise<SyncContext | null> {
   if (!settings.googleCalendarConnected) return null;
   const accessToken = await refreshAccessTokenIfNeeded(settings);
   if (!accessToken) return null;
   const calendarId = await ensureSyncCalendar(settings, accessToken);
   if (!calendarId) return null;
-  return { accessToken, calendarId };
+  return { settings, accessToken, calendarId };
+}
+
+async function createEvent(ctx: SyncContext, body: Record<string, unknown>, isRetry = false): Promise<string | undefined> {
+  const res = await fetch(`${CALENDAR_API}/calendars/${encodeURIComponent(ctx.calendarId)}/events`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${ctx.accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (res.ok) return ((await res.json()) as { id: string }).id;
+
+  // 404 on the calendar itself = the user deleted the "i-Planner" calendar in
+  // Google. Forget it, make a fresh one, and retry once — otherwise every
+  // future sync would fail forever against a calendar that no longer exists.
+  if (res.status === 404 && !isRetry) {
+    ctx.settings.googleCalendarId = undefined;
+    const calendarId = await ensureSyncCalendar(ctx.settings, ctx.accessToken);
+    if (calendarId) return createEvent({ ...ctx, calendarId }, body, true);
+  }
+  console.error('[googleCalendarSync] event create failed', res.status, await res.text());
+  return undefined;
 }
 
 async function upsertEvent(
-  accessToken: string,
-  calendarId: string,
+  ctx: SyncContext,
   existingEventId: string | undefined,
   body: Record<string, unknown>
 ): Promise<string | undefined> {
   if (existingEventId) {
     const res = await fetch(
-      `${CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(existingEventId)}`,
+      `${CALENDAR_API}/calendars/${encodeURIComponent(ctx.calendarId)}/events/${encodeURIComponent(existingEventId)}`,
       {
         method: 'PUT',
-        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        headers: { Authorization: `Bearer ${ctx.accessToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       }
     );
@@ -182,31 +192,21 @@ async function upsertEvent(
       const data = (await res.json()) as { id: string };
       return data.id;
     }
-    if (res.status !== 404) {
+    // 404/410 — stale event id (user deleted it, or it lived on an older sync
+    // calendar). Fall through and create a fresh event so upsert is always safe.
+    if (res.status !== 404 && res.status !== 410) {
       console.error('[googleCalendarSync] event update failed', res.status, await res.text());
       return existingEventId;
     }
-    // 404 — stale event id (e.g. a reconnect rotated to a new sync calendar).
-    // Fall through and create a fresh event so backfill is always safe to call.
   }
 
-  const createRes = await fetch(`${CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  if (!createRes.ok) {
-    console.error('[googleCalendarSync] event create failed', createRes.status, await createRes.text());
-    return undefined;
-  }
-  const created = (await createRes.json()) as { id: string };
-  return created.id;
+  return createEvent(ctx, body);
 }
 
-async function deleteEvent(accessToken: string, calendarId: string, eventId: string): Promise<void> {
+async function deleteEvent(ctx: SyncContext, eventId: string): Promise<void> {
   const res = await fetch(
-    `${CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
-    { method: 'DELETE', headers: { Authorization: `Bearer ${accessToken}` } }
+    `${CALENDAR_API}/calendars/${encodeURIComponent(ctx.calendarId)}/events/${encodeURIComponent(eventId)}`,
+    { method: 'DELETE', headers: { Authorization: `Bearer ${ctx.accessToken}` } }
   );
   // 404/410 means it's already gone — treat as a successful delete.
   if (!res.ok && res.status !== 404 && res.status !== 410) {
@@ -219,10 +219,11 @@ export async function upsertClassEvent(
   item: SyncableClassItem
 ): Promise<string | undefined> {
   const ctx = await prepareSync(settings);
-  if (!ctx) return undefined;
+  if (!ctx) return item.googleEventId;
 
   const timeZone = settings.timeZone || 'UTC';
-  const { start, end } = buildEventWindow(item.startDate, item.time, 60, timeZone);
+  const recurring = item.recurring && !!item.freq;
+  const { start, end } = buildEventWindow(item.startDate, item.time, 60, timeZone, recurring ? item : undefined);
   const body: Record<string, unknown> = {
     summary: item.courseName,
     start: toGoogleEventTime(start, timeZone),
@@ -230,10 +231,11 @@ export async function upsertClassEvent(
     location: item.venue || undefined,
     description: item.professor ? `Professor: ${item.professor}` : undefined,
   };
-  const rrule = item.recurring ? buildRRule(item.freq, item.dayIdxs) : undefined;
+  const until = item.endDate ? endOfLocalDayUtc(item.endDate, timeZone) : undefined;
+  const rrule = recurring ? buildRRule(item.freq, item.dayIdxs ?? [], until) : undefined;
   if (rrule) body.recurrence = [rrule];
 
-  return upsertEvent(ctx.accessToken, ctx.calendarId, item.googleEventId, body);
+  return upsertEvent(ctx, item.googleEventId, body);
 }
 
 export async function deleteClassEvent(
@@ -243,7 +245,7 @@ export async function deleteClassEvent(
   if (!item.googleEventId) return;
   const ctx = await prepareSync(settings);
   if (!ctx) return;
-  await deleteEvent(ctx.accessToken, ctx.calendarId, item.googleEventId);
+  await deleteEvent(ctx, item.googleEventId);
 }
 
 export async function upsertTaskEvent(
@@ -252,20 +254,21 @@ export async function upsertTaskEvent(
 ): Promise<string | undefined> {
   if (!task.dueDate) return undefined;
   const ctx = await prepareSync(settings);
-  if (!ctx) return undefined;
+  if (!ctx) return task.googleEventId;
 
   const timeZone = settings.timeZone || 'UTC';
-  const { start, end } = buildEventWindow(task.dueDate, task.time, 30, timeZone);
+  const recurring = !!task.recurring && !!task.freq;
+  const { start, end } = buildEventWindow(task.dueDate, task.time, 30, timeZone, recurring ? task : undefined);
   const body: Record<string, unknown> = {
     summary: task.title,
     start: toGoogleEventTime(start, timeZone),
     end: toGoogleEventTime(end, timeZone),
   };
   if (task.notes) body.description = task.notes;
-  const rrule = task.recurring && task.freq ? buildRRule(task.freq, task.dayIdxs ?? []) : undefined;
+  const rrule = recurring ? buildRRule(task.freq!, task.dayIdxs ?? []) : undefined;
   if (rrule) body.recurrence = [rrule];
 
-  return upsertEvent(ctx.accessToken, ctx.calendarId, task.googleEventId, body);
+  return upsertEvent(ctx, task.googleEventId, body);
 }
 
 export async function deleteTaskEvent(
@@ -275,7 +278,22 @@ export async function deleteTaskEvent(
   if (!task.googleEventId) return;
   const ctx = await prepareSync(settings);
   if (!ctx) return;
-  await deleteEvent(ctx.accessToken, ctx.calendarId, task.googleEventId);
+  await deleteEvent(ctx, task.googleEventId);
+}
+
+// Best-effort — lets the user's Google account drop the app's grant on
+// disconnect instead of leaving a dangling authorization behind.
+export async function revokeGoogleAccess(settings: SettingsDocument): Promise<void> {
+  const token = decryptToken(settings.googleRefreshToken) ?? decryptToken(settings.googleAccessToken);
+  if (!token) return;
+  try {
+    await fetch(`${REVOKE_URL}?token=${encodeURIComponent(token)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    });
+  } catch (err) {
+    console.error('[googleCalendarSync] token revoke failed', err);
+  }
 }
 
 export interface RemoteGoogleEvent {
@@ -291,42 +309,56 @@ export interface RemoteGoogleEvent {
 // "i-Planner" secondary calendar this file writes to. That separation naturally
 // excludes everything the app already wrote via upsertClassEvent/upsertTaskEvent,
 // with no id-matching needed (unlike the Apple import path, which shares one calendar).
+//
+// Throws (rather than returning []) on failure, so the import endpoint can tell
+// "nothing there" apart from "couldn't check" — it prunes stale rows on the former.
 export async function listPrimaryGoogleEvents(
   settings: SettingsDocument,
   timeMinIso: string,
   timeMaxIso: string
 ): Promise<RemoteGoogleEvent[]> {
-  if (!settings.googleCalendarConnected) return [];
-  const accessToken = await refreshAccessTokenIfNeeded(settings);
-  if (!accessToken) return [];
-
-  const params = new URLSearchParams({
-    timeMin: timeMinIso,
-    timeMax: timeMaxIso,
-    singleEvents: 'true', // expands recurring events into individual instances
-    orderBy: 'startTime',
-    maxResults: '250',
-  });
-  const res = await fetch(`${CALENDAR_API}/calendars/primary/events?${params.toString()}`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-  if (!res.ok) {
-    console.error('[googleCalendarSync] failed to list primary events', res.status, await res.text());
-    return [];
+  const accessToken = settings.googleCalendarConnected ? await refreshAccessTokenIfNeeded(settings) : null;
+  if (!accessToken) {
+    if (settings.googleReauthRequired || !settings.googleCalendarConnected) throw new CalendarReauthRequiredError('google');
+    throw new Error('Could not refresh Google access token.');
   }
 
-  const data = (await res.json()) as {
-    items?: {
-      id: string;
-      summary?: string;
-      start?: { date?: string; dateTime?: string };
-      end?: { date?: string; dateTime?: string };
-      location?: string;
-      status?: string;
-    }[];
+  type GoogleEvent = {
+    id: string;
+    summary?: string;
+    start?: { date?: string; dateTime?: string };
+    end?: { date?: string; dateTime?: string };
+    location?: string;
+    status?: string;
   };
 
-  return (data.items ?? [])
+  const items: GoogleEvent[] = [];
+  let pageToken: string | undefined;
+  for (let page = 0; page < MAX_LIST_PAGES; page++) {
+    const params = new URLSearchParams({
+      timeMin: timeMinIso,
+      timeMax: timeMaxIso,
+      singleEvents: 'true', // expands recurring events into individual instances
+      orderBy: 'startTime',
+      maxResults: '250',
+    });
+    if (pageToken) params.set('pageToken', pageToken);
+    const res = await fetch(`${CALENDAR_API}/calendars/primary/events?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      console.error('[googleCalendarSync] failed to list primary events', res.status, text);
+      if (res.status === 401) throw new CalendarReauthRequiredError('google');
+      throw new Error(`Google Calendar list failed (${res.status}).`);
+    }
+    const data = (await res.json()) as { items?: GoogleEvent[]; nextPageToken?: string };
+    items.push(...(data.items ?? []));
+    pageToken = data.nextPageToken;
+    if (!pageToken) break;
+  }
+
+  return items
     .filter((e) => e.status !== 'cancelled' && e.start && e.end)
     .map((e) => {
       const allDay = !!e.start!.date;

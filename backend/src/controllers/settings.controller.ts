@@ -4,12 +4,12 @@ import { AuthedRequest } from '../middleware/requireAuth';
 import { ApiError } from '../utils/ApiError';
 import { env } from '../config/env';
 import { signState } from '../utils/googleOAuthState';
+import { revokeGoogleAccess } from '../services/googleCalendarSync';
+import { GRAPH_SCOPE } from '../services/microsoftCalendarSync';
 
 // Write scope — needed to create the sync calendar and write events, not just read.
 // Users connected under the old readonly scope will need to reconnect once.
 const GOOGLE_CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar';
-// Read-only — Outlook import never writes back, unlike Google above.
-const MICROSOFT_CALENDAR_SCOPE = 'offline_access https://graph.microsoft.com/Calendars.Read';
 
 export async function getSettings(req: AuthedRequest, res: Response) {
   const settings = await Settings.findOne({ firebaseUid: req.userId });
@@ -62,11 +62,16 @@ export async function startGoogleCalendarConnect(req: AuthedRequest, res: Respon
   res.json({ url: authorizeUrl.toString() });
 }
 
+// Events already written stay on the user's calendar. The "i-Planner"
+// calendar id is dropped too — a later reconnect finds the same calendar again
+// by name (see ensureSyncCalendar), so no duplicate calendar gets created.
 export async function disconnectGoogleCalendar(req: AuthedRequest, res: Response) {
+  const existing = await Settings.findOne({ firebaseUid: req.userId });
+  if (existing) await revokeGoogleAccess(existing);
   const settings = await Settings.findOneAndUpdate(
     { firebaseUid: req.userId },
     {
-      $set: { googleCalendarConnected: false },
+      $set: { googleCalendarConnected: false, googleReauthRequired: false },
       $unset: {
         googleAccessToken: '',
         googleRefreshToken: '',
@@ -79,7 +84,7 @@ export async function disconnectGoogleCalendar(req: AuthedRequest, res: Response
   res.json(toPublicSettings(settings));
 }
 
-// Same backend-relay shape as startGoogleCalendarConnect above, read-only scope.
+// Same backend-relay shape as startGoogleCalendarConnect above.
 // Throws instead of silently returning a broken URL when the Azure app
 // registration hasn't been set up yet (microsoftOAuthClientId is optional at
 // startup — see config/env.ts — unlike Google's, which crashes at boot instead).
@@ -99,7 +104,10 @@ export async function startMicrosoftCalendarConnect(req: AuthedRequest, res: Res
   authorizeUrl.searchParams.set('redirect_uri', redirectUri);
   authorizeUrl.searchParams.set('response_type', 'code');
   authorizeUrl.searchParams.set('response_mode', 'query');
-  authorizeUrl.searchParams.set('scope', MICROSOFT_CALENDAR_SCOPE);
+  authorizeUrl.searchParams.set('scope', GRAPH_SCOPE);
+  // Lets users with several Microsoft accounts (work + personal) pick the
+  // right one instead of silently reusing whichever is signed in.
+  authorizeUrl.searchParams.set('prompt', 'select_account');
   authorizeUrl.searchParams.set('state', signState(req.userId!));
 
   res.json({ url: authorizeUrl.toString() });
@@ -109,11 +117,12 @@ export async function disconnectOutlookCalendar(req: AuthedRequest, res: Respons
   const settings = await Settings.findOneAndUpdate(
     { firebaseUid: req.userId },
     {
-      $set: { outlookCalendarConnected: false },
+      $set: { outlookCalendarConnected: false, outlookReauthRequired: false },
       $unset: {
         outlookAccessToken: '',
         outlookRefreshToken: '',
         outlookTokenExpiresAt: '',
+        outlookCalendarId: '',
       },
     },
     { upsert: true, new: true }

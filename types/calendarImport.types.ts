@@ -2,7 +2,7 @@ export type CalendarSource = "apple" | "google" | "outlook";
 
 export interface ImportedCalendarEvent {
   id: string;
-  // The actual calendar-provider event id (expo-calendar's or Google's own)
+  // The actual calendar-provider event id (expo-calendar's, Google's or Outlook's own)
   // — use THIS, not `id`, when linking a converted task to the same event.
   externalId: string;
   source: CalendarSource;

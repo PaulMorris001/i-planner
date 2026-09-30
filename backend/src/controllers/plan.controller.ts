@@ -1,10 +1,9 @@
 import { Response } from 'express';
 import { Plan, PATH_TYPES, PathType } from '../models/Plan';
-import { Settings } from '../models/Settings';
 import { Subscription } from '../models/Subscription';
 import { AuthedRequest } from '../middleware/requireAuth';
 import { ApiError } from '../utils/ApiError';
-import { deleteClassEvent, upsertClassEvent, SyncableClassItem } from '../services/googleCalendarSync';
+import { syncClassesToCalendars } from '../services/calendarSync';
 import { generateExamTopics as generateExamTopicsService } from '../services/examTopics';
 import { FEATURE_MIN_TIER, hasTier } from '../constants/featureTiers';
 import { checkAndConsumeQuery } from '../services/aiUsageLimiter';
@@ -13,10 +12,6 @@ function assertValidPathType(pathType: string): asserts pathType is PathType {
   if (!(PATH_TYPES as readonly string[]).includes(pathType)) {
     throw new ApiError(400, `Invalid plan type: ${pathType}`, 'general');
   }
-}
-
-interface ClassRecord extends SyncableClassItem {
-  id: string;
 }
 
 export async function getPlan(req: AuthedRequest, res: Response) {
@@ -37,7 +32,7 @@ export async function savePlan(req: AuthedRequest, res: Response) {
   }
 
   if (pathType === 'student' && Array.isArray(data.classes)) {
-    await syncClassesToGoogle(req.userId!, data.classes);
+    await syncClassesToCalendars(req.userId!, data.classes);
   }
 
   const plan = await Plan.findOneAndUpdate(
@@ -85,44 +80,4 @@ export async function generateExamTopicsHandler(req: AuthedRequest, res: Respons
   });
 
   res.json({ topics });
-}
-
-// All frontend class call sites funnel through savePlan, so this is the single
-// choke point for Google-class-sync — no frontend changes needed to add it.
-async function syncClassesToGoogle(firebaseUid: string, newClasses: ClassRecord[]) {
-  const settings = await Settings.findOne({ firebaseUid });
-  if (!settings?.googleCalendarConnected) return;
-
-  const existingPlan = await Plan.findOne({ firebaseUid, pathType: 'student' });
-  const existingData = existingPlan?.data as { classes?: ClassRecord[] } | undefined;
-  const oldClasses: ClassRecord[] = Array.isArray(existingData?.classes) ? existingData.classes : [];
-  const oldById = new Map(oldClasses.map(c => [c.id, c]));
-  const newById = new Map(newClasses.map(c => [c.id, c]));
-
-  for (const old of oldClasses) {
-    if (!newById.has(old.id)) {
-      await deleteClassEvent(settings, old);
-    }
-  }
-
-  for (const item of newClasses) {
-    const old = oldById.get(item.id);
-    const changed =
-      !old ||
-      old.courseName !== item.courseName ||
-      old.startDate !== item.startDate ||
-      old.recurring !== item.recurring ||
-      old.freq !== item.freq ||
-      old.time !== item.time ||
-      old.professor !== item.professor ||
-      old.venue !== item.venue ||
-      JSON.stringify(old.dayIdxs) !== JSON.stringify(item.dayIdxs);
-
-    if (!changed) {
-      item.googleEventId = old.googleEventId;
-      continue;
-    }
-
-    item.googleEventId = await upsertClassEvent(settings, { ...item, googleEventId: old?.googleEventId });
-  }
 }

@@ -17,17 +17,20 @@ import type { ImportedCalendarEvent } from '@/types/calendarImport.types';
 const IMPORT_WINDOW_DAYS = 60;
 
 export default function ImportCalendar() {
-  // Outlook UI disabled for now — no Azure app registration/credentials set
-  // up yet. See the commented-out import card below to re-enable.
-  const { appleCalendarConnected, googleCalendarConnected } = useSettings();
+  const { appleCalendarConnected, googleCalendarConnected, outlookCalendarConnected } = useSettings();
   const { isOpen: taskModalOpen, openWithDraft } = useNewTaskModal();
 
   const [events, setEvents] = useState<ImportedCalendarEvent[]>([]);
+  // Latest list for importCloud (a stable callback) to diff against.
+  const eventsRef = useRef(events);
+  useEffect(() => {
+    eventsRef.current = events;
+  }, [events]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [importingApple, setImportingApple] = useState(false);
   const [importingGoogle, setImportingGoogle] = useState(false);
-  // const [importingOutlook, setImportingOutlook] = useState(false);
+  const [importingOutlook, setImportingOutlook] = useState(false);
 
   const fetchList = useCallback(async () => {
     try {
@@ -70,14 +73,14 @@ export default function ImportCalendar() {
   // delta — so "how many are new this time" is computed by diffing the count
   // before/after, and reported via Alert so tapping Import always visibly
   // resolves to something instead of just a spinner that quietly finishes.
-  const reportImportResult = (addedCount: number) => {
+  function reportImportResult(addedCount: number) {
     Alert.alert(
       addedCount > 0 ? 'Import complete' : 'Nothing new',
       addedCount > 0
         ? `Added ${addedCount} new event${addedCount === 1 ? '' : 's'} to review below.`
         : "No new events found — you're all caught up."
     );
-  };
+  }
 
   const handleImportApple = async () => {
     setImportingApple(true);
@@ -97,35 +100,42 @@ export default function ImportCalendar() {
     }
   };
 
-  const handleImportGoogle = async () => {
-    setImportingGoogle(true);
-    try {
-      const beforeCount = events.length;
-      const updated = await calendarImportService.importGoogle();
-      setEvents(updated);
-      reportImportResult(Math.max(0, updated.length - beforeCount));
-    } catch (err) {
-      console.error('[ImportCalendar] Google import failed', err);
-      Alert.alert("Couldn't import", 'Check your connection and try again.');
-    } finally {
-      setImportingGoogle(false);
-    }
-  };
+  // Google/Outlook imports run server-side and make the list match the
+  // provider exactly (new events added, deleted ones pruned). `silent` is the
+  // automatic refresh on screen open — no alerts, just a fresher list.
+  const importCloud = useCallback(
+    async (source: 'google' | 'outlook', silent = false) => {
+      const setBusy = source === 'google' ? setImportingGoogle : setImportingOutlook;
+      setBusy(true);
+      try {
+        const updated =
+          source === 'google'
+            ? await calendarImportService.importGoogle()
+            : await calendarImportService.importOutlook();
+        const known = new Set(eventsRef.current.map((e) => e.id));
+        setEvents(updated);
+        if (!silent) reportImportResult(updated.filter((e) => !known.has(e.id)).length);
+      } catch (err) {
+        console.error(`[ImportCalendar] ${source} import failed`, err);
+        if (!silent) {
+          const message = (err as { message?: string })?.message;
+          Alert.alert("Couldn't import", message || 'Check your connection and try again.');
+        }
+      } finally {
+        setBusy(false);
+      }
+    },
+    []
+  );
 
-  // const handleImportOutlook = async () => {
-  //   setImportingOutlook(true);
-  //   try {
-  //     const beforeCount = events.length;
-  //     const updated = await calendarImportService.importOutlook();
-  //     setEvents(updated);
-  //     reportImportResult(Math.max(0, updated.length - beforeCount));
-  //   } catch (err) {
-  //     console.error('[ImportCalendar] Outlook import failed', err);
-  //     Alert.alert("Couldn't import", 'Check your connection and try again.');
-  //   } finally {
-  //     setImportingOutlook(false);
-  //   }
-  // };
+  const autoImported = useRef(false);
+  useEffect(() => {
+    if (autoImported.current) return;
+    if (!googleCalendarConnected && !outlookCalendarConnected) return;
+    autoImported.current = true;
+    if (googleCalendarConnected) importCloud('google', true);
+    if (outlookCalendarConnected) importCloud('outlook', true);
+  }, [googleCalendarConnected, outlookCalendarConnected, importCloud]);
 
   const handleDismiss = (event: ImportedCalendarEvent) => {
     setEvents((prev) => prev.filter((e) => e.id !== event.id));
@@ -152,7 +162,7 @@ export default function ImportCalendar() {
     });
   };
 
-  const noCalendarConnected = !appleCalendarConnected && !googleCalendarConnected;
+  const noCalendarConnected = !appleCalendarConnected && !googleCalendarConnected && !outlookCalendarConnected;
 
   return (
     <ScreenWrapper
@@ -171,7 +181,7 @@ export default function ImportCalendar() {
 
       {noCalendarConnected ? (
         <Text style={styles.emptyText}>
-          Connect Apple or Google Calendar in Profile → Calendar Sync first.
+          Connect Apple, Google or Outlook Calendar in Profile → Calendar Sync first.
         </Text>
       ) : (
         <View style={styles.importRow}>
@@ -195,7 +205,7 @@ export default function ImportCalendar() {
           {googleCalendarConnected && (
             <Pressable
               style={[styles.importCard, importingGoogle && styles.importCardBusy]}
-              onPress={handleImportGoogle}
+              onPress={() => importCloud('google')}
               disabled={importingGoogle}
             >
               <View style={styles.importIconBoxGoogle}>
@@ -209,13 +219,10 @@ export default function ImportCalendar() {
               )}
             </Pressable>
           )}
-          {/* Outlook import card disabled for now — see the useSettings()
-              destructure and handleImportOutlook near the top of this file to
-              re-enable once Outlook Calendar is configured.
           {outlookCalendarConnected && (
             <Pressable
               style={[styles.importCard, importingOutlook && styles.importCardBusy]}
-              onPress={handleImportOutlook}
+              onPress={() => importCloud('outlook')}
               disabled={importingOutlook}
             >
               <View style={styles.importIconBoxOutlook}>
@@ -229,7 +236,6 @@ export default function ImportCalendar() {
               )}
             </Pressable>
           )}
-          */}
         </View>
       )}
 

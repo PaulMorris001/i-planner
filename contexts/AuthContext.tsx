@@ -11,6 +11,7 @@ import type {
   RegisterPayload,
 } from "@/types/auth.types";
 import type { User } from "@/types/user.types";
+import { cancelAllDeviceReminders } from "@/utils/notificationReconcile";
 import {
   deleteUser,
   EmailAuthProvider,
@@ -112,6 +113,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
+    // Local notifications outlive the session — without this, the signed-out
+    // account's task/bill/class reminders keep firing on this device (or for
+    // whoever signs in next). Signing back in reschedules them via reconcile.
+    await cancelAllDeviceReminders();
     await signOut(auth);
     setError(null);
   };
@@ -136,10 +141,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw mapFirebaseError(e);
       }
       await deleteUser(currentUser);
+      await cancelAllDeviceReminders();
       return;
     }
 
     await accountService.deleteData();
+    // The data behind every reminder is gone now, whether or not the auth
+    // deletion below needs a re-login first.
+    await cancelAllDeviceReminders();
     try {
       await deleteUser(currentUser);
     } catch (e) {

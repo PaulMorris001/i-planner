@@ -54,20 +54,19 @@ export default function Profile() {
   const {
     appleCalendarConnected,
     googleCalendarConnected,
-    // outlookCalendarConnected, — Outlook UI disabled for now, see the
-    // commented-out calendar row below (no Azure app registration/credentials
-    // set up yet). Kept in SettingsContext/backend untouched — just not wired
-    // to any visible control here.
+    outlookCalendarConnected,
+    googleReauthRequired,
+    outlookReauthRequired,
     remindersEnabled,
     aiAccessTasks,
     aiAccessGoals,
     aiAccessCalendar,
     connectAppleCalendar,
     connectGoogleCalendar,
-    // connectOutlookCalendar, — see outlookCalendarConnected note above.
+    connectOutlookCalendar,
     disconnectAppleCalendar,
     disconnectGoogleCalendar,
-    // disconnectOutlookCalendar, — see outlookCalendarConnected note above.
+    disconnectOutlookCalendar,
     enableReminders,
     disableReminders,
     setAiAccess,
@@ -123,32 +122,32 @@ export default function Profile() {
     }
   };
 
-  // Outlook UI disabled for now — see the useSettings() destructure above.
-  // const handleConnectOutlook = async () => {
-  //   const ok = await connectOutlookCalendar();
-  //   if (!ok) {
-  //     Alert.alert(
-  //       "Couldn't connect calendar",
-  //       "Something went wrong finishing the Microsoft sign-in. Try again.",
-  //     );
-  //   }
-  // };
+  const handleConnectOutlook = async () => {
+    const ok = await connectOutlookCalendar();
+    if (!ok) {
+      Alert.alert(
+        "Couldn't connect calendar",
+        "Something went wrong finishing the Microsoft sign-in. Try again.",
+      );
+    }
+  };
+
+  const calendarStatus = (connected: boolean, reauthRequired?: boolean) =>
+    connected
+      ? "Connected"
+      : reauthRequired
+        ? "Access expired — reconnect"
+        : "Not connected";
 
   const confirmDisconnect = (
     calendarName: string,
     onConfirm: () => void,
-    // Apple/Google write-sync copy doesn't apply to Outlook (import-only,
-    // nothing is ever added to the user's real calendar) — overridable per call.
     message = "New classes and tasks won't be added to your calendar anymore. Events already created will stay put.",
   ) => {
-    Alert.alert(
-      `Disconnect ${calendarName}?`,
-      message,
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Disconnect", style: "destructive", onPress: onConfirm },
-      ],
-    );
+    Alert.alert(`Disconnect ${calendarName}?`, message, [
+      { text: "Cancel", style: "cancel" },
+      { text: "Disconnect", style: "destructive", onPress: onConfirm },
+    ]);
   };
 
   const handleEnableReminders = async () => {
@@ -181,7 +180,10 @@ export default function Profile() {
       scroll
       // 40px alone doesn't clear the tab bar (60 + insets.bottom); without
       // this, the Legal/Account section's bottom is unreachable behind it.
-      style={{ ...styles.scrollContent, paddingBottom: styles.scrollContent.paddingBottom + tabBarHeight }}
+      style={{
+        ...styles.scrollContent,
+        paddingBottom: styles.scrollContent.paddingBottom + tabBarHeight,
+      }}
       edges={["top", "right", "left"]}
     >
       <View style={styles.body}>
@@ -201,7 +203,9 @@ export default function Profile() {
             ) : (
               <Text style={styles.profileName}>{displayName}</Text>
             )}
-            <Text style={styles.profilePlan}>I-Planner · {TIER_LABEL[tier]} plan</Text>
+            <Text style={styles.profilePlan}>
+              I-Planner · {TIER_LABEL[tier]} plan
+            </Text>
           </View>
         </View>
 
@@ -336,7 +340,7 @@ export default function Profile() {
             <View style={{ flex: 1 }}>
               <Text style={styles.consentLabel}>Google Calendar</Text>
               <Text style={styles.consentDesc}>
-                {googleCalendarConnected ? "Connected" : "Not connected"}
+                {calendarStatus(googleCalendarConnected, googleReauthRequired)}
               </Text>
             </View>
             <Pressable
@@ -359,16 +363,15 @@ export default function Profile() {
                   googleCalendarConnected && styles.calendarActionTextDanger,
                 ]}
               >
-                {googleCalendarConnected ? "Disconnect" : "Connect"}
+                {googleCalendarConnected
+                  ? "Disconnect"
+                  : googleReauthRequired
+                    ? "Reconnect"
+                    : "Connect"}
               </Text>
             </Pressable>
           </View>
 
-          {/* Outlook Calendar disabled for now — no Azure app registration/
-              credentials set up yet. Everything it needs (backend routes,
-              SettingsContext state) is still in place; just re-enable this
-              block plus the useSettings() destructure and handleConnectOutlook
-              above once MICROSOFT_OAUTH_CLIENT_ID/SECRET are configured.
           <View style={styles.calendarRow}>
             <View style={styles.calendarIconBox}>
               <Text style={styles.outlookO}>O</Text>
@@ -376,7 +379,7 @@ export default function Profile() {
             <View style={{ flex: 1 }}>
               <Text style={styles.consentLabel}>Outlook Calendar</Text>
               <Text style={styles.consentDesc}>
-                {outlookCalendarConnected ? "Connected" : "Not connected"}
+                {calendarStatus(outlookCalendarConnected, outlookReauthRequired)}
               </Text>
             </View>
             <Pressable
@@ -389,7 +392,6 @@ export default function Profile() {
                   ? confirmDisconnect(
                       "Outlook Calendar",
                       disconnectOutlookCalendar,
-                      "You can reconnect any time to import events again.",
                     )
                   : handleConnectOutlook()
               }
@@ -400,24 +402,37 @@ export default function Profile() {
                   outlookCalendarConnected && styles.calendarActionTextDanger,
                 ]}
               >
-                {outlookCalendarConnected ? "Disconnect" : "Connect"}
+                {outlookCalendarConnected
+                  ? "Disconnect"
+                  : outlookReauthRequired
+                    ? "Reconnect"
+                    : "Connect"}
               </Text>
             </Pressable>
           </View>
-          */}
 
           <Pressable
             style={styles.calendarRow}
             onPress={() => router.push(Routes.IMPORT_CALENDAR)}
           >
             <View style={styles.calendarIconBox}>
-              <IconSymbol name="calendar" color={Colors.textPrimary} size={17} />
+              <IconSymbol
+                name="calendar"
+                color={Colors.textPrimary}
+                size={17}
+              />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.consentLabel}>Import calendar events</Text>
-              <Text style={styles.consentDesc}>Review and add events as tasks</Text>
+              <Text style={styles.consentDesc}>
+                Review and add events as tasks
+              </Text>
             </View>
-            <IconSymbol name="chevron.right" color={Colors.textMuted} size={18} />
+            <IconSymbol
+              name="chevron.right"
+              color={Colors.textMuted}
+              size={18}
+            />
           </Pressable>
         </View>
 

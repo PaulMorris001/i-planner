@@ -2,7 +2,7 @@ import * as Notifications from 'expo-notifications';
 import { Platform, Alert } from 'react-native';
 import { router } from 'expo-router';
 import { parseTimeToMinutes } from '@/utils/time';
-import { parseISODateLocal, classRecurrenceEnded } from '@/utils/date';
+import { parseISODateLocal, classRecurrenceEnded, localMidnight, weekdayIndexMonday } from '@/utils/date';
 import { formatCurrency } from '@/utils/currency';
 import { Routes } from '@/constants/routes';
 import { taskService } from '@/services/task.service';
@@ -314,6 +314,44 @@ function alarmContentFields() {
 
 type RecurFreq = 'weekly' | 'weekdays' | 'daily' | 'monthly';
 
+// A recurring item whose first occurrence is still ahead (a class that starts
+// next term, a recurring task starting next week). Native repeating triggers
+// have no start date — they'd start firing this week — so until it starts,
+// scheduleOccurrence only schedules the first week's occurrences as one-offs.
+// Part of the reconcile signatures (utils/notificationReconcile.ts), so the
+// first reconcile after the start date swaps in the real repeating triggers.
+export function recurrenceNotStarted(recurring: boolean, dateIso: string | undefined, now: Date = new Date()): boolean {
+  if (!recurring || !dateIso) return false;
+  const start = parseISODateLocal(dateIso);
+  return !Number.isNaN(start.getTime()) && localMidnight(start) > localMidnight(now);
+}
+
+// A native MONTHLY trigger on day 29–31 is broken on both platforms: iOS
+// skips months without that day (a bill due the 31st goes silent in 30-day
+// months and February), Android rolls over into the 1st/2nd/3rd of the next
+// month. Those days are scheduled as the next few real occurrences instead
+// (clamped to month length), and this per-month bucket in the reconcile
+// signatures makes each month's first reconcile top them back up.
+export function monthlyRefreshBucket(
+  recurring: boolean,
+  freq: string | undefined,
+  dateIso: string | undefined,
+  now: Date = new Date()
+): string | null {
+  if (!recurring || freq !== 'monthly' || !dateIso) return null;
+  const date = parseISODateLocal(dateIso);
+  if (Number.isNaN(date.getTime()) || date.getDate() <= 28) return null;
+  return `${now.getFullYear()}-${now.getMonth() + 1}`;
+}
+
+const MONTHLY_FALLBACK_OCCURRENCES = 3;
+
+function isRepeatingSpec(spec: { recurring: boolean; freq?: RecurFreq; dayIdxs?: number[] }): boolean {
+  if (!spec.recurring) return false;
+  if (spec.freq === 'daily' || spec.freq === 'monthly') return true;
+  return (spec.freq === 'weekly' || spec.freq === 'weekdays') && !!spec.dayIdxs?.length;
+}
+
 interface OccurrenceSpec {
   title: string;
   bodyForMinutes: (minutesUntil: number) => string;
@@ -332,6 +370,10 @@ interface OccurrenceSpec {
   // notification — set for alarm task/class notifications (kind:
   // 'task-alarm' | 'class-alarm'), routing to the in-app Alarm screen.
   data?: Record<string, unknown>;
+  // Tasks/classes: dateIso is when the recurrence begins, so a future one is
+  // held back until then (see recurrenceNotStarted). Bills don't set this —
+  // their dateIso only supplies the day-of-month.
+  deferUntilStart?: boolean;
 }
 
 // Schedules a single lead-time notification (0 minutes = exactly at the due/
@@ -342,7 +384,15 @@ interface OccurrenceSpec {
 // single one-off DATE trigger.
 async function scheduleOccurrence(spec: OccurrenceSpec): Promise<string[]> {
   if (!spec.dateIso || !spec.time) return [];
-  if (parseTimeToMinutes(spec.time) >= 24 * 60) return []; // unparseable time string
+  const timeMinutes = parseTimeToMinutes(spec.time);
+  if (timeMinutes >= 24 * 60) return []; // unparseable time string
+  // The wall-clock moment of this item's time on a given calendar day.
+  const at = (day: Date) =>
+    new Date(day.getFullYear(), day.getMonth(), day.getDate(), Math.floor(timeMinutes / 60), timeMinutes % 60);
+  const repeating = isRepeatingSpec(spec);
+  // Checked before the permission call below — reconcile re-runs this for
+  // every past one-off item it sees, so it should stay a cheap no-op there.
+  if (!repeating && at(parseISODateLocal(spec.dateIso)).getTime() <= Date.now()) return [];
   if (!(await hasPermission())) return [];
 
   const channelId = Platform.OS === 'android'
@@ -356,7 +406,36 @@ async function scheduleOccurrence(spec: OccurrenceSpec): Promise<string[]> {
   // fields, harmless no-ops on Android.
   const alarmContentExtras = spec.isAlarm ? alarmContentFields() : {};
 
+  // One DATE-triggered notification per occurrence, for the cases a native
+  // repeating trigger can't express (not-yet-started recurrences, month-end
+  // days). Single-fire even for alarms — a full escalation burst per
+  // occurrence would eat into iOS's 64-notification cap fast.
+  const scheduleOccurrencesAt = async (occurrences: Date[], limit = Infinity): Promise<string[]> => {
+    const ids: string[] = [];
+    for (const occurrence of occurrences) {
+      if (ids.length >= limit) break;
+      const fireAt = new Date(occurrence.getTime() - spec.leadMinutes * 60_000);
+      if (fireAt.getTime() <= Date.now()) continue;
+      ids.push(
+        await Notifications.scheduleNotificationAsync({
+          content: { title: spec.title, body: spec.bodyForMinutes(spec.leadMinutes), ...alarmContentExtras, data: spec.data },
+          trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: fireAt, channelId },
+        })
+      );
+    }
+    return ids;
+  };
+
   try {
+    if (repeating && spec.deferUntilStart && recurrenceNotStarted(true, spec.dateIso)) {
+      const start = parseISODateLocal(spec.dateIso);
+      if (spec.freq === 'monthly') return scheduleOccurrencesAt([at(start)]);
+      const firstWeek = Array.from({ length: 7 }, (_, i) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + i))
+        .filter((day) => spec.freq === 'daily' || spec.dayIdxs!.includes(weekdayIndexMonday(day)))
+        .map(at);
+      return scheduleOccurrencesAt(firstWeek);
+    }
+
     if (spec.recurring && spec.freq === 'daily') {
       const { hour, minute } = leadHourMinute(spec.time, spec.leadMinutes);
       const id = await Notifications.scheduleNotificationAsync({
@@ -382,8 +461,20 @@ async function scheduleOccurrence(spec: OccurrenceSpec): Promise<string[]> {
     }
 
     if (spec.recurring && spec.freq === 'monthly') {
-      const { hour, minute } = leadHourMinute(spec.time, spec.leadMinutes);
-      const day = parseISODateLocal(spec.dateIso).getDate();
+      const { hour, minute, dayShift } = leadHourMinute(spec.time, spec.leadMinutes);
+      const dueDay = parseISODateLocal(spec.dateIso).getDate();
+      if (dueDay > 28) {
+        // See monthlyRefreshBucket — next few real occurrences, each clamped
+        // to its month's last day.
+        const now = new Date();
+        const upcoming = Array.from({ length: MONTHLY_FALLBACK_OCCURRENCES + 1 }, (_, m) => {
+          const lastDay = new Date(now.getFullYear(), now.getMonth() + m + 1, 0).getDate();
+          return at(new Date(now.getFullYear(), now.getMonth() + m, Math.min(dueDay, lastDay)));
+        });
+        return scheduleOccurrencesAt(upcoming, MONTHLY_FALLBACK_OCCURRENCES);
+      }
+      // A lead that wraps past midnight belongs on the previous day.
+      const day = Math.max(1, dueDay + dayShift);
       const id = await Notifications.scheduleNotificationAsync({
         content: { title: spec.title, body: spec.bodyForMinutes(spec.leadMinutes), ...alarmContentExtras, data: spec.data },
         trigger: { type: Notifications.SchedulableTriggerInputTypes.MONTHLY, day, hour, minute, channelId },
@@ -547,6 +638,7 @@ export async function scheduleTaskNotifications(task: {
     leadMinutes,
     isAlarm,
     data: isAlarm ? buildAlarmData('task-alarm', task.id, task.title) : undefined,
+    deferUntilStart: true,
   });
   const [lead, exact] = await Promise.all([
     scheduleOccurrence(spec(REMINDER_LEAD_MINUTES)),
@@ -644,6 +736,7 @@ export async function scheduleClassNotifications(item: {
     leadMinutes,
     isAlarm,
     data: isAlarm ? buildAlarmData('class-alarm', item.id, item.courseName) : undefined,
+    deferUntilStart: true,
   });
   const [lead, exact] = await Promise.all([
     scheduleOccurrence(spec(REMINDER_LEAD_MINUTES)),
@@ -807,6 +900,31 @@ export async function scheduleSavingsGoalNotifications(goal: {
   } catch (err) {
     console.error('[notifications] failed to schedule savings goal check-in', err);
     return [];
+  }
+}
+
+// Ids of every notification this device still has pending — reconcile uses it
+// to notice reminders that silently vanished (a backup restore brings back the
+// schedule cache but not the OS's notifications; iOS drops anything past its
+// 64 cap). null when it couldn't be read, meaning "skip that check".
+export async function getPendingNotificationIds(): Promise<Set<string> | null> {
+  try {
+    const pending = await Notifications.getAllScheduledNotificationsAsync();
+    return new Set(pending.map((n) => n.identifier));
+  } catch (err) {
+    console.error('[notifications] failed to list pending notifications', err);
+    return null;
+  }
+}
+
+// Everything this app ever scheduled on this device, including ids no entity
+// tracks anymore (snooze bursts, ids from before a failed save) — for turning
+// reminders off and for logout, where "cancel what we know about" isn't enough.
+export async function cancelAllScheduledReminders(): Promise<void> {
+  try {
+    await Notifications.cancelAllScheduledNotificationsAsync();
+  } catch (err) {
+    console.error('[notifications] failed to cancel all notifications', err);
   }
 }
 

@@ -20,6 +20,17 @@ export function createApp() {
   // Uses cwd (not __dirname) since src/ and dist/ differ in depth but both run with cwd = backend/.
   app.use(express.static(path.join(process.cwd(), 'public')));
 
+  // Microsoft Entra publisher-domain verification for the Outlook Calendar app
+  // registration ("i-Planner", Branding & properties → Publisher domain).
+  // Explicit route because express.static above skips dot-folders like
+  // /.well-known. Must stay reachable over HTTPS with no redirect, or the
+  // domain loses its verified status.
+  app.get('/.well-known/microsoft-identity-association.json', (_req, res) => {
+    res.json({
+      associatedApplications: [{ applicationId: '60efc113-00c8-4b41-bcc0-d98a36fa4b57' }],
+    });
+  });
+
   // Public, browser-facing note-share preview pages — see
   // routes/sharedNoteWeb.routes.ts for why this isn't under /api.
   app.use('/shared', sharedNoteWebRouter);

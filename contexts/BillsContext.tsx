@@ -58,6 +58,15 @@ export function BillsProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // The auth listener above keeps the first render's fetch closure, and
+  // remindersEnabled is always false on that render (settings load async), so
+  // its reconcile pass is a no-op on every cold start. Re-run it once the real
+  // value arrives — and whenever reminders are switched back on.
+  useEffect(() => {
+    if (remindersEnabled && auth.currentUser) fetchBills();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [remindersEnabled]);
+
   const createBill = async (input: NewBillInput) => {
     const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const notificationIds = remindersEnabled ? await scheduleBillNotifications(input) : [];

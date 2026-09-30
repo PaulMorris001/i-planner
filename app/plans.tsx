@@ -4,10 +4,10 @@ import { Card } from "@/components/ui/Card";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
+import { TIER_RANK } from "@/constants/featureTiers";
+import { PRIVACY_URL, TERMS_URL } from "@/constants/legal";
 import { Colors, Radius, Spacing } from "@/constants/theme";
 import { usePurchases } from "@/contexts/PurchasesContext";
-import { TIER_RANK } from "@/constants/featureTiers";
-import { TERMS_URL, PRIVACY_URL } from "@/constants/legal";
 import type { SubscriptionTier } from "@/types/subscription.types";
 import * as WebBrowser from "expo-web-browser";
 import { useState } from "react";
@@ -66,7 +66,7 @@ const TIERS: Tier[] = [
       "Everything in Free",
       "Class schedule management",
       "Assignment & deadline tracking",
-      "Calendar sync (Apple + Google)",
+      "Calendar sync (Apple, Google + Outlook)",
       "AI Study Buddy",
       "Habit tracking with streaks",
       "Exam countdown",

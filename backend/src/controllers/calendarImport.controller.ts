@@ -1,12 +1,22 @@
 import { Response } from 'express';
 import { ImportedCalendarEvent, toPublicImportedCalendarEvent } from '../models/ImportedCalendarEvent';
-import { Settings } from '../models/Settings';
+import { Settings, SettingsDocument } from '../models/Settings';
 import { Task } from '../models/Task';
 import { Plan } from '../models/Plan';
 import { AuthedRequest } from '../middleware/requireAuth';
 import { ApiError } from '../utils/ApiError';
 import { listPrimaryGoogleEvents } from '../services/googleCalendarSync';
 import { listPrimaryOutlookEvents } from '../services/microsoftCalendarSync';
+import { CalendarReauthRequiredError } from '../services/calendarEventTime';
+
+interface RemoteEvent {
+  id: string;
+  title: string;
+  startAt: string;
+  endAt: string;
+  allDay: boolean;
+  location?: string;
+}
 
 // How far ahead to pull events on each import — keeps both the Google API call and
 // the Apple-side local read bounded.
@@ -23,33 +33,51 @@ export async function listImportedEvents(req: AuthedRequest, res: Response) {
   res.json(events.map(toPublicImportedCalendarEvent));
 }
 
-export async function importGoogleEvents(req: AuthedRequest, res: Response) {
+// Shared by the Google and Outlook imports. Fetches the provider's default
+// calendar, then makes the stored rows for that source match it exactly:
+// upserts what's there, and prunes rows whose event was deleted/moved out of
+// the window upstream (so the review list never shows ghosts). The provider
+// fetch throws on failure, so a failed fetch can never wipe the list.
+async function importFromProvider(
+  req: AuthedRequest,
+  source: 'google' | 'outlook',
+  fetchEvents: (settings: SettingsDocument, startIso: string, endIso: string) => Promise<RemoteEvent[]>
+) {
+  const label = source === 'google' ? 'Google Calendar' : 'Outlook Calendar';
   const settings = await Settings.findOne({ firebaseUid: req.userId });
-  if (!settings?.googleCalendarConnected) {
-    throw new ApiError(400, 'Google Calendar is not connected.', 'general');
+  const connected = source === 'google' ? settings?.googleCalendarConnected : settings?.outlookCalendarConnected;
+  if (!settings || !connected) {
+    const reauth = source === 'google' ? settings?.googleReauthRequired : settings?.outlookReauthRequired;
+    throw new ApiError(400, reauth ? `${label} access expired — reconnect it in Profile → Calendar Sync.` : `${label} is not connected.`, 'general');
   }
 
   const { start, end } = importWindow();
-  // Reads the user's "primary" calendar, not the dedicated "i-Planner" secondary
-  // calendar this app syncs its own tasks/classes to, so those are excluded
-  // automatically. A task created by CONVERTING an imported event is the exception —
-  // createTaskDoc skips syncing it to the secondary calendar since it already points
-  // at a real primary-calendar event — so it's filtered out below instead.
-  const remoteEvents = await listPrimaryGoogleEvents(settings, start.toISOString(), end.toISOString());
+  let remoteEvents: RemoteEvent[];
+  try {
+    remoteEvents = await fetchEvents(settings, start.toISOString(), end.toISOString());
+  } catch (err) {
+    if (err instanceof CalendarReauthRequiredError) {
+      throw new ApiError(401, `${label} access expired — reconnect it in Profile → Calendar Sync.`, 'general');
+    }
+    console.error(`[calendarImport] ${source} fetch failed`, err);
+    throw new ApiError(502, `Couldn't reach ${label}. Try again in a moment.`, 'general');
+  }
 
-  const ownedTasks = await Task.find(
-    { firebaseUid: req.userId, googleEventId: { $exists: true, $ne: null } },
-    'googleEventId'
+  // Events the user already converted to a task — converting deletes the
+  // ImportedCalendarEvent row (see NewTaskModal), so without this a re-import
+  // would fetch the same event again and resurrect it. (The app's own synced
+  // events live in the separate "i-Planner" calendar, so they never show up here.)
+  const idField = source === 'google' ? 'googleEventId' : 'outlookEventId';
+  const ownedTasks = await Task.find({ firebaseUid: req.userId, [idField]: { $exists: true, $ne: null } }, idField);
+  const ownedIds = new Set(
+    (ownedTasks as unknown as Record<string, string | undefined>[]).map((t) => t[idField]).filter((id): id is string => !!id)
   );
-  const ownedGoogleEventIds = new Set(
-    (ownedTasks as unknown as { googleEventId?: string }[]).map((t) => t.googleEventId).filter((id): id is string => !!id)
-  );
-  const incoming = remoteEvents.filter((e) => !ownedGoogleEventIds.has(e.id));
+  const incoming = remoteEvents.filter((e) => !ownedIds.has(e.id));
 
   await Promise.all(
     incoming.map((e) =>
       ImportedCalendarEvent.findOneAndUpdate(
-        { firebaseUid: req.userId, source: 'google', externalId: e.id },
+        { firebaseUid: req.userId, source, externalId: e.id },
         {
           $set: {
             title: e.title,
@@ -63,55 +91,22 @@ export async function importGoogleEvents(req: AuthedRequest, res: Response) {
       )
     )
   );
+  await ImportedCalendarEvent.deleteMany({
+    firebaseUid: req.userId,
+    source,
+    externalId: { $nin: incoming.map((e) => e.id) },
+  });
 
   const events = await ImportedCalendarEvent.find({ firebaseUid: req.userId }).sort({ startAt: 1 });
-  res.json(events.map(toPublicImportedCalendarEvent));
+  return events.map(toPublicImportedCalendarEvent);
 }
 
-// Read-only, so unlike importGoogleEvents there's no need to exclude events
-// this app itself *wrote* (nothing ever gets written to the user's Outlook
-// calendar, see microsoftCalendarSync.ts). But an event the user already
-// converted to a task still needs excluding here — converting deletes the
-// ImportedCalendarEvent row (see NewTaskModal), so without this a re-import
-// would just fetch the same event from Graph again and resurrect it.
+export async function importGoogleEvents(req: AuthedRequest, res: Response) {
+  res.json(await importFromProvider(req, 'google', listPrimaryGoogleEvents));
+}
+
 export async function importOutlookEvents(req: AuthedRequest, res: Response) {
-  const settings = await Settings.findOne({ firebaseUid: req.userId });
-  if (!settings?.outlookCalendarConnected) {
-    throw new ApiError(400, 'Outlook Calendar is not connected.', 'general');
-  }
-
-  const { start, end } = importWindow();
-  const remoteEvents = await listPrimaryOutlookEvents(settings, start.toISOString(), end.toISOString());
-
-  const ownedTasks = await Task.find(
-    { firebaseUid: req.userId, outlookEventId: { $exists: true, $ne: null } },
-    'outlookEventId'
-  );
-  const ownedOutlookEventIds = new Set(
-    (ownedTasks as unknown as { outlookEventId?: string }[]).map((t) => t.outlookEventId).filter((id): id is string => !!id)
-  );
-  const incoming = remoteEvents.filter((e) => !ownedOutlookEventIds.has(e.id));
-
-  await Promise.all(
-    incoming.map((e) =>
-      ImportedCalendarEvent.findOneAndUpdate(
-        { firebaseUid: req.userId, source: 'outlook', externalId: e.id },
-        {
-          $set: {
-            title: e.title,
-            startAt: e.startAt,
-            endAt: e.endAt,
-            allDay: e.allDay,
-            location: e.location,
-          },
-        },
-        { upsert: true }
-      )
-    )
-  );
-
-  const events = await ImportedCalendarEvent.find({ firebaseUid: req.userId }).sort({ startAt: 1 });
-  res.json(events.map(toPublicImportedCalendarEvent));
+  res.json(await importFromProvider(req, 'outlook', listPrimaryOutlookEvents));
 }
 
 interface IncomingAppleEvent {

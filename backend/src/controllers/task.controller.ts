@@ -3,7 +3,8 @@ import { Task, toPublicTask } from '../models/Task';
 import { AuthedRequest } from '../middleware/requireAuth';
 import { ApiError } from '../utils/ApiError';
 import { findOwnedOrThrow } from '../utils/ownedDoc';
-import { createTaskDoc, syncTaskToGoogle, unsyncTaskFromGoogle } from '../services/taskCreation';
+import { createTaskDoc } from '../services/taskCreation';
+import { syncTaskToCalendars, unsyncTaskFromCalendars } from '../services/calendarSync';
 
 export async function listTasks(req: AuthedRequest, res: Response) {
   const tasks = await Task.find({ firebaseUid: req.userId });
@@ -39,8 +40,8 @@ export async function createTask(req: AuthedRequest, res: Response) {
     // the device event(s)/reminder(s) and just wants the ids persisted.
     appleEventIds: Array.isArray(appleEventIds) ? appleEventIds : undefined,
     notificationIds: Array.isArray(notificationIds) ? notificationIds : undefined,
-    // Only set when converting an imported calendar event — createTaskDoc skips
-    // its own Google sync when this is present.
+    // Only set when converting an imported calendar event (together with
+    // calendarLinkExternal, which makes createTaskDoc skip calendar sync).
     googleEventId: typeof googleEventId === 'string' && googleEventId ? googleEventId : undefined,
     outlookEventId: typeof outlookEventId === 'string' && outlookEventId ? outlookEventId : undefined,
     calendarLinkExternal: !!calendarLinkExternal,
@@ -57,7 +58,7 @@ export async function updateTask(req: AuthedRequest, res: Response) {
     title, category, priority, day, hour, time, dueDate, done, recurring, freq, dayIdxs, notes, appleEventIds,
     notificationIds, completedDates, alarmEnabled,
   } = req.body ?? {};
-  // Google sync only cares about fields that actually affect the calendar event —
+  // Calendar sync only cares about fields that actually affect the calendar event —
   // a bare { done } toggle or an { appleEventIds } id-persist patch shouldn't touch it.
   const hasContentChange = [title, category, priority, day, hour, time, dueDate, recurring, freq, dayIdxs, notes]
     .some((v) => v !== undefined);
@@ -82,8 +83,8 @@ export async function updateTask(req: AuthedRequest, res: Response) {
   // calendarLinkExternal is never read from the body — it's creation-time-only
   // (see createTask). A converted task points at an event the app doesn't own,
   // so edits must never touch that event, only the app's own copy.
-  if (hasContentChange && !task.calendarLinkExternal) {
-    task.googleEventId = await syncTaskToGoogle(req.userId!, task);
+  if (hasContentChange) {
+    await syncTaskToCalendars(req.userId!, task);
   }
 
   await task.save();
@@ -94,9 +95,7 @@ export async function deleteTask(req: AuthedRequest, res: Response) {
   const task = await findOwnedOrThrow(Task, req.params.id, req.userId!);
   // Same reasoning as updateTask above — deleting a converted task from the
   // app must not delete the user's real external calendar event.
-  if (!task.calendarLinkExternal) {
-    await unsyncTaskFromGoogle(req.userId!, task);
-  }
+  await unsyncTaskFromCalendars(req.userId!, task);
   await task.deleteOne();
   res.status(204).send();
 }
