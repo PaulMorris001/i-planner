@@ -36,6 +36,9 @@ export const env = {
   microsoftOAuthClientId: clean(process.env.MICROSOFT_OAUTH_CLIENT_ID),
   microsoftOAuthClientSecret: clean(process.env.MICROSOFT_OAUTH_CLIENT_SECRET),
   backendPublicUrl: required('BACKEND_PUBLIC_URL'),
+  // Domain used in note share links -- e.g. https://i-plannerapp.com once the
+  // root domain points at this backend. Defaults to BACKEND_PUBLIC_URL.
+  shareBaseUrl: (clean(process.env.SHARE_BASE_URL) ?? required('BACKEND_PUBLIC_URL')).replace(/\/+$/, ''),
   openaiApiKey: required('OPENAI_API_KEY'),
   // AES-256 key (32 bytes, base64) encrypting Settings.googleAccessToken/googleRefreshToken
   // at rest — see utils/tokenCrypto.ts. Generate: node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"

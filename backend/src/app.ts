@@ -34,6 +34,9 @@ export function createApp() {
   // Public, browser-facing note-share preview pages — see
   // routes/sharedNoteWeb.routes.ts for why this isn't under /api.
   app.use('/shared', sharedNoteWebRouter);
+  // Short share links (/n/<slug>) -- /shared stays mounted so links already
+  // sent keep working.
+  app.use('/n', sharedNoteWebRouter);
 
   app.use('/api', router);
 

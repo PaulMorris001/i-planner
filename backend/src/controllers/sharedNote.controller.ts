@@ -7,6 +7,7 @@ import { AuthedRequest } from '../middleware/requireAuth';
 import { ApiError } from '../utils/ApiError';
 import { findOwnedOrThrow } from '../utils/ownedDoc';
 import { isDuplicateKeyError } from '../utils/mongoErrors';
+import { shortId } from '../utils/shortId';
 import { env } from '../config/env';
 import { NOTE_TITLE_MAX_LENGTH, NOTE_BODY_MAX_LENGTH } from '../constants/noteLimits';
 import { buildSharedNoteHtml, buildSharedNoteUnavailableHtml } from '../services/sharedNoteHtml';
@@ -16,8 +17,14 @@ import { buildSharedNoteHtml, buildSharedNoteUnavailableHtml } from '../services
 // is bogus, or if the note it points at has since been deleted; callers turn
 // that into whatever "not available" response fits their context (an HTML
 // page for the web route, a 404 ApiError for the JSON routes).
-async function resolveSharedNote(token: string) {
-  const shared = await SharedNote.findOne({ token });
+// A link carries either the short slug (/n/<slug>) or, for links made before
+// short links existed, the original UUID token (/shared/<token>).
+function findShare(id: string) {
+  return SharedNote.findOne({ $or: [{ slug: id }, { token: id }] });
+}
+
+async function resolveSharedNote(id: string) {
+  const shared = await findShare(id);
   if (!shared) return null;
   const note = await Note.findOne({ _id: shared.noteId, firebaseUid: shared.firebaseUid });
   if (!note) return null;
@@ -29,7 +36,7 @@ export async function createShare(req: AuthedRequest, res: Response) {
   let shared = await SharedNote.findOne({ noteId: note.id, firebaseUid: req.userId });
   if (!shared) {
     try {
-      shared = await SharedNote.create({ token: crypto.randomUUID(), noteId: note.id, firebaseUid: req.userId });
+      shared = await SharedNote.create({ token: crypto.randomUUID(), slug: shortId(), noteId: note.id, firebaseUid: req.userId });
     } catch (err) {
       if (!isDuplicateKeyError(err)) throw err;
       // Lost a race with a concurrent share request for the same note — the
@@ -40,7 +47,20 @@ export async function createShare(req: AuthedRequest, res: Response) {
       shared = existing;
     }
   }
-  res.json({ url: `${env.backendPublicUrl}/shared/${shared.token}` });
+  // Shares from before short links existed get a slug now. The old /shared/
+  // <uuid> link stays valid, since findShare still matches the token.
+  if (!shared.slug) {
+    for (let attempt = 0; attempt < 3 && !shared.slug; attempt++) {
+      try {
+        shared.slug = shortId();
+        await shared.save();
+      } catch (err) {
+        shared.slug = undefined; // ~1-in-10^17 slug collision -- just retry
+        if (!isDuplicateKeyError(err) || attempt === 2) throw err;
+      }
+    }
+  }
+  res.json({ url: `${env.shareBaseUrl}/n/${shared.slug}` });
 }
 
 // Unauthenticated — anyone with the link can view the preview page, same as
@@ -62,7 +82,7 @@ export async function getSharedNotePreview(req: AuthedRequest, res: Response) {
 }
 
 export async function importSharedNote(req: AuthedRequest, res: Response) {
-  const shared = await SharedNote.findOne({ token: req.params.token });
+  const shared = await findShare(req.params.token);
   if (!shared) throw new ApiError(404, 'This note is no longer available.', 'general');
 
   // Already imported this exact share before (including the sharer reopening
