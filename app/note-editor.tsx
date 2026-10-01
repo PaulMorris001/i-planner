@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, TextInput, Pressable, StyleSheet, Alert, Keyboard, ActivityIndicator, Share } from 'react-native';
+import { View, Text, TextInput, Pressable, StyleSheet, Alert, Keyboard, ActivityIndicator, Share, Platform } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useNavigation, usePreventRemove } from '@react-navigation/native';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
@@ -404,11 +404,11 @@ export default function NoteEditor() {
     setSharing(true);
     try {
       const { url } = await sharedNoteService.share(editing.id);
-      // `url` is what iOS's share sheet actually treats as a link (offering
-      // Messages/Mail's native link preview); `message` is what Android uses
-      // instead and what iOS falls back to if `url` weren't set — passing
-      // both covers each platform's preferred field in one call.
-      await Share.share({ message: url, url });
+      // Exactly one field per platform. iOS shares `message` and `url` as two
+      // separate items, so passing both made WhatsApp/Messages paste the link
+      // twice. `url` gets iOS's native link preview; Android ignores `url`
+      // entirely and only shares `message`.
+      await Share.share(Platform.OS === 'ios' ? { url } : { message: url });
     } catch (err) {
       console.error('[NoteEditor] failed to create share link', err);
       Alert.alert("Couldn't create link", 'Check your connection and try again.');
