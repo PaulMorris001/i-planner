@@ -32,7 +32,7 @@ const REGION_CURRENCY: Record<string, string> = {
 // once at module load: the device region doesn't change mid-session, and
 // this would otherwise re-resolve on every single formatCurrency call.
 const deviceLocale = getLocales()[0];
-const CURRENCY_CODE =
+export const CURRENCY_CODE =
   (deviceLocale?.regionCode && REGION_CURRENCY[deviceLocale.regionCode]) || deviceLocale?.currencyCode || 'USD';
 // NOT deviceLocale.languageTag — Language and Region are independently
 // configurable on iOS (e.g. Language "English (U.S.)" with Region "Nigeria"
@@ -80,6 +80,23 @@ export function formatCurrency(amount: number): string {
 // Instead, this reuses formatCurrency itself (proven working) and strips the
 // digits/punctuation back out — whatever's left is the symbol, regardless of
 // whether it's a prefix ("₦0") or suffix ("0 kr") in a given locale.
+// Formats an amount in the device's currency with explicit decimals — for
+// prices (e.g. "€6.99") where formatCurrency's whole-unit rounding would be
+// wrong. min and max are both pinned so engines that default a currency to 2
+// decimals don't reject a smaller max (some Intl builds throw on that).
+export function formatPrice(amount: number, fractionDigits: number, currency: string = CURRENCY_CODE): string {
+  try {
+    return new Intl.NumberFormat(LOCALE_TAG, {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: fractionDigits,
+      maximumFractionDigits: fractionDigits,
+    }).format(amount);
+  } catch {
+    return `${currency} ${amount.toFixed(fractionDigits)}`;
+  }
+}
+
 export const CURRENCY_SYMBOL: string = formatCurrency(0).replace(/[\d\s.,]/g, '') || '$';
 
 // `targetDateIso` is a real "YYYY-MM-DD" date-key (SavingsGoalModal's date

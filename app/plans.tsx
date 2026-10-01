@@ -8,6 +8,8 @@ import { TIER_RANK } from "@/constants/featureTiers";
 import { PRIVACY_URL, TERMS_URL } from "@/constants/legal";
 import { Colors, Radius, Spacing } from "@/constants/theme";
 import { usePurchases } from "@/contexts/PurchasesContext";
+import { formatCurrency } from "@/utils/currency";
+import { useLocalPrices } from "@/utils/localPricing";
 import type { SubscriptionTier } from "@/types/subscription.types";
 import * as WebBrowser from "expo-web-browser";
 import { useState } from "react";
@@ -23,11 +25,11 @@ import {
 interface Tier {
   id: SubscriptionTier;
   name: string;
-  monthlyPrice: string;
-  // Per-month equivalent for the "Annual" toggle; annualTotal is the real yearly price
-  // shown as a caption underneath.
-  annualMonthlyEquivalent: string;
-  annualTotal: string;
+  // USD list prices — only shown (converted to the user's currency, see
+  // utils/localPricing.ts) when the store's own localized price hasn't loaded.
+  // 0 = free.
+  monthlyUsd: number;
+  annualUsd: number;
   desc: string;
   features: string[];
   highlight?: boolean;
@@ -43,9 +45,8 @@ const TIERS: Tier[] = [
   {
     id: "free",
     name: "Free",
-    monthlyPrice: "$0",
-    annualMonthlyEquivalent: "$0",
-    annualTotal: "",
+    monthlyUsd: 0,
+    annualUsd: 0,
     desc: "Start planning with the basics.",
     features: [
       "Basic task planning",
@@ -58,9 +59,8 @@ const TIERS: Tier[] = [
   {
     id: "student",
     name: "Student / Edu",
-    monthlyPrice: "$7.99",
-    annualMonthlyEquivalent: "$6.67",
-    annualTotal: "$79.99/yr",
+    monthlyUsd: 7.99,
+    annualUsd: 79.99,
     desc: "Stay on top of classes, exams, and deadlines.",
     features: [
       "Everything in Free",
@@ -77,9 +77,8 @@ const TIERS: Tier[] = [
   {
     id: "professional",
     name: "Professional",
-    monthlyPrice: "$13.99",
-    annualMonthlyEquivalent: "$11.67",
-    annualTotal: "$139.99/yr",
+    monthlyUsd: 13.99,
+    annualUsd: 139.99,
     desc: "Plan your work, career, and goals.",
     features: [
       "Everything in Student / Edu",
@@ -95,9 +94,8 @@ const TIERS: Tier[] = [
   {
     id: "premium",
     name: "Premium AI",
-    monthlyPrice: "$24.99",
-    annualMonthlyEquivalent: "$20.83",
-    annualTotal: "$249.99/yr",
+    monthlyUsd: 24.99,
+    annualUsd: 249.99,
     desc: "Advanced AI planning for high-stakes goals.",
     features: ["Everything in Professional"],
     monthlyProductId: "premium_monthly",
@@ -120,6 +118,7 @@ export default function Plans() {
     restorePurchases,
   } = usePurchases();
   const [period, setPeriod] = useState<"monthly" | "annual">("monthly");
+  const localPrices = useLocalPrices();
   const [restoring, setRestoring] = useState(false);
 
   const fetchedProductIds = new Set(subscriptions.map((s) => s.id));
@@ -216,27 +215,28 @@ export default function Plans() {
             ctaDisabled = false;
           }
 
-          // Prefer the store's live localized price over the static estimate — the static
-          // strings are US-only guesses that go stale when App Store Connect / Play Console
-          // pricing changes. The live annual price is the true yearly total, not a per-month
-          // figure, so its unit reads "/yr" and needs no separate caption.
+          // Prefer the store's live localized price — it's in the user's own
+          // currency and is exactly what they'll be charged. The live annual
+          // price is the true yearly total, so its unit reads "/yr" and needs no
+          // caption. Without it, fall back to the USD list price converted to the
+          // user's currency, marked "≈" since it's an estimate (utils/localPricing.ts).
           const liveProduct = productId
             ? subscriptions.find((s) => s.id === productId)
             : undefined;
-          const displayPrice =
-            liveProduct?.displayPrice ??
-            (period === "monthly"
-              ? tierRow.monthlyPrice
-              : tierRow.annualMonthlyEquivalent);
-          const priceUnit = liveProduct
-            ? period === "monthly"
-              ? "/mo"
-              : "/yr"
-            : "/mo";
-          const displayCaption =
-            !liveProduct && period === "annual" && tierRow.annualTotal
-              ? `Billed ${tierRow.annualTotal}`
-              : undefined;
+          const approx = localPrices.estimated ? "≈ " : "";
+          let displayPrice: string;
+          let displayCaption: string | undefined;
+          if (isFree) {
+            displayPrice = formatCurrency(0);
+          } else if (liveProduct) {
+            displayPrice = liveProduct.displayPrice;
+          } else if (period === "monthly") {
+            displayPrice = approx + localPrices.price(tierRow.monthlyUsd);
+          } else {
+            displayPrice = approx + localPrices.monthlyFromAnnual(tierRow.annualUsd);
+            displayCaption = `Billed ${approx}${localPrices.price(tierRow.annualUsd)}/yr`;
+          }
+          const priceUnit = liveProduct && period === "annual" ? "/yr" : "/mo";
 
           return (
             <Card
