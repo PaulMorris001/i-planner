@@ -19,9 +19,12 @@ interface GoogleTokenResponse {
 // `state` param minted by startGoogleCalendarConnect. Every path redirects back into
 // the app rather than returning JSON, since there's no client code left to receive one.
 export async function handleGoogleCalendarCallback(req: Request, res: Response) {
-  const { code, state, error } = req.query;
+  const { code, state, error, error_description } = req.query;
 
   if (error || typeof code !== 'string' || typeof state !== 'string') {
+    // The provider's own explanation (e.g. "unauthorized_client: The client
+    // does not exist...") -- otherwise the app only ever sees status=error.
+    console.error('[googleOAuthCallback] provider returned an error', { error, error_description });
     res.redirect(`${APP_REDIRECT}?status=error`);
     return;
   }
@@ -48,6 +51,7 @@ export async function handleGoogleCalendarCallback(req: Request, res: Response) 
 
     const tokenData = (await tokenRes.json()) as GoogleTokenResponse;
     if (!tokenRes.ok || !tokenData.access_token) {
+      console.error('[googleOAuthCallback] token exchange rejected', tokenRes.status, tokenData.error, tokenData.error_description);
       res.redirect(`${APP_REDIRECT}?status=error`);
       return;
     }

@@ -22,9 +22,12 @@ interface MicrosoftTokenResponse {
 // `state` param (the signer is shared, not provider-specific — see
 // utils/googleOAuthState.ts).
 export async function handleMicrosoftCalendarCallback(req: Request, res: Response) {
-  const { code, state, error } = req.query;
+  const { code, state, error, error_description } = req.query;
 
   if (error || typeof code !== 'string' || typeof state !== 'string') {
+    // The provider's own explanation (e.g. "unauthorized_client: The client
+    // does not exist...") -- otherwise the app only ever sees status=error.
+    console.error('[microsoftOAuthCallback] provider returned an error', { error, error_description });
     res.redirect(`${APP_REDIRECT}?status=error`);
     return;
   }
@@ -52,6 +55,7 @@ export async function handleMicrosoftCalendarCallback(req: Request, res: Respons
 
     const tokenData = (await tokenRes.json()) as MicrosoftTokenResponse;
     if (!tokenRes.ok || !tokenData.access_token) {
+      console.error('[microsoftOAuthCallback] token exchange rejected', tokenRes.status, tokenData.error, tokenData.error_description);
       res.redirect(`${APP_REDIRECT}?status=error`);
       return;
     }
