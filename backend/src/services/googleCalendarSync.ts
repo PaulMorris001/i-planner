@@ -90,9 +90,12 @@ async function refreshAccessTokenIfNeeded(settings: SettingsDocument): Promise<s
   const data = (await res.json().catch(() => ({}))) as { access_token?: string; expires_in?: number; error?: string };
   if (!res.ok || !data.access_token) {
     console.error('[googleCalendarSync] token refresh failed', res.status, data);
-    // invalid_grant = revoked/expired refresh token; anything else (5xx, network
-    // blips) is transient and shouldn't disconnect the user.
-    if (data.error === 'invalid_grant') await markReauthRequired(settings);
+    // invalid_grant = revoked/expired refresh token; unauthorized_client = token
+    // issued to a different OAuth client (GOOGLE_OAUTH_CLIENT_ID was switched).
+    // Both need the user to reconnect. Anything else (5xx, network blips, or
+    // invalid_client from our own misconfigured secret) is transient or a
+    // server-side fix, and shouldn't disconnect anyone.
+    if (data.error === 'invalid_grant' || data.error === 'unauthorized_client') await markReauthRequired(settings);
     return null;
   }
 
