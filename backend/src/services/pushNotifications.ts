@@ -7,9 +7,15 @@ import { Settings } from '../models/Settings';
 // tokens, never raw FCM/APNs ones.
 const expo = new Expo();
 
-// Must match the channel the app creates (utils/notifications.ts) — Android
-// files every push under a channel, and an unknown one is dropped or demoted.
+// Android channels the app creates (utils/notifications.ts) — every push is
+// filed under one, and an unknown id is dropped or demoted. Announcements get
+// their own (mutable separately); reminder-style pushes reuse the reminders one.
 const ANNOUNCEMENT_CHANNEL_ID = 'announcements';
+export const REMINDERS_CHANNEL_ID = 'planner-reminders';
+
+// The app reads `kind` to decide how to show and route a push: 'announcement'
+// and 'task-nudge' always show; 'ai-reply' is hidden while the app is open.
+export type PushKind = 'announcement' | 'task-nudge' | 'ai-reply';
 
 export interface PushContent {
   title: string;
@@ -29,15 +35,21 @@ export interface PushSendResult {
 // Delivers one message to every given token. Tokens Expo rejects outright as
 // unregistered (app uninstalled, notifications revoked) are deleted, so later
 // sends don't keep paying for them.
-export async function sendPushToTokens(tokens: string[], content: PushContent): Promise<PushSendResult> {
+export async function sendPushToTokens(
+  tokens: string[],
+  content: PushContent,
+  options: { kind?: PushKind; channelId?: string } = {}
+): Promise<PushSendResult> {
+  const kind = options.kind ?? 'announcement';
+  const channelId = options.channelId ?? ANNOUNCEMENT_CHANNEL_ID;
   const valid = [...new Set(tokens)].filter((t) => Expo.isExpoPushToken(t));
   const messages: ExpoPushMessage[] = valid.map((to) => ({
     to,
     title: content.title,
     body: content.body,
     sound: 'default',
-    channelId: ANNOUNCEMENT_CHANNEL_ID,
-    data: { kind: 'announcement', ...(content.route ? { route: content.route } : {}) },
+    channelId,
+    data: { kind, ...(content.route ? { route: content.route } : {}) },
   }));
 
   const tickets: { token: string; ticket: ExpoPushTicket }[] = [];
@@ -72,4 +84,25 @@ export async function announcementTokens(onlyFirebaseUids?: string[]): Promise<s
   if (!uids.length) return [];
   const rows = await PushToken.find({ firebaseUid: { $in: uids } }, 'token');
   return rows.map((r) => r.token);
+}
+
+// Every registered device for one account (it may be signed in on several).
+export async function tokensForUser(firebaseUid: string): Promise<string[]> {
+  const rows = await PushToken.find({ firebaseUid }, 'token');
+  return rows.map((r) => r.token);
+}
+
+// Best-effort push to one account: logs instead of throwing, so a push
+// problem can never break the request or job that triggered it.
+export async function sendPushToUser(
+  firebaseUid: string,
+  content: PushContent,
+  options: { kind: PushKind; channelId?: string }
+): Promise<void> {
+  try {
+    const tokens = await tokensForUser(firebaseUid);
+    if (tokens.length) await sendPushToTokens(tokens, content, options);
+  } catch (err) {
+    console.error(`[push] ${options.kind} push failed`, err);
+  }
 }

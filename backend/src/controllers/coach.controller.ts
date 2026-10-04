@@ -9,6 +9,14 @@ import { generateCoachReply } from '../services/coachChat';
 import { checkAndConsumeQuery } from '../services/aiUsageLimiter';
 import { FEATURE_MIN_TIER, hasTier } from '../constants/featureTiers';
 import { parseIncomingAttachments, storeCoachAttachment } from '../services/coachAttachments';
+import { sendPushToUser, REMINDERS_CHANNEL_ID } from '../services/pushNotifications';
+
+// Short plain-text preview of a reply for a notification -- markdown symbols
+// would show up literally there.
+function replyPreview(text: string): string {
+  const plain = text.replace(/[*_`#>]/g, '').replace(/\s+/g, ' ').trim();
+  return plain.length > 120 ? `${plain.slice(0, 119)}…` : plain;
+}
 
 // Stored as the message text when the user sends files with no message.
 const ATTACHMENT_ONLY_PROMPT = 'Please take a look at the attached file.';
@@ -126,4 +134,13 @@ export async function sendCoachMessage(req: AuthedRequest, res: Response) {
   });
 
   res.status(201).json({ ...toPublicCoachMessage(assistantDoc), createdTaskIds });
+
+  // "Your reply is ready" for someone who switched away while it was being
+  // written. Sent every time; the app hides it when it's already open (see
+  // its notification handler), so only backgrounded users actually see it.
+  void sendPushToUser(
+    req.userId!,
+    { title: `${MODE_LABEL[mode]} replied`, body: replyPreview(replyText), route: '/coach' },
+    { kind: 'ai-reply', channelId: REMINDERS_CHANNEL_ID }
+  );
 }

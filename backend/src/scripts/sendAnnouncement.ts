@@ -3,12 +3,13 @@
 // with backend/.env, like grant-access — not exposed as an API route.
 //
 // Usage (from backend/):
-//   npm run announce -- --title "New: Outlook sync" --body "Connect it in Profile → Calendar Sync." --route /profile
+//   npm run announce -- --title "New: Outlook sync" --body "Connect it in Profile → Calendar Sync." --route profile
 //
 // Options:
 //   --title   (required) notification title
 //   --body    (required) notification text
-//   --route   optional in-app screen to open on tap, e.g. /notes, /plans, /coach
+//   --route   optional in-app screen to open on tap: notes, plans, coach, profile
+//             (leading "/" optional -- leave it off in Git Bash, which mangles it)
 //   --to      send only to these account emails (comma-separated) — test first!
 //   --dry-run show how many devices would get it, without sending
 import mongoose from 'mongoose';
@@ -21,10 +22,20 @@ function arg(name: string): string | undefined {
   return i !== -1 ? process.argv[i + 1] : undefined;
 }
 
+// Git Bash on Windows rewrites any argument starting with "/" into a Windows
+// path ("/profile" arrives as "C:/Program Files/Git/profile"). Undo that, and
+// accept the route with or without its leading slash ("profile" -> "/profile").
+function normalizeRoute(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  const msys = raw.replace(/\\/g, '/').match(/^[A-Za-z]:\/.*?\/Git(\/.*)$/);
+  const route = msys ? msys[1] : raw;
+  return route.startsWith('/') ? route : `/${route}`;
+}
+
 async function main() {
   const title = arg('title')?.trim();
   const body = arg('body')?.trim();
-  const route = arg('route')?.trim();
+  const route = normalizeRoute(arg('route')?.trim());
   const to = arg('to');
   const dryRun = process.argv.includes('--dry-run');
 
@@ -52,6 +63,7 @@ async function main() {
     }
   }
 
+  console.log(`Title: ${title}\nBody: ${body}\nOpens: ${route ?? '(app home)'}`);
   const tokens = await announcementTokens(onlyUids);
   console.log(`${tokens.length} device(s) opted in${to ? ` for ${to}` : ''}.`);
   if (to && !tokens.length) {

@@ -53,6 +53,9 @@ export interface SettingsDocument extends Document {
   // turns it on, per App Store guideline 4.5.4. Only scripts/sendAnnouncement.ts
   // reads it.
   productUpdatesEnabled?: boolean;
+  // Local "YYYY-MM-DD" the 10 PM "tasks left today" push last went out
+  // (services/dailyTaskNudge.ts) — at most one per user per day. Internal.
+  lastTaskNudgeDate?: string;
 }
 
 const settingsSchema = new Schema<SettingsDocument>({
@@ -80,6 +83,7 @@ const settingsSchema = new Schema<SettingsDocument>({
   savingsDisclosureAcknowledged: { type: Boolean, default: false },
   focusProfile: { type: String },
   productUpdatesEnabled: { type: Boolean, default: false },
+  lastTaskNudgeDate: { type: String },
 });
 
 export function toPublicSettings(doc: SettingsDocument | null) {

@@ -1,6 +1,7 @@
 import { env } from './config/env';
 import { connectDB } from './config/db';
 import { createApp } from './app';
+import { startDailyTaskNudges } from './services/dailyTaskNudge';
 
 async function main() {
   await connectDB();
@@ -8,6 +9,8 @@ async function main() {
   const app = createApp();
   app.listen(env.port, () => {
     console.log(`[server] listening on http://localhost:${env.port}`);
+    // The 10 PM "tasks left today" push (checks every few minutes).
+    startDailyTaskNudges();
     // Calendar OAuth config at a glance in the deploy logs. Client IDs and the
     // public URL aren't secret; secrets are only reported as set/missing.
     // "length" exposes a stray character that a visual check would miss
