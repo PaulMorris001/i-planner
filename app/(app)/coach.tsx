@@ -33,12 +33,12 @@ interface Attachment {
   size?: number;
 }
 
-// Mirrors backend/src/services/coachAttachments.ts -- checked here too so the
+// Mirrors backend/src/services/coachAttachments.ts - checked here too so the
 // user hears about a too-big file before waiting on an upload.
 const MAX_ATTACHMENTS = 3;
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 // iOS can't present a picker while the attach menu (a native Modal) is still
-// sliding away -- the picker silently never opens. Wait out the animation.
+// sliding away - the picker silently never opens. Wait out the animation.
 const MENU_CLOSE_DELAY_MS = 400;
 
 // Shown on the progress card once a message's files have finished uploading.
@@ -111,7 +111,7 @@ export default function Coach() {
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [attachMenuOpen, setAttachMenuOpen] = useState(false);
-  // True while a message WITH files is in flight -- drives the upload card.
+  // True while a message WITH files is in flight - drives the upload card.
   const [sendingFiles, setSendingFiles] = useState(false);
   const {
     progress: uploadProgress,
@@ -303,7 +303,7 @@ export default function Coach() {
           return;
         }
       } catch {
-        // Couldn't check -- fall through to the normal error handling.
+        // Couldn't check, so fall through to the normal error handling.
       }
       // 429 (usage cap) carries a specific server message — show it as-is.
       const status = (err as { status?: number } | null)?.status;

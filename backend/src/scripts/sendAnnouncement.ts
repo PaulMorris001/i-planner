@@ -9,7 +9,7 @@
 //   --title   (required) notification title
 //   --body    (required) notification text
 //   --route   optional in-app screen to open on tap: notes, plans, coach, profile
-//             (leading "/" optional -- leave it off in Git Bash, which mangles it)
+//             (leading "/" optional - leave it off in Git Bash, which mangles it)
 //   --to      send only to these account emails (comma-separated) — test first!
 //   --dry-run show how many devices would get it, without sending
 import mongoose from 'mongoose';

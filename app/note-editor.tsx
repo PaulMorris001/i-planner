@@ -45,6 +45,9 @@ export default function NoteEditor() {
   const [cleanupState, setCleanupState] = useState<'idle' | 'loading' | 'reviewing'>('idle');
   const [savedId, setSavedId] = useState<string | undefined>(id);
   const [autosaveStatus, setAutosaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  // True once any save (Save button or autosave) has gone through on this
+  // screen - drives the green "Saved" state of the header button.
+  const [hasSaved, setHasSaved] = useState(false);
   const editing = savedId ? notes.find((n) => n.id === savedId) ?? null : null;
 
   const bodyInputRef = useRef<TextInput>(null);
@@ -64,14 +67,6 @@ export default function NoteEditor() {
   const pendingNavActionRef = useRef<Parameters<Parameters<typeof usePreventRemove>[1]>[0]['data']['action'] | null>(
     null
   );
-  // Set by handleSave right before it finishes, instead of calling
-  // router.back() itself — see the comment on handleSave for why: by the time
-  // its save actually resolves, updating lastSavedRef isn't enough on its own
-  // to make usePreventRemove's *current* render see isDirty go false, since
-  // nothing re-renders between that ref update and a same-tick router.back()
-  // call. The replay effect below actually navigates once a real render has
-  // caught up.
-  const wantsToLeaveAfterSaveRef = useRef(false);
   // Refs mirror the latest state for the autosave interval/callbacks below,
   // which are set up once and would otherwise close over stale values.
   const titleRef = useRef(title);
@@ -123,7 +118,11 @@ export default function NoteEditor() {
         setSavedId(created.id);
       }
       lastSavedRef.current = { title: t, body: b };
+      // A title derived from the first line becomes the real title, or the
+      // empty field would never match what was saved and look unsaved forever.
+      if (!titleRef.current.trim()) setTitle(t);
       setAutosaveStatus('saved');
+      setHasSaved(true);
     } catch (err) {
       console.error('[NoteEditor] autosave failed', err);
       setAutosaveStatus('idle');
@@ -146,7 +145,8 @@ export default function NoteEditor() {
     return () => clearInterval(interval);
   }, []);
 
-  const canSave = title.trim().length > 0 && !submitting;
+  // Any text worth saving (an untitled note uses its first line as the title).
+  const hasSaveableText = !!(title.trim() || deriveFallbackTitle(body));
   // True whenever there's something on screen that isn't reflected in the
   // last confirmed save (autosave included) — i.e. a crash, force-quit, or
   // leaving before the next 8s autosave tick would actually lose something.
@@ -155,6 +155,11 @@ export default function NoteEditor() {
   // state update or a re-render-triggering state change nearby (see
   // handleSave's own comment for the one case that needed extra care).
   const isDirty = title.trim() !== lastSavedRef.current.title || body !== lastSavedRef.current.body;
+  // Save is only offered when there's an unsaved change worth keeping. States:
+  // grey (nothing new: just opened, or unchanged since the last save), blue
+  // (unsaved change), green "Saved" (a save went through, nothing edited since).
+  const canSave = isDirty && hasSaveableText && !submitting;
+  const showSaved = !isDirty && hasSaved && !submitting;
   // While editing, the note's own folderId is the source of truth (kept live
   // by NotesContext's optimistic update) — newNoteFolderId only matters
   // before the note exists yet.
@@ -247,8 +252,7 @@ export default function NoteEditor() {
 
   // Same fallback-title behavior runAutosave already uses — a user who
   // dictated straight into the body and never touched the title shouldn't
-  // hit a dead end tapping "Save" here just because the header Save button's
-  // own (stricter, title-required) canSave would otherwise block it.
+  // hit a dead end tapping "Save" here.
   const handleSaveBeforeLeaving = async () => {
     if (busyRef.current) return;
     const t = title.trim() || deriveFallbackTitle(body);
@@ -276,8 +280,7 @@ export default function NoteEditor() {
     }
   };
 
-  // Replays whatever navigation attempt usePreventRemove blocked, or finishes
-  // a plain Save-button tap's own exit (see handleSave) — either way, only
+  // Replays whatever navigation attempt usePreventRemove blocked — only
   // once a real render has caught up to both cleanupState and isDirty going
   // clear. Dispatching synchronously from inside the various handlers above
   // would still see this hook's stale (not-yet-re-rendered) closure and could
@@ -288,9 +291,6 @@ export default function NoteEditor() {
       const action = pendingNavActionRef.current;
       pendingNavActionRef.current = null;
       navigation.dispatch(action);
-    } else if (wantsToLeaveAfterSaveRef.current) {
-      wantsToLeaveAfterSaveRef.current = false;
-      router.back();
     }
   }, [cleanupState, isDirty, navigation]);
 
@@ -327,22 +327,26 @@ export default function NoteEditor() {
     busyRef.current = true;
     setSubmitting(true);
     try {
-      const t = title.trim();
-      if (savedId) {
-        await updateNote(savedId, { title: t, body });
+      // Same first-line fallback as autosave for a note with no title.
+      const t = title.trim() || deriveFallbackTitle(body);
+      if (savedIdRef.current) {
+        await updateNote(savedIdRef.current, { title: t, body });
       } else {
-        await createNote({ title: t, body, folderId: newNoteFolderId });
+        // Record the new note's id: the editor stays open after saving now, so
+        // the next save must update this note, not create a second one.
+        const created = await createNote({ title: t, body, folderId: newNoteFolderId });
+        savedIdRef.current = created.id;
+        setSavedId(created.id);
       }
       lastSavedRef.current = { title: t, body };
-      // Not router.back() directly: updating the ref above doesn't make this
-      // render's `isDirty` (still true, from before this save) go false —
-      // nothing re-renders between that update and here to catch it up, so
-      // the guard above would immediately intercept this exact router.back()
-      // call. The replay effect actually navigates once a real render has
-      // caught up to isDirty going false.
-      wantsToLeaveAfterSaveRef.current = true;
+      if (!title.trim()) setTitle(t);
+      // Stays on the screen; the header button turns green "Saved" (and
+      // setHasSaved re-renders so isDirty catches up to the ref above).
+      setHasSaved(true);
+      setAutosaveStatus('saved');
     } catch (err) {
       console.error('[NoteEditor] failed to save note', err);
+      Alert.alert("Couldn't save", 'Check your connection and try again.');
     } finally {
       setSubmitting(false);
       busyRef.current = false;
@@ -454,9 +458,19 @@ export default function NoteEditor() {
             hitSlop={10}
             onPress={handleSave}
             disabled={!canSave}
-            style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]}
+            accessibilityLabel={showSaved ? 'Saved' : 'Save note'}
+            style={[styles.saveBtn, showSaved ? styles.saveBtnSaved : !canSave && !submitting && styles.saveBtnDisabled]}
           >
-            <Text style={[styles.saveBtnText, !canSave && styles.saveBtnTextDisabled]}>Save</Text>
+            {showSaved ? (
+              <>
+                <IconSymbol name="checkmark" color={Colors.white} size={14} />
+                <Text style={styles.saveBtnText}>Saved</Text>
+              </>
+            ) : submitting ? (
+              <Text style={styles.saveBtnText}>Saving…</Text>
+            ) : (
+              <Text style={[styles.saveBtnText, !canSave && styles.saveBtnTextDisabled]}>Save</Text>
+            )}
           </Pressable>
         </View>
       </View>
@@ -632,10 +646,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   saveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     backgroundColor: Colors.primaryLight,
     borderRadius: Radius.full,
     paddingVertical: 8,
     paddingHorizontal: 18,
+  },
+  saveBtnSaved: {
+    backgroundColor: Colors.success,
   },
   saveBtnDisabled: {
     backgroundColor: Colors.border,

@@ -6,7 +6,7 @@ import { Schema, model, Document } from 'mongoose';
 // If the Note is later deleted, resolution just comes up empty — nothing here
 // needs to be cleaned up alongside it.
 export interface SharedNoteDocument extends Document {
-  // Canonical internal id (a UUID) -- SharedNoteImport rows reference it, and
+  // Canonical internal id (a UUID) - SharedNoteImport rows reference it, and
   // links shared before short links existed (/shared/<uuid>) still use it.
   token: string;
   // Short public id used in share links (/n/<slug>). Added lazily: shares made

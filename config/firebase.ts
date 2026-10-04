@@ -3,7 +3,7 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import {
   initializeAuth,
   getAuth,
-  // @ts-ignore -- not in the public TS types yet, but present in the RN build.
+  // @ts-ignore: not in the public TS types yet, but present in the RN build.
   getReactNativePersistence,
   browserLocalPersistence,
 } from 'firebase/auth';

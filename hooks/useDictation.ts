@@ -28,7 +28,7 @@ export function joinDictationText(base: string, addition: string): string {
 // second), so it shouldn't false-positive mid-sentence.
 const SEGMENT_GAP_MS = 800;
 
-// Lowercase, punctuation stripped, whitespace collapsed -- recognizers revise
+// Lowercase, punctuation stripped, whitespace collapsed - recognizers revise
 // casing and punctuation of earlier words as they go ("the" -> "The,").
 function normalizeTranscript(text: string): string {
   return text
@@ -44,7 +44,7 @@ const SAME_SEGMENT_OPENING_WORDS = 4;
 // than a brand-new segment. iOS re-sends the WHOLE session transcript on every
 // update and revises earlier words along the way, so an exact prefix check
 // misfires there: a revision looked "new", the old transcript got baked in,
-// and the next update (which still contains it) was appended on top --
+// and the next update (which still contains it) was appended on top,
 // duplicating every paragraph spoken so far. Compare normalized text, and also
 // treat a shared opening as the same segment: a genuinely new segment (Android
 // after a pause) starts with different words.

@@ -55,7 +55,7 @@ export async function createShare(req: AuthedRequest, res: Response) {
         shared.slug = shortId();
         await shared.save();
       } catch (err) {
-        shared.slug = undefined; // ~1-in-10^17 slug collision -- just retry
+        shared.slug = undefined; // ~1-in-10^17 slug collision - just retry
         if (!isDuplicateKeyError(err) || attempt === 2) throw err;
       }
     }

@@ -33,7 +33,7 @@ function isNewSubscription(
   productId: string
 ): boolean {
   if (!previous || previous.productIdentifier !== productId) return true; // first purchase, upgrade, or switch
-  // Same product, but the old one had lapsed -- they've re-subscribed.
+  // Same product, but the old one had lapsed - they've re-subscribed.
   return !!previous.expiresAt && previous.expiresAt.getTime() < Date.now();
 }
 
@@ -43,7 +43,7 @@ function billingFromProductId(productId: string): 'Monthly' | 'Annual' | undefin
   return undefined;
 }
 
-// Best-effort, after the response -- an email problem must never fail or slow
+// Best-effort, after the response - an email problem must never fail or slow
 // down the purchase itself.
 async function sendUpgradeEmail(
   firebaseUid: string,
@@ -88,7 +88,7 @@ export async function verifySubscription(req: AuthedRequest, res: Response) {
   const tier = tierFromProductId(result.productId);
   const store = platform === 'ios' ? 'app_store' : 'play_store';
   // new: false hands back the document as it was BEFORE this update, in the
-  // same atomic step -- so if a purchase and a launch-time re-check race, only
+  // same atomic step - so if a purchase and a launch-time re-check race, only
   // the one that actually changed the product sees a change and emails.
   const previous = await Subscription.findOneAndUpdate(
     { firebaseUid: req.userId },

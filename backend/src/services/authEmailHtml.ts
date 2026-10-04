@@ -3,7 +3,7 @@ import { AI_QUERY_CAPS } from '../constants/aiUsage';
 import type { SubscriptionTier } from '../models/Subscription';
 
 // App icon, served from backend/public/email-logo.png (192px, so it stays sharp
-// at 56px on high-density screens). Must be an absolute https URL -- inboxes
+// at 56px on high-density screens). Must be an absolute https URL - inboxes
 // fetch images themselves, there's no relative path in an email.
 const LOGO_URL = `${env.backendPublicUrl}/email-logo.png`;
 
@@ -67,7 +67,7 @@ export function buildLoginNotifyEmailHtml(
 ): { subject: string; html: string; text: string } {
   const name = greeting(fullName);
   const device = deviceLabel ? escapeHtml(deviceLabel) : 'a new device';
-  // UTC, spelled out -- the server doesn't know the reader's time zone.
+  // UTC, spelled out - the server doesn't know the reader's time zone.
   const time = when.toUTCString().replace('GMT', 'UTC');
   const subject = 'New sign-in to your i-Planner account';
   const html = page(
@@ -99,7 +99,7 @@ const TIER_NAME: Record<PaidTier, string> = {
   premium: 'Premium AI',
 };
 
-// What each paid tier unlocks -- kept to features the backend actually gates
+// What each paid tier unlocks - kept to features the backend actually gates
 // (constants/featureTiers.ts) plus the AI limits, so the email never promises
 // something the plan doesn't include.
 function tierBenefits(tier: PaidTier): string[] {
@@ -123,7 +123,7 @@ export interface UpgradeEmailInput {
 
 // Sent once when a verified purchase starts or changes a subscription (see
 // subscription.controller.ts). A confirmation and welcome, not the official
-// receipt -- Apple/Google send that themselves, with the amount charged.
+// receipt - Apple/Google send that themselves, with the amount charged.
 export function buildUpgradeEmailHtml(input: UpgradeEmailInput): { subject: string; html: string; text: string } {
   const name = greeting(input.fullName);
   const plan = TIER_NAME[input.tier];

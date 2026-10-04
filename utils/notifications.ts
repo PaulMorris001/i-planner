@@ -118,7 +118,7 @@ export function initNotificationHandler(): void {
   handlerRegistered = true;
   Notifications.setNotificationHandler({
     // Only runs while the app is open. An "AI reply ready" push is for people
-    // who switched away mid-reply -- with the app open, the reply is already
+    // who switched away mid-reply - with the app open, the reply is already
     // on screen, so stay quiet. Everything else shows as normal.
     handleNotification: async (notification) => {
       const show = (notification.request.content.data as Record<string, unknown> | undefined)?.kind !== 'ai-reply';
@@ -147,7 +147,7 @@ function buildAlarmData(kind: AlarmKind, id: string | undefined, title: string):
 async function handleAlarmResponse(response: Notifications.NotificationResponse): Promise<void> {
   const data = response.notification.request.content.data as Record<string, unknown> | undefined;
   const kind = data?.kind;
-  // Server-sent pushes (backend services/pushNotifications.ts) -- announcements,
+  // Server-sent pushes (backend services/pushNotifications.ts) - announcements,
   // the 10 PM tasks-left nudge, AI replies: open the screen they name, if any.
   // Only in-app paths, never an arbitrary URL.
   if (kind === 'announcement' || kind === 'task-nudge' || kind === 'ai-reply') {

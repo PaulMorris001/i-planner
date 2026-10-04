@@ -30,7 +30,7 @@ export interface PushSendResult {
   accepted: number;
   failed: number;
   removedTokens: number;
-  // Expo ticket ids for accepted messages -- pass to checkPushReceipts.
+  // Expo ticket ids for accepted messages - pass to checkPushReceipts.
   ticketIds: string[];
 }
 
@@ -82,7 +82,7 @@ export interface PushReceiptSummary {
 }
 
 // "Accepted" only means Expo took the message. Whether Apple/Google actually
-// delivered it shows up a few seconds later as a receipt -- this is where
+// delivered it shows up a few seconds later as a receipt - this is where
 // credential problems (e.g. InvalidCredentials) and dead devices surface.
 export async function checkPushReceipts(ticketIds: string[]): Promise<PushReceiptSummary> {
   const summary: PushReceiptSummary = { delivered: 0, pending: 0, errors: [] };

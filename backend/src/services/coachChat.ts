@@ -5,7 +5,7 @@ import { CREATE_TASK_TOOL, createTasksFromDrafts } from './coachTools';
 import { attachmentContentParts, ATTACHMENT_TTL_SECONDS } from './coachAttachments';
 
 // Earlier messages' attachments ride along again so follow-up questions about
-// the same document still work -- but only the most recent few (each file is
+// the same document still work - but only the most recent few (each file is
 // re-read on every turn it's included), and never one old enough that OpenAI
 // may already have deleted it (a dead file id would fail the whole request).
 const MAX_HISTORY_ATTACHMENT_MESSAGES = 3;
@@ -95,7 +95,7 @@ export async function generateCoachReply(input: {
     '**bold** for key terms, "- " bullet lists, `inline code`, and "## " headings when they make a ' +
     "longer answer easier to scan — but don't force them into a short, simple reply. " +
     'When the user attaches files, read them and answer from their actual content.\n\n' +
-    `--- User's current planner data ---\n${input.contextSummary}`;
+    `User's current planner data:\n${input.contextSummary}`;
 
   const tools = input.mode === 'plan' && input.canCreateTasks ? [CREATE_TASK_TOOL] : undefined;
 

@@ -11,7 +11,7 @@ import { FEATURE_MIN_TIER, hasTier } from '../constants/featureTiers';
 import { parseIncomingAttachments, storeCoachAttachment } from '../services/coachAttachments';
 import { sendPushToUser, REMINDERS_CHANNEL_ID } from '../services/pushNotifications';
 
-// Short plain-text preview of a reply for a notification -- markdown symbols
+// Short plain-text preview of a reply for a notification - markdown symbols
 // would show up literally there.
 function replyPreview(text: string): string {
   const plain = text.replace(/[*_`#>]/g, '').replace(/\s+/g, ' ').trim();

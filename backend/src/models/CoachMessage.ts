@@ -52,7 +52,7 @@ export function toPublicCoachMessage(doc: CoachMessageDocument) {
     id: doc.id as string,
     role: doc.role,
     content: doc.content,
-    // Names only -- the file itself never goes back to the client.
+    // Names only - the file itself never goes back to the client.
     attachments: doc.attachments?.length ? doc.attachments.map((a) => ({ filename: a.filename })) : undefined,
     createdAt: doc.createdAt.toISOString(),
   };

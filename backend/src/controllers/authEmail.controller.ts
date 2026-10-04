@@ -47,7 +47,7 @@ export async function sendLoginNotifyEmail(req: AuthedRequest, res: Response) {
   if (!req.userEmail) throw new ApiError(400, 'This account has no email address on file.', 'general');
   const fullName = typeof req.body?.fullName === 'string' ? req.body.fullName : undefined;
   // Only sign-ins from a device we haven't seen get an email. Older app
-  // versions don't send a device id -- skip rather than email every sign-in.
+  // versions don't send a device id - skip rather than email every sign-in.
   const device = readDevice(req.body);
   if (!device) {
     res.status(204).end();

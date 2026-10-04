@@ -3,10 +3,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 // Progress for "upload a file, then wait on an AI extraction" screens
 // (SyllabusUploadModal, TimetableUploadModal, AI Coach attachments). Three
 // phases, all on one bar:
-//  1. preparing  -- reading the file off the device, before any bytes are sent
-//  2. uploading  -- REAL progress from the request's upload events, filling the
+//  1. preparing: reading the file off the device, before any bytes are sent
+//  2. uploading: REAL progress from the request's upload events, filling the
 //                   first UPLOAD_SHARE of the bar ("Uploading… 45%")
-//  3. processing -- the AI call itself, which reports nothing, so the bar
+//  3. processing: the AI call itself, which reports nothing, so the bar
 //                   climbs asymptotically toward (never reaching) a cap with
 //                   rotating status text. A fake linear fill would either
 //                   finish long before the real result or look stalled.
