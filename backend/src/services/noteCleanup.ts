@@ -27,7 +27,61 @@ const INSTRUCTIONS =
 // returning a fallback string — a failed cleanup must surface as an error to
 // the caller (so note-editor.tsx's Alert fires and the original text is left
 // untouched), not silently succeed with unchanged text disguised as "cleaned."
+// One AI call rewrites its whole input, so its time grows with length — a
+// 100k-character note in one call would take minutes and time out. Longer
+// notes are split at paragraph breaks into sections this size, cleaned a few
+// at a time, and joined back in order.
+const SECTION_CHARS = 12_000;
+const PARALLEL_SECTIONS = 4;
+
+// Splits at blank lines (paragraphs); a single paragraph longer than a
+// section is split at sentence ends, and as a last resort at a space.
+export function splitIntoSections(text: string, maxChars = SECTION_CHARS): string[] {
+  if (text.length <= maxChars) return [text];
+  const pieces: string[] = [];
+  for (const paragraph of text.split(/\n{2,}/)) {
+    if (paragraph.length <= maxChars) {
+      pieces.push(paragraph);
+      continue;
+    }
+    let rest = paragraph;
+    while (rest.length > maxChars) {
+      const window = rest.slice(0, maxChars);
+      const sentenceEnd = Math.max(window.lastIndexOf('. '), window.lastIndexOf('? '), window.lastIndexOf('! '));
+      const cut = sentenceEnd > maxChars / 2 ? sentenceEnd + 1 : window.lastIndexOf(' ') > 0 ? window.lastIndexOf(' ') : maxChars;
+      pieces.push(rest.slice(0, cut).trim());
+      rest = rest.slice(cut).trim();
+    }
+    if (rest) pieces.push(rest);
+  }
+  // Pack paragraphs back together up to the section size.
+  const sections: string[] = [];
+  let current = '';
+  for (const piece of pieces) {
+    if (current && current.length + 2 + piece.length > maxChars) {
+      sections.push(current);
+      current = piece;
+    } else {
+      current = current ? `${current}\n\n${piece}` : piece;
+    }
+  }
+  if (current) sections.push(current);
+  return sections;
+}
+
 export async function cleanNoteText(text: string): Promise<string> {
+  const sections = splitIntoSections(text);
+  if (sections.length === 1) return cleanSection(text);
+  const cleaned: string[] = new Array(sections.length);
+  for (let start = 0; start < sections.length; start += PARALLEL_SECTIONS) {
+    const batch = sections.slice(start, start + PARALLEL_SECTIONS);
+    const results = await Promise.all(batch.map(cleanSection));
+    results.forEach((result, i) => (cleaned[start + i] = result));
+  }
+  return cleaned.join('\n\n');
+}
+
+async function cleanSection(text: string): Promise<string> {
   const response = await openai.responses.create({
     model: OPENAI_MODEL,
     instructions: INSTRUCTIONS,

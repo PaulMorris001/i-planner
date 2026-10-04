@@ -16,5 +16,10 @@ export const noteService = {
   // Stateless AI cleanup for speech-to-text artifacts — not tied to a saved
   // note id, see backend/src/controllers/note.controller.ts's cleanNote.
   cleanText: (text: string) =>
-    authedRequest<{ cleaned: string }>("/notes/clean", { method: "POST", body: { text } }),
+    authedRequest<{ cleaned: string }>("/notes/clean", {
+      method: "POST",
+      body: { text },
+      // Long notes are cleaned in sections on the server, which takes a while.
+      timeoutMs: 180_000,
+    }),
 };

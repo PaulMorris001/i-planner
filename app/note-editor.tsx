@@ -17,7 +17,7 @@ import { formatShortDate, formatTimeLabel } from '@/utils/date';
 import { shareNote } from '@/utils/exportNote';
 
 
-const NOTE_BODY_MAX_LENGTH = 20_000;
+const NOTE_BODY_MAX_LENGTH = 100_000;
 // Keep in sync with backend/src/constants/noteLimits.ts's NOTE_TITLE_MAX_LENGTH.
 const NOTE_TITLE_MAX_LENGTH = 200;
 

@@ -9,11 +9,16 @@
 // builds a proportionally large text-fragment tree, and a large enough one
 // has caused a real, confirmed stack-overflow crash when that tree was later
 // torn down — see app/note-editor.tsx and components/notes/NoteListSection.tsx.
+// That crash's real source (full bodies in list previews) is fixed at the
+// source now (previews are sliced to 200 chars, and the shared-note screen
+// renders per paragraph), so this cap is about editor performance instead:
+// React Native's controlled TextInput passes the whole string across on every
+// keystroke, which stays smooth at this size but lags well beyond it.
 //
 // NOTE_TITLE_MAX_LENGTH / FOLDER_NAME_MAX_LENGTH close the same crash class
 // for the two other free-text fields in this feature — title and folder name
 // are rendered the exact same way (ListRow, GridTile, PageHeader, etc.) but,
 // unlike body, had no cap anywhere until now.
-export const NOTE_BODY_MAX_LENGTH = 20_000;
+export const NOTE_BODY_MAX_LENGTH = 100_000;
 export const NOTE_TITLE_MAX_LENGTH = 200;
 export const FOLDER_NAME_MAX_LENGTH = 100;

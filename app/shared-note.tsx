@@ -145,7 +145,14 @@ export default function SharedNote() {
           <Text style={styles.title}>{preview!.title}</Text>
           <View style={styles.divider} />
           {preview!.body.trim() ? (
-            <Text style={styles.body}>{preview!.body}</Text>
+            // One <Text> per paragraph, not one for the whole note: a single huge
+            // <Text> builds a text tree large enough to overflow the stack when
+            // torn down (the original notes crash; see NoteListSection.tsx).
+            preview!.body.split(/\n{2,}/).map((paragraph, i) => (
+              <Text key={i} style={styles.body}>
+                {paragraph}
+              </Text>
+            ))
           ) : (
             <Text style={[styles.body, styles.bodyEmpty]}>No additional text</Text>
           )}
