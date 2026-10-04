@@ -10,6 +10,7 @@ import { isDuplicateKeyError } from '../utils/mongoErrors';
 import { shortId } from '../utils/shortId';
 import { env } from '../config/env';
 import { NOTE_TITLE_MAX_LENGTH, NOTE_BODY_MAX_LENGTH } from '../constants/noteLimits';
+import { isRichBody, sanitizeBody } from '../utils/richText';
 import { buildSharedNoteHtml, buildSharedNoteUnavailableHtml } from '../services/sharedNoteHtml';
 
 // Resolves a share token to the underlying note's *current* content — not a
@@ -109,7 +110,10 @@ export async function importSharedNote(req: AuthedRequest, res: Response) {
   // since the source was created, or legacy data from before caps existed,
   // would otherwise import uncapped).
   const title = note.title.slice(0, NOTE_TITLE_MAX_LENGTH);
-  const body = note.body.slice(0, NOTE_BODY_MAX_LENGTH);
+  // A formatted body is copied whole: cutting HTML at a character count would
+  // slice through a tag. It was validated and sanitized when saved; sanitizing
+  // again is a cheap safeguard on a path that skips note.controller.ts.
+  const body = isRichBody(note.body) ? sanitizeBody(note.body) : note.body.slice(0, NOTE_BODY_MAX_LENGTH);
 
   // Unfiled, like every other newly created note — the recipient can move it
   // into a folder themselves afterward.

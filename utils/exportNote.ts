@@ -3,6 +3,7 @@ import * as Sharing from 'expo-sharing';
 import { File, Paths } from 'expo-file-system';
 import { Alert } from 'react-native';
 import type { Note } from '@/types/note.types';
+import { RICH_BODY_MARKER, isRichBody } from '@/utils/richNote';
 
 // Escapes user text before embedding it in the generated HTML — title/body are
 // freeform note content, not markup, and must not be interpreted as HTML.
@@ -30,7 +31,12 @@ function sanitizeFilename(title: string): string {
 }
 
 function buildHtml(note: Note): string {
-  const bodyHtml = escapeHtml(note.body).replace(/\n/g, '<br/>');
+  // A formatted body is already HTML (cleaned by the server when it was saved);
+  // a plain one is text and must be escaped.
+  const rich = isRichBody(note.body);
+  const bodyHtml = rich
+    ? note.body.slice(RICH_BODY_MARKER.length)
+    : escapeHtml(note.body).replace(/\n/g, '<br/>');
   return `<!DOCTYPE html>
 <html>
   <head>
@@ -40,12 +46,17 @@ function buildHtml(note: Note): string {
       h1 { font-size: 22px; margin-bottom: 4px; }
       .meta { font-size: 12px; color: #888; margin-bottom: 24px; }
       .body { font-size: 15px; line-height: 1.6; white-space: pre-wrap; }
+      .body.rich { white-space: normal; }
+      .body.rich p { margin: 0 0 10px; }
+      .body.rich ul, .body.rich ol { margin: 0 0 10px; padding-left: 24px; }
+      .body.rich li p { margin: 0 0 4px; }
+      .body.rich mark { border-radius: 3px; padding: 0 2px; }
     </style>
   </head>
   <body>
     <h1>${escapeHtml(note.title)}</h1>
     <div class="meta">Exported from i-Planner &middot; ${new Date().toLocaleDateString()}</div>
-    <div class="body">${bodyHtml || '<em>No additional text</em>'}</div>
+    <div class="body${rich ? ' rich' : ''}">${bodyHtml.replace(/<[^>]*>/g, '').trim() ? bodyHtml : '<em>No additional text</em>'}</div>
   </body>
 </html>`;
 }

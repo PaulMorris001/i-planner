@@ -5,7 +5,19 @@ import { AuthedRequest } from '../middleware/requireAuth';
 import { ApiError } from '../utils/ApiError';
 import { findOwnedOrThrow } from '../utils/ownedDoc';
 import { cleanNoteText } from '../services/noteCleanup';
-import { NOTE_BODY_MAX_LENGTH, NOTE_TITLE_MAX_LENGTH } from '../constants/noteLimits';
+import { NOTE_BODY_MAX_LENGTH, NOTE_RICH_BODY_MAX_LENGTH, NOTE_TITLE_MAX_LENGTH } from '../constants/noteLimits';
+import { sanitizeBody, visibleTextLength } from '../utils/richText';
+
+// Cleans a body (formatted ones are sanitized; see utils/richText.ts) and
+// enforces the length limits: the visible text is capped at
+// NOTE_BODY_MAX_LENGTH, the stored string at NOTE_RICH_BODY_MAX_LENGTH.
+function validatedBody(body: string): string {
+  const clean = sanitizeBody(body);
+  if (clean.length > NOTE_RICH_BODY_MAX_LENGTH || visibleTextLength(clean) > NOTE_BODY_MAX_LENGTH) {
+    throw new ApiError(400, `Note is too long (max ${NOTE_BODY_MAX_LENGTH.toLocaleString()} characters).`, 'general');
+  }
+  return clean;
+}
 
 export async function listNotes(req: AuthedRequest, res: Response) {
   const notes = await Note.find({ firebaseUid: req.userId }).sort({ updatedAt: -1 });
@@ -22,9 +34,7 @@ export async function createNote(req: AuthedRequest, res: Response) {
   if (trimmedTitle.length > NOTE_TITLE_MAX_LENGTH) {
     throw new ApiError(400, `Title is too long (max ${NOTE_TITLE_MAX_LENGTH.toLocaleString()} characters).`, 'general');
   }
-  if (typeof body === 'string' && body.length > NOTE_BODY_MAX_LENGTH) {
-    throw new ApiError(400, `Note is too long (max ${NOTE_BODY_MAX_LENGTH.toLocaleString()} characters).`, 'general');
-  }
+  const cleanBody = typeof body === 'string' ? validatedBody(body) : '';
   // Verified against the owning user, not just trusted from the client, so a
   // note can never end up silently referencing another user's folder (or one
   // that no longer exists) — findOwnedOrThrow throws its own clean 404 if not.
@@ -39,7 +49,7 @@ export async function createNote(req: AuthedRequest, res: Response) {
     // string (including simply omitted) just starts empty. updateNote below
     // is stricter: a wrong type there is far more likely a client bug acting
     // on an *existing* note than an intentional "clear the body."
-    body: typeof body === 'string' ? body : '',
+    body: cleanBody,
     ...(typeof folderId === 'string' && folderId ? { folderId } : {}),
   });
 
@@ -71,10 +81,7 @@ export async function updateNote(req: AuthedRequest, res: Response) {
     if (typeof body !== 'string') {
       throw new ApiError(400, 'Body must be text.', 'general');
     }
-    if (body.length > NOTE_BODY_MAX_LENGTH) {
-      throw new ApiError(400, `Note is too long (max ${NOTE_BODY_MAX_LENGTH.toLocaleString()} characters).`, 'general');
-    }
-    note.body = body;
+    note.body = validatedBody(body);
   }
   // Explicit null (or '') un-files the note — the "move to no folder" case —
   // distinct from folderId simply being absent from the patch, which leaves

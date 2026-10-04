@@ -19,6 +19,10 @@
 // for the two other free-text fields in this feature — title and folder name
 // are rendered the exact same way (ListRow, GridTile, PageHeader, etc.) but,
 // unlike body, had no cap anywhere until now.
+// Limit on the VISIBLE text of a note (what the user types).
 export const NOTE_BODY_MAX_LENGTH = 100_000;
+// Ceiling on the stored string for a formatted note, whose HTML markup adds
+// size on top of the text. Roughly 3x the text limit, enough for heavy formatting.
+export const NOTE_RICH_BODY_MAX_LENGTH = 300_000;
 export const NOTE_TITLE_MAX_LENGTH = 200;
 export const FOLDER_NAME_MAX_LENGTH = 100;

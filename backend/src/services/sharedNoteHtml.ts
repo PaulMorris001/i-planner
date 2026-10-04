@@ -1,3 +1,5 @@
+import { RICH_BODY_MARKER, isRichBody, sanitizeRichHtml } from '../utils/richText';
+
 const APP_STORE_URL = "https://apps.apple.com/app/id6792868417";
 const PLAY_STORE_URL =
   "https://play.google.com/store/apps/details?id=com.obitoventures.iplanner";
@@ -19,6 +21,13 @@ const PAGE_STYLES = `
   h1 { font-size: 22px; margin: 0 0 4px; }
   .meta { font-size: 12px; color: #A8A7BE; margin-bottom: 20px; }
   .body { font-size: 15px; line-height: 1.6; white-space: pre-wrap; }
+  .body.rich { white-space: normal; }
+  .body.rich p { margin: 0 0 10px; }
+  .body.rich ul, .body.rich ol { margin: 0 0 10px; padding-left: 24px; }
+  .body.rich li p { margin: 0 0 4px; }
+  .body.rich h1, .body.rich h2, .body.rich h3 { margin: 14px 0 8px; line-height: 1.3; }
+  .body.rich blockquote { margin: 0 0 10px; padding-left: 14px; border-left: 3px solid #E4E3EF; color: #6B6A80; }
+  .body.rich mark { border-radius: 3px; padding: 0 2px; }
   /* Pinned to the bottom of the screen so "Open in i-Planner" is visible
      immediately, however long the note. The page's bottom padding reserves
      the same space so the note's last lines can scroll clear of it. */
@@ -54,12 +63,17 @@ export function buildSharedNoteHtml(
   note: { title: string; body: string },
   token: string,
 ): string {
-  const bodyHtml = escapeHtml(note.body).replace(/\n/g, "<br/>");
+  // A formatted body is HTML saved by the editor; it is sanitized again here
+  // because this page is public and unauthenticated. A plain one is text.
+  const rich = isRichBody(note.body);
+  const bodyHtml = rich
+    ? sanitizeRichHtml(note.body.slice(RICH_BODY_MARKER.length))
+    : escapeHtml(note.body).replace(/\n/g, "<br/>");
   return page(
     note.title,
     `<h1>${escapeHtml(note.title)}</h1>
     <div class="meta">Shared from i-Planner</div>
-    <div class="body">${bodyHtml || "<em>No additional text</em>"}</div>`,
+    <div class="body${rich ? " rich" : ""}">${bodyHtml.replace(/<[^>]*>/g, "").trim() ? bodyHtml : "<em>No additional text</em>"}</div>`,
     `<a class="open-btn" href="iplanner://shared-note?token=${encodeURIComponent(token)}">Open in i-Planner</a>
     <div class="stores">Don't have the app? <a href="${APP_STORE_URL}">App Store</a> &middot; <a href="${PLAY_STORE_URL}">Google Play</a></div>`,
   );

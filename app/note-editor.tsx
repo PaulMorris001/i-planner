@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, Alert, Keyboard, ActivityIndicator, Share, Platform } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useNavigation, usePreventRemove } from '@react-navigation/native';
@@ -9,12 +9,23 @@ import { ShareOptionsModal } from '@/components/notes/ShareOptionsModal';
 import { Colors, Spacing, Radius } from '@/constants/theme';
 import { useNotes } from '@/hooks/useNotes';
 import { useFolders } from '@/hooks/useFolders';
-import { useDictation, joinDictationText } from '@/hooks/useDictation';
+import { useDictation } from '@/hooks/useDictation';
 import { noteService } from '@/services/note.service';
 import { sharedNoteService } from '@/services/sharedNote.service';
 import { confirmDelete } from '@/utils/confirmDelete';
 import { formatShortDate, formatTimeLabel } from '@/utils/date';
 import { shareNote } from '@/utils/exportNote';
+import { RichText, useBridgeState, useEditorBridge } from '@10play/tentap-editor';
+import { NoteFormatToolbar } from '@/components/notes/NoteFormatToolbar';
+import { editorHtml } from '@/editor-web/build/editorHtml';
+import { noteEditorBridges } from '@/utils/richText/editorBridges';
+import {
+  appendTextToEditorHtml,
+  bodyToEditorHtml,
+  bodyToPlainText,
+  editorHtmlToBody,
+  plainTextToEditorHtml,
+} from '@/utils/richNote';
 
 
 const NOTE_BODY_MAX_LENGTH = 100_000;
@@ -22,9 +33,17 @@ const NOTE_BODY_MAX_LENGTH = 100_000;
 const NOTE_TITLE_MAX_LENGTH = 200;
 
 const AUTOSAVE_INTERVAL_MS = 8_000;
+// Typing is read out of the editor (a WebView) this long after the last change.
+const EDITOR_SYNC_DEBOUNCE_MS = 250;
+// How long the editor's own echo of an app-made change is ignored.
+const EDITOR_ECHO_MS = 600;
+// The editor counts text slightly differently from this screen (list markers,
+// line breaks), so "full" is declared this many characters early.
+const NOTE_FULL_MARGIN = 100;
 
+// A title for a note whose title field is empty: its first line of text.
 function deriveFallbackTitle(body: string): string {
-  const firstLine = body.trim().split('\n')[0]?.trim() ?? '';
+  const firstLine = bodyToPlainText(body.slice(0, 2000)).trim().split('\n')[0]?.replace(/^•\s*/, '').trim() ?? '';
   if (!firstLine) return '';
   return firstLine.length > 60 ? firstLine.slice(0, 60) : firstLine;
 }
@@ -36,6 +55,9 @@ export default function NoteEditor() {
   const navigation = useNavigation();
 
   const [title, setTitle] = useState('');
+  // The note's body in its STORED form: the editor's HTML behind RICH_BODY_MARKER,
+  // or '' when empty (see utils/richNote.ts). Always the last text pulled from
+  // the editor, never edited directly.
   const [body, setBody] = useState('');
   const [newNoteFolderId, setNewNoteFolderId] = useState<string | undefined>(folderIdParam);
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
@@ -48,15 +70,13 @@ export default function NoteEditor() {
   // True once any save (Save button or autosave) has gone through on this
   // screen - drives the green "Saved" state of the header button.
   const [hasSaved, setHasSaved] = useState(false);
+  // True from the moment the editor reports a change until that change has been
+  // pulled into `body` (typing is debounced). Counts as unsaved, so leaving the
+  // screen in that gap can't lose the last few keystrokes.
+  const [pendingSync, setPendingSync] = useState(false);
   const editing = savedId ? notes.find((n) => n.id === savedId) ?? null : null;
 
-  const bodyInputRef = useRef<TextInput>(null);
   const warnedMaxLengthRef = useRef(false);
-  // Snapshot of `body` taken the instant dictation starts — each dictation
-  // "result" event carries the whole utterance recognized so far, not a
-  // delta, so the live text replaces (not appends to) whatever was already
-  // there before this snapshot was taken.
-  const dictationBaseTextRef = useRef('');
   // Snapshot of `body` taken right before a Clean request fires, restored on Revert.
   const preCleanBodyRef = useRef('');
   // Set only when usePreventRemove blocks a real navigation attempt (back
@@ -82,28 +102,144 @@ export default function NoteEditor() {
   const busyRef = useRef(false);
   const lastSavedRef = useRef<{ title: string; body: string }>({ title: '', body: '' });
 
+  // --- Rich text editor -----------------------------------------------------
+  // The editor runs in a WebView (see editor-web/), so everything below is
+  // asynchronous: content is pulled out with getHTML() rather than read from a
+  // controlled input.
+  const [initialEditorHtml] = useState(() => bodyToEditorHtml(editing?.body ?? ''));
+  const onEditorChangeRef = useRef<() => void>(() => {});
+  const editor = useEditorBridge({
+    customSource: editorHtml,
+    bridgeExtensions: noteEditorBridges,
+    initialContent: initialEditorHtml,
+    autofocus: false,
+    // This screen's own keyboard handling (ScreenWrapper) already lifts the
+    // page above the keyboard; the editor's built-in avoidance would double up.
+    avoidIosKeyboard: false,
+    onChange: () => onEditorChangeRef.current(),
+  });
+  const editorState = useBridgeState(editor);
+  // False until the editor's first content has been read and recorded as the
+  // note's starting point (see the effect below). Saving is blocked until then,
+  // so an existing note's body can never be overwritten with an empty one.
+  const baselineReadyRef = useRef(false);
+  // Changes the app makes to the editor itself (load, revert, dictation)
+  // echo back as change events; those must not count as the user typing.
+  const suppressUntilRef = useRef(0);
+  const dictationActiveRef = useRef(false);
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dictationBaseHtmlRef = useRef('');
+  const dictationBaseLengthRef = useRef(0);
+
+  const applyBody = (stored: string) => {
+    bodyRef.current = stored;
+    setBody(stored);
+  };
+
+  const pullBodyFromEditor = async () => editorHtmlToBody(await editor.getHTML());
+
+  // Reads what the editor currently holds into `body`. Also what Save,
+  // autosave and leaving the screen call first, so none of them ever act on text
+  // that is still waiting out the typing debounce.
+  const syncBodyFromEditor = async (): Promise<string> => {
+    if (syncTimerRef.current) {
+      clearTimeout(syncTimerRef.current);
+      syncTimerRef.current = null;
+    }
+    const stored = await pullBodyFromEditor();
+    applyBody(stored);
+    setPendingSync(false);
+    enforceLengthLimit(stored);
+    return stored;
+  };
+
+  // The latest body: pulled from the editor if typing is still waiting to sync.
+  const currentBody = async (): Promise<string> => (syncTimerRef.current ? syncBodyFromEditor() : bodyRef.current);
+
+  onEditorChangeRef.current = () => {
+    if (!baselineReadyRef.current || dictationActiveRef.current || Date.now() < suppressUntilRef.current) return;
+    setPendingSync(true);
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    syncTimerRef.current = setTimeout(() => {
+      syncBodyFromEditor().catch((err) => console.error('[NoteEditor] failed to read the editor', err));
+    }, EDITOR_SYNC_DEBOUNCE_MS);
+  };
+
+  useEffect(
+    () => () => {
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    },
+    []
+  );
+
+  // Puts `stored` into the editor exactly as given, and makes it the screen's
+  // body without reading the editor back. Used by Discard and Revert, which must
+  // restore a previously stored string EXACTLY: reading it back could differ by a
+  // harmless serialization detail and leave the note looking edited forever,
+  // which would trap the user in the "Save changes?" prompt.
+  const restoreBody = (stored: string) => {
+    suppressUntilRef.current = Date.now() + EDITOR_ECHO_MS;
+    editor.setContent(bodyToEditorHtml(stored));
+    applyBody(stored);
+    setPendingSync(false);
+  };
+
+  // Loads brand-new content (the AI's cleaned text) and records what the editor
+  // makes of it as the body.
+  const loadEditorHtml = async (html: string) => {
+    suppressUntilRef.current = Date.now() + EDITOR_ECHO_MS;
+    editor.setContent(html);
+    const stored = await pullBodyFromEditor();
+    applyBody(stored);
+    setPendingSync(false);
+    return stored;
+  };
+
+  // Once the editor is up: take ITS rendering of the note as the starting point.
+  // Comparing against the stored string instead would flag every note as edited
+  // the moment it opens (an older plain-text note, or any note whose HTML the
+  // editor writes slightly differently), and Save would never start grey.
+  useEffect(() => {
+    if (!editorState.isReady || baselineReadyRef.current) return;
+    let cancelled = false;
+    (async () => {
+      // The note arrived after the editor was created: put its text in.
+      if (editing && bodyToEditorHtml(editing.body) !== initialEditorHtml) {
+        suppressUntilRef.current = Date.now() + EDITOR_ECHO_MS;
+        editor.setContent(bodyToEditorHtml(editing.body));
+      }
+      const stored = await pullBodyFromEditor();
+      if (cancelled) return;
+      baselineReadyRef.current = true;
+      lastSavedRef.current = { title: lastSavedRef.current.title, body: stored };
+      applyBody(stored);
+    })().catch((err) => console.error('[NoteEditor] failed to load the note into the editor', err));
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editorState.isReady, editing?.id]);
+
   useEffect(() => {
     if (editing) {
       setTitle(editing.title);
-      setBody(editing.body);
-      lastSavedRef.current = { title: editing.title, body: editing.body };
+      lastSavedRef.current = { title: editing.title, body: lastSavedRef.current.body };
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   // Persists whatever's currently typed if it differs from the last save.
-  // Shared by the autosave interval and the max-length hard stop. Takes an
-  // optional override so the max-length stop can force-save the just-truncated
-  // text immediately — the refs it'd otherwise read from only catch up to a
-  // setState on the next render, one render too late for that case.
-  const runAutosave = async (override?: { body?: string }) => {
+  // Shared by the autosave interval and the max-length hard stop.
+  const runAutosave = async () => {
     if (busyRef.current) return;
-    // Never silently commit an unconfirmed AI-cleanup decision — the body
-    // TextInput is also locked (editable={false}) during review, so nothing
-    // else can change while this holds, but the 8s interval itself has no
-    // other reason to skip a tick.
+    // Never silently commit an unconfirmed AI-cleanup decision — the editor is
+    // also locked (not editable) during review, so nothing else can change while
+    // this holds, but the 8s interval itself has no other reason to skip a tick.
     if (cleanupState === 'reviewing') return;
-    const b = override?.body ?? bodyRef.current;
+    // See baselineReadyRef: never save before the note's real text is known.
+    if (savedIdRef.current && !baselineReadyRef.current) return;
+    if (syncTimerRef.current) await syncBodyFromEditor();
+    const b = bodyRef.current;
     const t = titleRef.current.trim() || deriveFallbackTitle(b);
     if (!t) return; // nothing worth persisting yet
     if (t === lastSavedRef.current.title && b === lastSavedRef.current.body) return;
@@ -147,6 +283,8 @@ export default function NoteEditor() {
 
   // Any text worth saving (an untitled note uses its first line as the title).
   const hasSaveableText = !!(title.trim() || deriveFallbackTitle(body));
+  // Whether the body has any visible text (not just empty formatting).
+  const hasBodyText = useMemo(() => !!bodyToPlainText(body).trim(), [body]);
   // True whenever there's something on screen that isn't reflected in the
   // last confirmed save (autosave included) — i.e. a crash, force-quit, or
   // leaving before the next 8s autosave tick would actually lose something.
@@ -154,7 +292,7 @@ export default function NoteEditor() {
   // own state — lastSavedRef only ever changes right alongside a title/body
   // state update or a re-render-triggering state change nearby (see
   // handleSave's own comment for the one case that needed extra care).
-  const isDirty = title.trim() !== lastSavedRef.current.title || body !== lastSavedRef.current.body;
+  const isDirty = pendingSync || title.trim() !== lastSavedRef.current.title || body !== lastSavedRef.current.body;
   // Save is only offered when there's an unsaved change worth keeping. States:
   // grey (nothing new: just opened, or unchanged since the last save), blue
   // (unsaved change), green "Saved" (a save went through, nothing edited since).
@@ -166,60 +304,90 @@ export default function NoteEditor() {
   const currentFolderId = editing ? editing.folderId : newNoteFolderId;
   const currentFolderName = currentFolderId ? folders.find((f) => f.id === currentFolderId)?.name : undefined;
 
-  const handleBodyChange = (text: string) => {
-    if (text.length < NOTE_BODY_MAX_LENGTH) {
-      warnedMaxLengthRef.current = false;
-      setBody(text);
-      return;
-    }
-    // Defense in depth alongside the TextInput's own maxLength prop — under a
-    // long dictation session that prop alone wasn't enough to stop the app
-    // from receiving far more text than this ever clipped to (see the
-    // stack-overflow crash this guards against, above).
-    const truncated = text.slice(0, NOTE_BODY_MAX_LENGTH);
-    setBody(truncated);
+  // The note has hit the length limit (the editor itself stops accepting text
+  // there): stop dictation, save what's there, and say so once.
+  const notifyNoteFull = () => {
     if (warnedMaxLengthRef.current) return;
     warnedMaxLengthRef.current = true;
     // Ending focus is what actually stops OS-level dictation — it has no API
-    // for the app to tell it "stop," it just keeps listening as long as this
+    // for the app to tell it "stop," it just keeps listening as long as the
     // field is focused.
-    bodyInputRef.current?.blur();
+    editor.blur();
     Keyboard.dismiss();
-    // The in-app mic button (below) isn't tied to keyboard focus at all, so
-    // blurring/dismissing the keyboard above does nothing to it — this is the
+    // The in-app mic button isn't tied to keyboard focus at all, so this is the
     // direct, explicit stop the OS-dictation path above can only approximate.
     if (dictation.recording) dictation.stop();
-    runAutosave({ body: truncated }).finally(() => {
+    runAutosave().finally(() => {
       Alert.alert(
         'Note is full',
-        `This note has reached the ${NOTE_BODY_MAX_LENGTH.toLocaleString()}-character limit, so typing and dictation have been stopped here. What you've written has been saved — start a new note to keep going.`
+        `This note has reached the ${NOTE_BODY_MAX_LENGTH.toLocaleString()}-character limit, so typing and dictation have been stopped here. What you've written has been saved, so start a new note to keep going.`
       );
     });
   };
 
+  const enforceLengthLimit = (stored: string) => {
+    if (bodyToPlainText(stored).length < NOTE_BODY_MAX_LENGTH - NOTE_FULL_MARGIN) {
+      warnedMaxLengthRef.current = false;
+      return;
+    }
+    notifyNoteFull();
+  };
+
   const dictation = useDictation({
     onTranscriptChange: (liveText) => {
-      handleBodyChange(joinDictationText(dictationBaseTextRef.current, liveText));
+      dictationActiveRef.current = true;
+      // Dictation owns the editor's content while it runs: each update replaces
+      // the previous session's text after the original note, so changes made
+      // through the editor itself are ignored until it ends.
+      const room = Math.max(0, NOTE_BODY_MAX_LENGTH - dictationBaseLengthRef.current);
+      const text = liveText.length > room ? liveText.slice(0, room) : liveText;
+      editor.setContent(appendTextToEditorHtml(dictationBaseHtmlRef.current, text));
+      if (liveText.length > room) notifyNoteFull();
+    },
+    onEnd: () => {
+      dictationActiveRef.current = false;
+      // Whatever was dictated becomes part of the note.
+      suppressUntilRef.current = Date.now() + EDITOR_ECHO_MS;
+      syncBodyFromEditor().catch((err) => console.error('[NoteEditor] failed to read dictated text', err));
     },
   });
 
-  const handleToggleDictation = () => {
+  // The editor can't be typed into while dictating or while an AI cleanup is
+  // waiting on the Keep/Revert choice (Revert restores an exact snapshot taken
+  // before Clean ran, so a manual edit during review would be silently lost).
+  useEffect(() => {
+    if (!editorState.isReady) return;
+    editor.setEditable(!dictation.recording && cleanupState !== 'reviewing');
+    if (!dictation.recording) dictationActiveRef.current = false;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editorState.isReady, dictation.recording, cleanupState]);
+
+  const handleToggleDictation = async () => {
     if (dictation.recording) {
       dictation.stop();
-    } else {
-      dictationBaseTextRef.current = body;
-      dictation.start();
+      return;
     }
+    if (!baselineReadyRef.current) return;
+    const stored = await currentBody();
+    dictationBaseHtmlRef.current = bodyToEditorHtml(stored);
+    dictationBaseLengthRef.current = bodyToPlainText(stored).length;
+    dictation.start();
   };
 
   const handleClean = async () => {
-    if (cleanupState !== 'idle' || dictation.recording || !body.trim()) return;
+    if (cleanupState !== 'idle' || dictation.recording || !baselineReadyRef.current) return;
     Keyboard.dismiss();
-    preCleanBodyRef.current = body;
+    editor.blur();
+    const stored = await currentBody();
+    const plain = bodyToPlainText(stored);
+    if (!plain.trim()) return;
+    preCleanBodyRef.current = stored;
     setCleanupState('loading');
     try {
-      const { cleaned } = await noteService.cleanText(body);
-      handleBodyChange(cleaned);
+      // The AI works on the note's text; formatting isn't part of what it
+      // returns, so the cleaned version replaces it (Revert brings it back).
+      const { cleaned } = await noteService.cleanText(plain);
+      await loadEditorHtml(plainTextToEditorHtml(cleaned));
       setCleanupState('reviewing');
     } catch (err) {
       console.error('[NoteEditor] failed to clean note', err);
@@ -236,7 +404,7 @@ export default function NoteEditor() {
   };
 
   const handleRevertCleaned = () => {
-    handleBodyChange(preCleanBodyRef.current);
+    restoreBody(preCleanBodyRef.current);
     setCleanupState('idle');
   };
 
@@ -246,8 +414,12 @@ export default function NoteEditor() {
   // save, which makes isDirty false by construction — nothing to separately
   // "undo" server-side, since nothing here was ever persisted.
   const handleDiscardChanges = () => {
+    if (syncTimerRef.current) {
+      clearTimeout(syncTimerRef.current);
+      syncTimerRef.current = null;
+    }
     setTitle(lastSavedRef.current.title);
-    setBody(lastSavedRef.current.body);
+    restoreBody(lastSavedRef.current.body);
   };
 
   // Same fallback-title behavior runAutosave already uses — a user who
@@ -255,22 +427,23 @@ export default function NoteEditor() {
   // hit a dead end tapping "Save" here.
   const handleSaveBeforeLeaving = async () => {
     if (busyRef.current) return;
-    const t = title.trim() || deriveFallbackTitle(body);
-    if (!t) {
-      // Nothing meaningful typed on either field — nothing to lose either way.
-      handleDiscardChanges();
-      return;
-    }
     busyRef.current = true;
     setSubmitting(true);
     try {
+      const b = await currentBody();
+      const t = title.trim() || deriveFallbackTitle(b);
+      if (!t) {
+        // Nothing meaningful typed on either field — nothing to lose either way.
+        handleDiscardChanges();
+        return;
+      }
       if (savedId) {
-        await updateNote(savedId, { title: t, body });
+        await updateNote(savedId, { title: t, body: b });
       } else {
-        const created = await createNote({ title: t, body, folderId: newNoteFolderId });
+        const created = await createNote({ title: t, body: b, folderId: newNoteFolderId });
         setSavedId(created.id);
       }
-      lastSavedRef.current = { title: t, body };
+      lastSavedRef.current = { title: t, body: b };
     } catch (err) {
       console.error('[NoteEditor] failed to save note before leaving', err);
       Alert.alert("Couldn't save", 'Check your connection and try again.');
@@ -319,6 +492,12 @@ export default function NoteEditor() {
 
   const handleSave = async () => {
     if (!canSave || busyRef.current) return;
+    // See baselineReadyRef: never save before the note's real text is known.
+    if (savedIdRef.current && !baselineReadyRef.current) return;
+    // Saving means "done typing for now", so put the keyboard away. The editor
+    // lives in a WebView, so it has to be blurred itself, not just the keyboard.
+    editor.blur();
+    Keyboard.dismiss();
     // Tapping Save while an AI-cleanup decision is still unresolved implicitly
     // means "keep this version" — clear the review state so the guard above
     // doesn't intercept this save's own exit and re-litigate a decision Save
@@ -327,18 +506,20 @@ export default function NoteEditor() {
     busyRef.current = true;
     setSubmitting(true);
     try {
+      const b = await currentBody();
       // Same first-line fallback as autosave for a note with no title.
-      const t = title.trim() || deriveFallbackTitle(body);
+      const t = title.trim() || deriveFallbackTitle(b);
+      if (!t) return;
       if (savedIdRef.current) {
-        await updateNote(savedIdRef.current, { title: t, body });
+        await updateNote(savedIdRef.current, { title: t, body: b });
       } else {
         // Record the new note's id: the editor stays open after saving now, so
         // the next save must update this note, not create a second one.
-        const created = await createNote({ title: t, body, folderId: newNoteFolderId });
+        const created = await createNote({ title: t, body: b, folderId: newNoteFolderId });
         savedIdRef.current = created.id;
         setSavedId(created.id);
       }
-      lastSavedRef.current = { title: t, body };
+      lastSavedRef.current = { title: t, body: b };
       if (!title.trim()) setTitle(t);
       // Stays on the screen; the header button turns green "Saved" (and
       // setHasSaved re-renders so isDirty catches up to the ref above).
@@ -505,25 +686,13 @@ export default function NoteEditor() {
           </Pressable>
         </View>
 
-        <TextInput
-          ref={bodyInputRef}
-          value={body}
-          onChangeText={handleBodyChange}
-          placeholder="Write something…"
-          placeholderTextColor={Colors.textMuted}
-          style={[styles.bodyInput, cleanupState === 'reviewing' && styles.bodyInputReviewing]}
-          multiline
-          textAlignVertical="top"
-          maxLength={NOTE_BODY_MAX_LENGTH}
-          // Locked during review — Revert restores an exact snapshot taken
-          // before Clean ran, so a manual edit made while reviewing would
-          // otherwise get silently discarded by Revert with no warning.
-          editable={cleanupState !== 'reviewing'}
-        />
+        <View style={styles.editorWrap}>
+          <RichText editor={editor} style={styles.richText} />
+        </View>
 
         {cleanupState === 'reviewing' ? (
           <View style={styles.reviewBanner}>
-            <Text style={styles.reviewBannerText}>AI cleaned this note — read it over, then choose:</Text>
+            <Text style={styles.reviewBannerText}>AI cleaned this note (formatting is reset). Read it over, then choose:</Text>
             <View style={styles.reviewBannerActions}>
               <Pressable style={styles.revertBtn} onPress={handleRevertCleaned}>
                 <Text style={styles.revertBtnText}>Revert</Text>
@@ -538,10 +707,10 @@ export default function NoteEditor() {
             <Pressable
               hitSlop={10}
               onPress={handleClean}
-              disabled={cleanupState !== 'idle' || dictation.recording || !body.trim()}
-              style={[styles.cleanBtn, (dictation.recording || !body.trim()) && styles.cleanBtnDisabled]}
+              disabled={cleanupState !== 'idle' || dictation.recording || !hasBodyText}
+              style={[styles.cleanBtn, (dictation.recording || !hasBodyText) && styles.cleanBtnDisabled]}
             >
-              <IconSymbol name="sparkles" color={Colors.primaryLight} size={16} />
+              <IconSymbol name="paintbrush.fill" color={Colors.primaryLight} size={16} />
               <Text style={styles.cleanBtnText}>Clean</Text>
             </Pressable>
 
@@ -555,6 +724,8 @@ export default function NoteEditor() {
           </>
         )}
       </View>
+
+      {editorState.isFocused && !dictation.recording && cleanupState === 'idle' && <NoteFormatToolbar editor={editor} />}
 
       <FolderPickerModal
         visible={folderPickerOpen}
@@ -723,16 +894,14 @@ const styles = StyleSheet.create({
     color: Colors.primaryLight,
     maxWidth: 120,
   },
-  bodyInput: {
+  editorWrap: {
     flex: 1,
     marginTop: 14,
-    fontSize: 16,
-    lineHeight: 23,
-    color: Colors.textPrimary,
-    padding: 0,
+    overflow: 'hidden',
   },
-  bodyInputReviewing: {
-    color: Colors.textSecondary,
+  richText: {
+    flex: 1,
+    backgroundColor: 'transparent',
   },
   micFab: {
     position: 'absolute',

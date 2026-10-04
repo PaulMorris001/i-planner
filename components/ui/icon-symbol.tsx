@@ -57,6 +57,17 @@ const MAPPING = {
   'magnifyingglass': 'search',
   'mic.fill': 'mic',
   'link': 'link',
+  // Note formatting toolbar (components/notes/NoteFormatToolbar.tsx).
+  'bold': 'format-bold',
+  'italic': 'format-italic',
+  'highlighter': 'border-color',
+  'text.alignleft': 'format-align-left',
+  'text.aligncenter': 'format-align-center',
+  'text.alignright': 'format-align-right',
+  'list.dash': 'format-list-bulleted',
+  'list.number': 'format-list-numbered',
+  // Note editor's Clean (AI cleanup) button.
+  'paintbrush.fill': 'brush',
 } satisfies IconMapping;
 
 /**

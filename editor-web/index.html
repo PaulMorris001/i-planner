@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <title>NoteEditor</title>
+  </head>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: transparent;
+    }
+    #root > div:nth-of-type(1) {
+      position: absolute;
+      height: 100%;
+      overflow: auto;
+      width: 100%;
+      top: 0;
+      bottom: 0;
+    }
+    #root div .ProseMirror {
+      min-height: 100%;
+      overflow: visible;
+      padding-bottom: 72px; /* room under the last line for the Clean / mic buttons */
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      font-size: 16px;
+      line-height: 23px;
+      color: #0f0e2a;
+    }
+    .ProseMirror:focus {
+      outline: none;
+    }
+    .ProseMirror p {
+      margin: 0 0 10px;
+    }
+    .ProseMirror ul,
+    .ProseMirror ol {
+      margin: 0 0 10px;
+      padding-left: 24px;
+    }
+    .ProseMirror li p {
+      margin: 0 0 4px;
+    }
+    .ProseMirror mark {
+      border-radius: 3px;
+      padding: 0 1px;
+    }
+    .ProseMirror p.is-editor-empty:first-child::before {
+      color: #a8a7be;
+    }
+    .highlight-background {
+      background-color: #e6e6ff;
+    }
+  </style>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>

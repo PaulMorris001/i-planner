@@ -16,5 +16,10 @@
     ".expo/types/**/*.d.ts",
     "expo-env.d.ts",
     ".expo/types/**/*.ts"
+  ],
+  "exclude": [
+    "editor-web/*.ts",
+    "editor-web/*.tsx",
+    "editor-web/build/index.html"
   ]
 }

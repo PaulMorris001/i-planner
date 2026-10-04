@@ -22,12 +22,14 @@
     "googleapis": "^173.0.0",
     "mongoose": "^8.6.0",
     "openai": "^6.48.0",
-    "resend": "^6.28.1"
+    "resend": "^6.28.1",
+    "sanitize-html": "^2.17.5"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/node": "^22.5.0",
+    "@types/sanitize-html": "^2.16.2",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.9.2"
   }

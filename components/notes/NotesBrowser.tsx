@@ -20,6 +20,7 @@ import { useFolders } from '@/hooks/useFolders';
 import { useNotesViewMode } from '@/hooks/useNotesViewMode';
 import { confirmDelete } from '@/utils/confirmDelete';
 import { shareNote } from '@/utils/exportNote';
+import { bodyToPlainText } from '@/utils/richNote';
 import type { Note } from '@/types/note.types';
 import type { Folder } from '@/types/folder.types';
 
@@ -33,6 +34,21 @@ function openEditor(id?: string, parentId?: string) {
 
 function openFolder(id: string) {
   router.push(`${Routes.NOTES_FOLDER}?id=${id}`);
+}
+
+// Lowercased visible text of a note's body for search. A formatted body is
+// HTML, and searching the markup would match tag names ("p", "strong"), so it
+// is converted first. Cached per note version: converting every note on every
+// keystroke of the search box would be wasteful for long notes.
+const searchableBodyCache = new Map<string, string>();
+function searchableBody(note: Note): string {
+  const key = `${note.id}:${note.updatedAt}`;
+  let text = searchableBodyCache.get(key);
+  if (text === undefined) {
+    text = bodyToPlainText(note.body).toLowerCase();
+    searchableBodyCache.set(key, text);
+  }
+  return text;
 }
 
 interface NotesBrowserProps {
@@ -85,7 +101,7 @@ export function NotesBrowser({ parentId, emptyNotesText, searchPlaceholder, show
   const matchingNotes = isSearching
     ? notes.filter((n) => {
         if (searchScope && (!n.folderId || !searchScope.has(n.folderId))) return false;
-        return n.title.toLowerCase().includes(trimmedQuery) || n.body.toLowerCase().includes(trimmedQuery);
+        return n.title.toLowerCase().includes(trimmedQuery) || searchableBody(n).includes(trimmedQuery);
       })
     : [];
 

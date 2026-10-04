@@ -3,6 +3,7 @@ import { Card } from '@/components/ui/Card';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { formatShortDate } from '@/utils/date';
+import { bodyToPlainText } from '@/utils/richNote';
 import type { Note } from '@/types/note.types';
 
 // Cap what ever reaches <Text numberOfLines={1}> below, not just what's
@@ -17,9 +18,13 @@ import type { Note } from '@/types/note.types';
 // means this never builds more than a few hundred characters' worth of
 // fragments, regardless of how large the actual note is.
 const PREVIEW_CHARS = 200;
+// A formatted body is HTML, so it is turned into text first. Only its start is
+// read (generous, since markup takes up room) so a huge note stays cheap, and
+// line breaks become spaces because the preview is one line.
+const PREVIEW_SOURCE_CHARS = 4000;
 function previewText(body: string): string {
-  const trimmed = body.trim();
-  return trimmed.length > PREVIEW_CHARS ? `${trimmed.slice(0, PREVIEW_CHARS)}…` : trimmed;
+  const text = bodyToPlainText(body.slice(0, PREVIEW_SOURCE_CHARS)).replace(/\s+/g, ' ').trim();
+  return text.length > PREVIEW_CHARS ? `${text.slice(0, PREVIEW_CHARS)}…` : text;
 }
 
 interface NoteListSectionProps {
@@ -53,7 +58,7 @@ export function NoteListSection({ notes, onOpenNote, onShowActions, emptyText }:
               <IconSymbol name="ellipsis" color={Colors.textMuted} size={18} />
             </Pressable>
           </View>
-          {note.body.trim() ? (
+          {previewText(note.body) ? (
             <Text style={styles.noteBody} numberOfLines={1}>
               {previewText(note.body)}
             </Text>

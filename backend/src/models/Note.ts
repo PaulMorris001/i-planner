@@ -1,5 +1,5 @@
 import { Schema, model, Document } from 'mongoose';
-import { NOTE_TITLE_MAX_LENGTH, NOTE_BODY_MAX_LENGTH } from '../constants/noteLimits';
+import { NOTE_TITLE_MAX_LENGTH, NOTE_RICH_BODY_MAX_LENGTH } from '../constants/noteLimits';
 
 export interface NoteDocument extends Document {
   firebaseUid: string;
@@ -25,7 +25,7 @@ const noteSchema = new Schema<NoteDocument>(
     // the controller is expected to have already caught it before this ever
     // matters.
     title: { type: String, required: true, trim: true, maxlength: NOTE_TITLE_MAX_LENGTH },
-    body: { type: String, default: '', maxlength: NOTE_BODY_MAX_LENGTH },
+    body: { type: String, default: '', maxlength: NOTE_RICH_BODY_MAX_LENGTH },
     folderId: { type: String },
   },
   // Unlike Habit, updatedAt is kept — Habit's derived fields (streak/week) come from
