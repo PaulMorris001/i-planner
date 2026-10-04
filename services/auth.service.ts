@@ -1,5 +1,6 @@
 import { auth } from "@/config/firebase";
 import { authEmailService } from "@/services/authEmail.service";
+import { getDeviceInfo } from "@/utils/deviceId";
 import type {
   AuthError,
   AuthResponse,
@@ -72,8 +73,8 @@ export const authService = {
       );
       // Not awaited — a Resend/backend hiccup here must never block or fail
       // an otherwise-successful sign-in.
-      authEmailService
-        .sendLoginNotify(cred.user.displayName ?? undefined)
+      getDeviceInfo()
+        .then((device) => authEmailService.sendLoginNotify(cred.user.displayName ?? undefined, device))
         .catch((err) => console.error("[auth] failed to send login-notify email", err));
       return { user: mapFirebaseUser(cred.user) };
     } catch (err) {
@@ -90,8 +91,8 @@ export const authService = {
       );
       await updateProfile(cred.user, { displayName: payload.fullName });
       // Not awaited — same reasoning as login's sendLoginNotify above.
-      authEmailService
-        .sendWelcome(payload.fullName)
+      getDeviceInfo()
+        .then((device) => authEmailService.sendWelcome(payload.fullName, device))
         .catch((err) => console.error("[auth] failed to send welcome email", err));
       return { user: mapFirebaseUser(cred.user) };
     } catch (err) {

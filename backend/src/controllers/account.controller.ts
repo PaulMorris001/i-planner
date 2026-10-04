@@ -8,6 +8,14 @@ import { CoachMessage } from '../models/CoachMessage';
 import { Subscription } from '../models/Subscription';
 import { Syllabus } from '../models/Syllabus';
 import { AiUsage } from '../models/AiUsage';
+import { Bill } from '../models/Bill';
+import { SavingsGoal } from '../models/SavingsGoal';
+import { Note } from '../models/Note';
+import { Folder } from '../models/Folder';
+import { SharedNote } from '../models/SharedNote';
+import { SharedNoteImport } from '../models/SharedNoteImport';
+import { ImportedCalendarEvent } from '../models/ImportedCalendarEvent';
+import { KnownDevice } from '../models/KnownDevice';
 import { AuthedRequest } from '../middleware/requireAuth';
 
 // Wipes every piece of app data owned by this user. Firebase Auth account deletion
@@ -25,6 +33,14 @@ export async function deleteAccount(req: AuthedRequest, res: Response) {
     Subscription.deleteMany({ firebaseUid }),
     Syllabus.deleteMany({ firebaseUid }),
     AiUsage.deleteMany({ firebaseUid }),
+    Bill.deleteMany({ firebaseUid }),
+    SavingsGoal.deleteMany({ firebaseUid }),
+    Note.deleteMany({ firebaseUid }),
+    Folder.deleteMany({ firebaseUid }),
+    SharedNote.deleteMany({ firebaseUid }),
+    SharedNoteImport.deleteMany({ firebaseUid }),
+    ImportedCalendarEvent.deleteMany({ firebaseUid }),
+    KnownDevice.deleteMany({ firebaseUid }),
   ]);
 
   res.status(204).send();

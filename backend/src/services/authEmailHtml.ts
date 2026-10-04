@@ -49,14 +49,24 @@ export function buildWelcomeEmailHtml(fullName: string | undefined): { subject: 
   return { subject, html, text };
 }
 
-export function buildLoginNotifyEmailHtml(fullName: string | undefined): { subject: string; html: string; text: string } {
+// Sent only for a sign-in from a device not seen before on this account.
+export function buildLoginNotifyEmailHtml(
+  fullName: string | undefined,
+  deviceLabel: string | undefined,
+  when: Date
+): { subject: string; html: string; text: string } {
   const name = greeting(fullName);
-  const subject = 'Welcome back to i-Planner';
+  const device = deviceLabel ? escapeHtml(deviceLabel) : 'a new device';
+  // UTC, spelled out -- the server doesn't know the reader's time zone.
+  const time = when.toUTCString().replace('GMT', 'UTC');
+  const subject = 'New sign-in to your i-Planner account';
   const html = page(
-    `<h1 style="font-size:22px;margin:0 0 12px;">Welcome back, ${name}!</h1>
-    <p style="font-size:15px;line-height:1.6;margin:0;">You just signed in to i-Planner. If this wasn't you, please secure your account.</p>`
+    `<h1 style="font-size:22px;margin:0 0 12px;">New sign-in detected</h1>
+    <p style="font-size:15px;line-height:1.6;margin:0 0 12px;">Hi ${name}, your i-Planner account was just signed in to from a device we haven't seen before:</p>
+    <p style="font-size:15px;line-height:1.6;margin:0 0 12px;padding:12px 14px;background:#F7F7FB;border-radius:12px;"><strong>${device}</strong><br/><span style="color:#6B6A80;font-size:13px;">${time}</span></p>
+    <p style="font-size:15px;line-height:1.6;margin:0;">If this was you, there's nothing to do. If it wasn't, reset your password from the i-Planner sign-in screen ("Forgot password") right away.</p>`
   );
-  const text = `Welcome back, ${name}!\n\nYou just signed in to i-Planner. If this wasn't you, please secure your account.`;
+  const text = `Hi ${name}, your i-Planner account was just signed in to from a device we haven't seen before:\n\n${deviceLabel ?? 'A new device'}\n${time}\n\nIf this was you, there's nothing to do. If it wasn't, reset your password from the i-Planner sign-in screen ("Forgot password") right away.`;
   return { subject, html, text };
 }
 
