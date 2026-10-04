@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "329407085695",
+    "project_id": "iplanner-27410",
+    "storage_bucket": "iplanner-27410.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:329407085695:android:7a9aa06c2e4e9e09ef934a",
+        "android_client_info": {
+          "package_name": "com.obitoventures.iplanner"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "329407085695-rmr1kbdi61669en0uqjvi6hgfdqku2vg.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCTp__dB8o1LJIGE5ducgCzOPUAnQPITMk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "329407085695-rmr1kbdi61669en0uqjvi6hgfdqku2vg.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

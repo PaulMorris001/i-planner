@@ -146,6 +146,13 @@ function buildAlarmData(kind: AlarmKind, id: string | undefined, title: string):
 async function handleAlarmResponse(response: Notifications.NotificationResponse): Promise<void> {
   const data = response.notification.request.content.data as Record<string, unknown> | undefined;
   const kind = data?.kind;
+  // Server-sent announcement (backend scripts/sendAnnouncement.ts): open the
+  // screen it names, if any. Only in-app paths — never an arbitrary URL.
+  if (kind === 'announcement') {
+    const route = typeof data?.route === 'string' ? data.route : undefined;
+    if (route?.startsWith('/')) router.push(route as Parameters<typeof router.push>[0]);
+    return;
+  }
   if (kind !== 'task-alarm' && kind !== 'class-alarm') return;
 
   // Whichever one of the burst the user acted on, the rest have served their
@@ -263,9 +270,21 @@ async function ensureAndroidAlarmChannel(): Promise<void> {
 // at all for that device until the user happened to toggle Reminders off and
 // back on. Channel creation itself needs no notification permission to be
 // granted yet, so this is safe to run before that's ever requested.
+// Server-sent announcements (new features, updates) — their own channel so
+// users can mute them in Android settings without losing task reminders.
+// Must match ANNOUNCEMENT_CHANNEL_ID in backend/src/services/pushNotifications.ts.
+async function ensureAndroidAnnouncementsChannel(): Promise<void> {
+  if (Platform.OS !== 'android') return;
+  await Notifications.setNotificationChannelAsync('announcements', {
+    name: 'Product updates',
+    importance: Notifications.AndroidImportance.DEFAULT,
+  });
+}
+
 async function ensureAndroidChannels(): Promise<void> {
   await ensureAndroidChannel();
   await ensureAndroidAlarmChannel();
+  await ensureAndroidAnnouncementsChannel();
 }
 
 export async function requestNotificationPermission(): Promise<boolean> {

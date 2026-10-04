@@ -49,6 +49,10 @@ export interface SettingsDocument extends Document {
   // fresh install/new device can restore the user's real path instead of
   // silently defaulting to "professional" and skipping onboarding entirely.
   focusProfile?: string;
+  // Opt-in for push announcements (new features, updates) — off until the user
+  // turns it on, per App Store guideline 4.5.4. Only scripts/sendAnnouncement.ts
+  // reads it.
+  productUpdatesEnabled?: boolean;
 }
 
 const settingsSchema = new Schema<SettingsDocument>({
@@ -75,6 +79,7 @@ const settingsSchema = new Schema<SettingsDocument>({
   aiDisclosureAcknowledged: { type: Boolean, default: false },
   savingsDisclosureAcknowledged: { type: Boolean, default: false },
   focusProfile: { type: String },
+  productUpdatesEnabled: { type: Boolean, default: false },
 });
 
 export function toPublicSettings(doc: SettingsDocument | null) {
@@ -92,6 +97,7 @@ export function toPublicSettings(doc: SettingsDocument | null) {
     aiDisclosureAcknowledged: doc?.aiDisclosureAcknowledged ?? false,
     savingsDisclosureAcknowledged: doc?.savingsDisclosureAcknowledged ?? false,
     focusProfile: doc?.focusProfile,
+    productUpdatesEnabled: doc?.productUpdatesEnabled ?? false,
   };
 }
 

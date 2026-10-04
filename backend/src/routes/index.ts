@@ -18,6 +18,7 @@ import { googleOAuthRouter } from './googleOAuth.routes';
 import { microsoftOAuthRouter } from './microsoftOAuth.routes';
 import { subscriptionRouter } from './subscription.routes';
 import { calendarImportRouter } from './calendarImport.routes';
+import { pushRouter } from './push.routes';
 
 export const router = Router();
 
@@ -43,6 +44,7 @@ router.use('/syllabi', syllabusRouter);
 router.use('/timetables', timetableRouter);
 router.use('/subscription', subscriptionRouter);
 router.use('/calendar', calendarImportRouter);
+router.use('/push', pushRouter);
 
 // Sibling to /settings, not nested — settingsRouter blanket-applies requireAuth,
 // but this unauthenticated browser redirect can't carry one.

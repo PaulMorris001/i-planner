@@ -14,4 +14,6 @@ export interface Settings {
   aiDisclosureAcknowledged: boolean;
   savingsDisclosureAcknowledged: boolean;
   focusProfile?: string;
+  // Opted in to push announcements (new features, updates).
+  productUpdatesEnabled?: boolean;
 }

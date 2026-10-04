@@ -9,12 +9,14 @@
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "grant-access": "ts-node src/scripts/grantComplimentaryAccess.ts",
-    "check-access": "ts-node src/scripts/checkAccess.ts"
+    "check-access": "ts-node src/scripts/checkAccess.ts",
+    "announce": "ts-node src/scripts/sendAnnouncement.ts"
   },
   "dependencies": {
     "@apple/app-store-server-library": "^3.1.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
+    "expo-server-sdk": "^6.1.0",
     "express": "^4.19.2",
     "firebase-admin": "^14.1.0",
     "googleapis": "^173.0.0",

@@ -42,3 +42,8 @@ app-example
 # generated native folders
 /ios
 /android
+
+# Google/Firebase service account private keys -- never commit. (google-services.json
+# is different: it is the public app config and is meant to be committed.)
+*-firebase-adminsdk-*.json
+*service-account*.json

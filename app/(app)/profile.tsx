@@ -58,6 +58,7 @@ export default function Profile() {
     googleReauthRequired,
     outlookReauthRequired,
     remindersEnabled,
+    productUpdatesEnabled,
     aiAccessTasks,
     aiAccessGoals,
     aiAccessCalendar,
@@ -69,6 +70,8 @@ export default function Profile() {
     disconnectOutlookCalendar,
     enableReminders,
     disableReminders,
+    enableProductUpdates,
+    disableProductUpdates,
     setAiAccess,
   } = useSettings();
   const consent = { aiAccessTasks, aiAccessGoals, aiAccessCalendar };
@@ -155,6 +158,20 @@ export default function Profile() {
     if (!ok) {
       Alert.alert(
         "Couldn't enable reminders",
+        "Notification permission was denied. You can allow it later from your device settings.",
+      );
+    }
+  };
+
+  const handleToggleProductUpdates = async (value: boolean) => {
+    if (!value) {
+      await disableProductUpdates();
+      return;
+    }
+    const ok = await enableProductUpdates();
+    if (!ok) {
+      Alert.alert(
+        "Couldn't turn on updates",
         "Notification permission was denied. You can allow it later from your device settings.",
       );
     }
@@ -479,6 +496,21 @@ export default function Profile() {
                 {remindersEnabled ? "Turn off" : "Enable"}
               </Text>
             </Pressable>
+          </View>
+
+          <View style={styles.consentRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.consentLabel}>Product updates</Text>
+              <Text style={styles.consentDesc}>
+                Occasional notifications about new features and improvements
+              </Text>
+            </View>
+            <Switch
+              value={!!productUpdatesEnabled}
+              onValueChange={handleToggleProductUpdates}
+              trackColor={{ false: Colors.border, true: Colors.primaryLight }}
+              thumbColor={Colors.white}
+            />
           </View>
         </View>
 

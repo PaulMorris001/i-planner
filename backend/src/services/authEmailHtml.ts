@@ -1,4 +1,6 @@
 import { env } from '../config/env';
+import { AI_QUERY_CAPS } from '../constants/aiUsage';
+import type { SubscriptionTier } from '../models/Subscription';
 
 // App icon, served from backend/public/email-logo.png (192px, so it stays sharp
 // at 56px on high-density screens). Must be an absolute https URL -- inboxes
@@ -86,5 +88,85 @@ export function buildPasswordResetEmailHtml(resetLink: string): { subject: strin
     <a href="${escapeHtml(resetLink)}" style="display:block;text-align:center;background:#3B82F6;color:#fff;font-weight:700;text-decoration:none;padding:14px;border-radius:999px;font-size:15px;">Reset password</a>`
   );
   const text = `We received a request to reset your i-Planner password.\n\nReset it here: ${resetLink}\n\nIf you didn't request this, you can safely ignore this email.`;
+  return { subject, html, text };
+}
+
+type PaidTier = Exclude<SubscriptionTier, 'free'>;
+
+const TIER_NAME: Record<PaidTier, string> = {
+  student: 'Student / Edu',
+  professional: 'Professional',
+  premium: 'Premium AI',
+};
+
+// What each paid tier unlocks -- kept to features the backend actually gates
+// (constants/featureTiers.ts) plus the AI limits, so the email never promises
+// something the plan doesn't include.
+function tierBenefits(tier: PaidTier): string[] {
+  const aiActions = `${AI_QUERY_CAPS[tier].toLocaleString('en-US')} AI actions every month`;
+  if (tier === 'student') {
+    return [aiActions, 'AI syllabus & timetable scanning', 'AI Study Buddy for any subject', 'Classes, deadlines & exam countdowns'];
+  }
+  if (tier === 'professional') {
+    return ['Everything in Student / Edu', aiActions, 'AI Plan My Day & AI Goal Coach', 'AI certification & exam study plans'];
+  }
+  return ['Everything in Professional', aiActions, 'Every AI coach: study, planning & goals', 'The most AI for high-stakes goals'];
+}
+
+export interface UpgradeEmailInput {
+  fullName?: string;
+  tier: PaidTier;
+  billing: 'Monthly' | 'Annual' | undefined;
+  renewsAt?: Date;
+  store: 'app_store' | 'play_store';
+}
+
+// Sent once when a verified purchase starts or changes a subscription (see
+// subscription.controller.ts). A confirmation and welcome, not the official
+// receipt -- Apple/Google send that themselves, with the amount charged.
+export function buildUpgradeEmailHtml(input: UpgradeEmailInput): { subject: string; html: string; text: string } {
+  const name = greeting(input.fullName);
+  const plan = TIER_NAME[input.tier];
+  const storeName = input.store === 'app_store' ? 'the App Store' : 'Google Play';
+  const renews = input.renewsAt
+    ? input.renewsAt.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
+    : undefined;
+  const benefits = tierBenefits(input.tier);
+  const subject = `You're on i-Planner ${plan}: payment confirmed`;
+
+  const rows: [string, string][] = [
+    ['Plan', input.billing ? `${plan} (${input.billing})` : plan],
+    ...(renews ? ([['Renews on', renews]] as [string, string][]) : []),
+    ['Paid through', storeName === 'the App Store' ? 'App Store' : 'Google Play'],
+  ];
+  const html = page(
+    `<h1 style="font-size:22px;margin:0 0 12px;">Welcome to ${escapeHtml(plan)}!</h1>
+    <p style="font-size:15px;line-height:1.6;margin:0 0 16px;">Thanks, ${name}. Your payment went through and your new plan is active right now. Enjoy everything it unlocks.</p>
+    <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;background:#F7F7FB;border-radius:12px;margin:0 0 20px;border-collapse:separate;">
+      ${rows
+        .map(
+          ([label, value]) =>
+            `<tr><td style="padding:10px 14px;font-size:13px;color:#6B6A80;">${label}</td><td style="padding:10px 14px;font-size:14px;font-weight:700;text-align:right;">${escapeHtml(value)}</td></tr>`
+        )
+        .join('')}
+    </table>
+    <p style="font-size:15px;font-weight:700;margin:0 0 8px;">What you've unlocked</p>
+    <ul style="font-size:15px;line-height:1.7;margin:0 0 20px;padding-left:20px;">
+      ${benefits.map((b) => `<li>${escapeHtml(b)}</li>`).join('')}
+    </ul>
+    <p style="font-size:13px;line-height:1.6;color:#6B6A80;margin:0;">Your official receipt comes from ${storeName}. You can manage or cancel your subscription any time in your ${storeName} account settings.</p>`
+  );
+  const text = [
+    `Welcome to ${plan}!`,
+    '',
+    `Thanks, ${name}. Your payment went through and your new plan is active right now.`,
+    '',
+    ...rows.map(([label, value]) => `${label}: ${value}`),
+    '',
+    "What you've unlocked:",
+    ...benefits.map((b) => `- ${b}`),
+    '',
+    `Your official receipt comes from ${storeName}. Manage or cancel any time in your ${storeName} account settings.`,
+  ].join('\n');
   return { subject, html, text };
 }

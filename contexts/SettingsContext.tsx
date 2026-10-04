@@ -11,6 +11,7 @@ import { billService } from '@/services/bill.service';
 import { savingsGoalService } from '@/services/savingsGoal.service';
 import { syncClassToAppleCalendar, syncTaskToAppleCalendar } from '@/utils/appleCalendarSync';
 import { requestNotificationPermission } from '@/utils/notifications';
+import { registerPushToken } from '@/utils/pushNotifications';
 import {
   reconcileTaskNotifications,
   reconcileClassNotifications,
@@ -170,6 +171,8 @@ interface SettingsContextValue extends Settings {
   setAiAccess: (key: AiAccessKey, value: boolean) => Promise<void>;
   acknowledgeAiDisclosure: () => Promise<boolean>;
   acknowledgeSavingsDisclosure: () => Promise<boolean>;
+  enableProductUpdates: () => Promise<boolean>;
+  disableProductUpdates: () => Promise<void>;
 }
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
@@ -233,6 +236,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
               setSettings(await settingsService.patch({ remindersEnabled: true }));
             }
             backfillReminders();
+            // Keep this install's push token on the account (new install,
+            // token rotation, or signing into a different account).
+            registerPushToken();
           }
         } catch (err) {
           console.error('[SettingsProvider] failed to reconcile reminders permission', err);
@@ -394,6 +400,36 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Push announcements need the OS notification permission (shared with
+  // reminders) plus a registered token; the backend only sends to accounts
+  // with productUpdatesEnabled, so turning it off stops them right away.
+  const enableProductUpdates = async (): Promise<boolean> => {
+    const granted = await requestNotificationPermission();
+    if (!granted) return false;
+    const prevSettings = settings;
+    setSettings((s) => ({ ...s, productUpdatesEnabled: true }));
+    try {
+      await registerPushToken();
+      setSettings(await settingsService.patch({ productUpdatesEnabled: true }));
+      return true;
+    } catch (err) {
+      setSettings(prevSettings);
+      console.error('[SettingsProvider] failed to enable product updates', err);
+      return false;
+    }
+  };
+
+  const disableProductUpdates = async () => {
+    const prevSettings = settings;
+    setSettings((s) => ({ ...s, productUpdatesEnabled: false }));
+    try {
+      setSettings(await settingsService.patch({ productUpdatesEnabled: false }));
+    } catch (err) {
+      setSettings(prevSettings);
+      console.error('[SettingsProvider] failed to disable product updates', err);
+    }
+  };
+
   const acknowledgeSavingsDisclosure = async (): Promise<boolean> => {
     const prevSettings = settings;
     setSettings((s) => ({ ...s, savingsDisclosureAcknowledged: true }));
@@ -424,6 +460,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         setAiAccess,
         acknowledgeAiDisclosure,
         acknowledgeSavingsDisclosure,
+        enableProductUpdates,
+        disableProductUpdates,
       }}
     >
       {children}

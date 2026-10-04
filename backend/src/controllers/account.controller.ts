@@ -16,6 +16,7 @@ import { SharedNote } from '../models/SharedNote';
 import { SharedNoteImport } from '../models/SharedNoteImport';
 import { ImportedCalendarEvent } from '../models/ImportedCalendarEvent';
 import { KnownDevice } from '../models/KnownDevice';
+import { PushToken } from '../models/PushToken';
 import { AuthedRequest } from '../middleware/requireAuth';
 
 // Wipes every piece of app data owned by this user. Firebase Auth account deletion
@@ -41,6 +42,7 @@ export async function deleteAccount(req: AuthedRequest, res: Response) {
     SharedNoteImport.deleteMany({ firebaseUid }),
     ImportedCalendarEvent.deleteMany({ firebaseUid }),
     KnownDevice.deleteMany({ firebaseUid }),
+    PushToken.deleteMany({ firebaseUid }),
   ]);
 
   res.status(204).send();

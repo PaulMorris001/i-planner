@@ -22,7 +22,7 @@ export async function updateSettings(req: AuthedRequest, res: Response) {
   const {
     appleCalendarConnected, calendarGateDismissed, remindersEnabled, timeZone,
     aiAccessTasks, aiAccessGoals, aiAccessCalendar, aiDisclosureAcknowledged,
-    savingsDisclosureAcknowledged, focusProfile,
+    savingsDisclosureAcknowledged, focusProfile, productUpdatesEnabled,
   } = req.body ?? {};
 
   const update: Record<string, unknown> = {};
@@ -36,6 +36,7 @@ export async function updateSettings(req: AuthedRequest, res: Response) {
   if (aiDisclosureAcknowledged !== undefined) update.aiDisclosureAcknowledged = !!aiDisclosureAcknowledged;
   if (savingsDisclosureAcknowledged !== undefined) update.savingsDisclosureAcknowledged = !!savingsDisclosureAcknowledged;
   if (typeof focusProfile === 'string' && focusProfile) update.focusProfile = focusProfile;
+  if (productUpdatesEnabled !== undefined) update.productUpdatesEnabled = !!productUpdatesEnabled;
 
   const settings = await Settings.findOneAndUpdate(
     { firebaseUid: req.userId },

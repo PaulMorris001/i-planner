@@ -12,6 +12,7 @@ import type {
 } from "@/types/auth.types";
 import type { User } from "@/types/user.types";
 import { cancelAllDeviceReminders } from "@/utils/notificationReconcile";
+import { unregisterPushToken } from "@/utils/pushNotifications";
 import {
   deleteUser,
   EmailAuthProvider,
@@ -117,6 +118,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // account's task/bill/class reminders keep firing on this device (or for
     // whoever signs in next). Signing back in reschedules them via reconcile.
     await cancelAllDeviceReminders();
+    // Before signOut — the backend call needs the still-valid session.
+    await unregisterPushToken();
     await signOut(auth);
     setError(null);
   };
