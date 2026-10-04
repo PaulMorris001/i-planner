@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Text, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, Pressable, ActivityIndicator, StyleSheet, ScrollView } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { IconSymbol, type IconSymbolName } from '@/components/ui/icon-symbol';
@@ -126,40 +126,47 @@ export default function SharedNote() {
   }
 
   return (
-    <ScreenWrapper backgroundColor={Colors.offWhite} scroll style={styles.scrollContent}>
-      <View style={styles.eyebrowRow}>
-        <View style={styles.eyebrowIcon}>
-          <IconSymbol name="link" color={Colors.primaryLight} size={14} />
+    // Not ScreenWrapper's own scroll mode: the note scrolls on its own while
+    // the actions stay pinned at the bottom, so "Add to My Notes" is visible
+    // right away on a long note instead of only after scrolling to the end.
+    <ScreenWrapper backgroundColor={Colors.offWhite}>
+      <ScrollView style={styles.flex} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <View style={styles.eyebrowRow}>
+          <View style={styles.eyebrowIcon}>
+            <IconSymbol name="link" color={Colors.primaryLight} size={14} />
+          </View>
+          <Text style={styles.eyebrowText}>Shared note</Text>
         </View>
-        <Text style={styles.eyebrowText}>Shared note</Text>
-      </View>
 
-      <View style={styles.card}>
-        <View style={styles.cardIconBadge}>
-          <IconSymbol name="note.text" color={Colors.primaryLight} size={24} />
+        <View style={styles.card}>
+          <View style={styles.cardIconBadge}>
+            <IconSymbol name="note.text" color={Colors.primaryLight} size={24} />
+          </View>
+          <Text style={styles.title}>{preview!.title}</Text>
+          <View style={styles.divider} />
+          {preview!.body.trim() ? (
+            <Text style={styles.body}>{preview!.body}</Text>
+          ) : (
+            <Text style={[styles.body, styles.bodyEmpty]}>No additional text</Text>
+          )}
         </View>
-        <Text style={styles.title}>{preview!.title}</Text>
-        <View style={styles.divider} />
-        {preview!.body.trim() ? (
-          <Text style={styles.body}>{preview!.body}</Text>
-        ) : (
-          <Text style={[styles.body, styles.bodyEmpty]}>No additional text</Text>
-        )}
-      </View>
+      </ScrollView>
 
-      <Pressable style={styles.primaryBtn} onPress={handleImport} disabled={importing}>
-        {importing ? (
-          <ActivityIndicator color={Colors.white} size="small" />
-        ) : (
-          <>
-            <IconSymbol name="plus" color={Colors.white} size={16} />
-            <Text style={styles.primaryBtnText}>Add to My Notes</Text>
-          </>
-        )}
-      </Pressable>
-      <Pressable style={styles.secondaryBtn} onPress={goToNotes}>
-        <Text style={styles.secondaryBtnText}>Not now</Text>
-      </Pressable>
+      <View style={styles.footer}>
+        <Pressable style={[styles.primaryBtn, styles.footerPrimaryBtn]} onPress={handleImport} disabled={importing}>
+          {importing ? (
+            <ActivityIndicator color={Colors.white} size="small" />
+          ) : (
+            <>
+              <IconSymbol name="plus" color={Colors.white} size={16} />
+              <Text style={styles.primaryBtnText}>Add to My Notes</Text>
+            </>
+          )}
+        </Pressable>
+        <Pressable style={styles.secondaryBtn} onPress={goToNotes}>
+          <Text style={styles.secondaryBtnText}>Not now</Text>
+        </Pressable>
+      </View>
 
       <BottomSheetModal visible={!!alreadyImportedNote} onClose={() => setAlreadyImportedNote(null)}>
         <View style={styles.modalContent}>
@@ -223,9 +230,22 @@ function StateScreen({
 }
 
 const styles = StyleSheet.create({
+  flex: {
+    flex: 1,
+  },
   scrollContent: {
-    paddingBottom: 40,
+    paddingBottom: 24,
     paddingTop: Spacing.lg,
+  },
+  footer: {
+    backgroundColor: Colors.offWhite,
+    paddingTop: 12,
+    paddingBottom: 4,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.border,
+  },
+  footerPrimaryBtn: {
+    marginTop: 0,
   },
   centerState: {
     flex: 1,
@@ -345,7 +365,7 @@ const styles = StyleSheet.create({
     color: Colors.white,
   },
   secondaryBtn: {
-    marginTop: 14,
+    marginTop: 6,
     marginHorizontal: Spacing.md,
     alignItems: 'center',
     justifyContent: 'center',

@@ -1,7 +1,47 @@
 import OpenAI from 'openai';
 import { env } from '../config/env';
-import type { CoachModeId } from '../models/CoachMessage';
+import type { CoachAttachment, CoachModeId } from '../models/CoachMessage';
 import { CREATE_TASK_TOOL, createTasksFromDrafts } from './coachTools';
+import { attachmentContentParts, ATTACHMENT_TTL_SECONDS } from './coachAttachments';
+
+// Earlier messages' attachments ride along again so follow-up questions about
+// the same document still work -- but only the most recent few (each file is
+// re-read on every turn it's included), and never one old enough that OpenAI
+// may already have deleted it (a dead file id would fail the whole request).
+const MAX_HISTORY_ATTACHMENT_MESSAGES = 3;
+const ATTACHMENT_SAFE_AGE_MS = (ATTACHMENT_TTL_SECONDS - 24 * 60 * 60) * 1000;
+
+export interface CoachHistoryMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  attachments?: CoachAttachment[];
+  createdAt?: Date;
+}
+
+function userMessageInput(text: string, attachments: CoachAttachment[] | undefined) {
+  if (!attachments?.length) return { role: 'user' as const, content: text };
+  return {
+    role: 'user' as const,
+    content: [...attachmentContentParts(attachments), { type: 'input_text' as const, text }],
+  };
+}
+
+function historyInput(history: CoachHistoryMessage[]) {
+  const now = Date.now();
+  let attachmentMessagesLeft = MAX_HISTORY_ATTACHMENT_MESSAGES;
+  // Walk newest-first to decide which attachments to keep, then restore order.
+  return history
+    .slice()
+    .reverse()
+    .map((m) => {
+      if (m.role === 'assistant') return { role: 'assistant' as const, content: m.content };
+      const fresh = m.createdAt ? now - m.createdAt.getTime() < ATTACHMENT_SAFE_AGE_MS : false;
+      const keep = !!m.attachments?.length && fresh && attachmentMessagesLeft > 0;
+      if (keep) attachmentMessagesLeft--;
+      return userMessageInput(m.content, keep ? m.attachments : undefined);
+    })
+    .reverse();
+}
 
 const openai = new OpenAI({ apiKey: env.openaiApiKey });
 
@@ -38,8 +78,9 @@ export interface CoachReplyResult {
 export async function generateCoachReply(input: {
   mode: CoachModeId;
   contextSummary: string;
-  history: { role: 'user' | 'assistant'; content: string }[];
+  history: CoachHistoryMessage[];
   userMessage: string;
+  userAttachments?: CoachAttachment[];
   firebaseUid: string;
   canCreateTasks: boolean;
 }): Promise<CoachReplyResult> {
@@ -52,7 +93,8 @@ export async function generateCoachReply(input: {
     'to personalize your answers — reference specific tasks, goals, classes, or exams by name where ' +
     'relevant, rather than speaking generically. The app renders markdown, so feel free to use ' +
     '**bold** for key terms, "- " bullet lists, `inline code`, and "## " headings when they make a ' +
-    "longer answer easier to scan — but don't force them into a short, simple reply.\n\n" +
+    "longer answer easier to scan — but don't force them into a short, simple reply. " +
+    'When the user attaches files, read them and answer from their actual content.\n\n' +
     `--- User's current planner data ---\n${input.contextSummary}`;
 
   const tools = input.mode === 'plan' && input.canCreateTasks ? [CREATE_TASK_TOOL] : undefined;
@@ -61,10 +103,7 @@ export async function generateCoachReply(input: {
     const firstResponse = await openai.responses.create({
       model: OPENAI_MODEL,
       instructions,
-      input: [
-        ...input.history.map((m) => ({ role: m.role, content: m.content })),
-        { role: 'user' as const, content: input.userMessage },
-      ],
+      input: [...historyInput(input.history), userMessageInput(input.userMessage, input.userAttachments)],
       tools,
     });
 

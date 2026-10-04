@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Alert, Animated, StyleSheet } from 'react-native';
 import type { ReactNode } from 'react';
 import * as DocumentPicker from 'expo-document-picker';
+import { File } from 'expo-file-system';
+import * as ImagePicker from 'expo-image-picker';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
@@ -11,6 +13,7 @@ import { CoachMessageText } from '@/components/coach/CoachMessageText';
 import { TypingMessageText } from '@/components/coach/TypingMessageText';
 import { AiDisclosureGate } from '@/components/coach/AiDisclosureGate';
 import { UpgradeModal } from '@/components/ui/UpgradeModal';
+import { BottomSheetModal } from '@/components/ui/BottomSheetModal';
 import { useOnboarding } from '@/hooks/useOnboarding';
 import { useTasks } from '@/hooks/useTasks';
 import { useSettings } from '@/hooks/useSettings';
@@ -25,7 +28,27 @@ import type { CoachMessage, CoachModeId } from '@/types/coach.types';
 interface Attachment {
   uri: string;
   name: string;
+  size?: number;
 }
+
+// Mirrors backend/src/services/coachAttachments.ts -- checked here too so the
+// user hears about a too-big file before waiting on an upload.
+const MAX_ATTACHMENTS = 3;
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+// iOS can't present a picker while the attach menu (a native Modal) is still
+// sliding away -- the picker silently never opens. Wait out the animation.
+const MENU_CLOSE_DELAY_MS = 400;
+
+const ATTACHMENT_TYPES = [
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'image/jpeg',
+  'image/png',
+  'text/plain',
+  'text/markdown',
+  'text/csv',
+];
 
 const MODES: { id: CoachModeId; label: string }[] = [
   { id: 'study', label: 'Study Buddy' },
@@ -82,6 +105,7 @@ export default function Coach() {
   const [upgradeTarget, setUpgradeTarget] = useState<CoachModeId | null>(null);
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [attachMenuOpen, setAttachMenuOpen] = useState(false);
   const [messages, setMessages] = useState<CoachMessage[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [sending, setSending] = useState(false);
@@ -127,17 +151,64 @@ export default function Coach() {
     };
   }, [mode]);
 
+  // Shared by both pickers: drops anything over the size limit and anything
+  // past the per-message cap, telling the user which.
+  const addAttachments = (picked: Attachment[]) => {
+    const tooBig = picked.filter((a) => (a.size ?? 0) > MAX_ATTACHMENT_BYTES);
+    const ok = picked.filter((a) => (a.size ?? 0) <= MAX_ATTACHMENT_BYTES);
+    const room = MAX_ATTACHMENTS - attachments.length;
+    if (tooBig.length) {
+      Alert.alert('File too large', `${tooBig.map((a) => a.name).join(', ')} is over 10 MB.`);
+    } else if (ok.length > room) {
+      Alert.alert('Too many files', `You can attach up to ${MAX_ATTACHMENTS} files per message.`);
+    }
+    setAttachments((prev) => [...prev, ...ok.slice(0, Math.max(0, room))]);
+  };
+
+  const openFromAttachMenu = (pick: () => void) => {
+    setAttachMenuOpen(false);
+    setTimeout(pick, MENU_CLOSE_DELAY_MS);
+  };
+
+  const handlePickImage = async () => {
+    const room = MAX_ATTACHMENTS - attachments.length;
+    if (room <= 0) {
+      Alert.alert('Too many files', `You can attach up to ${MAX_ATTACHMENTS} files per message.`);
+      return;
+    }
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Photo access needed', 'Allow photo library access in Settings to choose a photo.');
+      return;
+    }
+    // quality < 1 also makes iOS hand back a JPEG instead of HEIC, which the
+    // backend (JPG/PNG only) can read; 0.7 keeps text in a photo legible.
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.7,
+      allowsMultipleSelection: true,
+      selectionLimit: room,
+    });
+    if (result.canceled) return;
+    addAttachments(
+      result.assets.map((a, i) => {
+        const ext = a.mimeType === 'image/png' ? 'png' : 'jpg';
+        // fileName can be null (limited photo access) or keep a .heic name;
+        // the backend picks the file type from the extension, so it must match.
+        const name = a.fileName && /\.(jpe?g|png)$/i.test(a.fileName) ? a.fileName : `photo-${Date.now()}-${i + 1}.${ext}`;
+        return { uri: a.uri, name, size: a.fileSize };
+      })
+    );
+  };
+
   const handlePickFile = async () => {
     const result = await DocumentPicker.getDocumentAsync({
-      type: '*/*',
+      type: ATTACHMENT_TYPES,
       multiple: true,
       copyToCacheDirectory: true,
     });
     if (result.canceled) return;
-    setAttachments((prev) => [
-      ...prev,
-      ...result.assets.map((a) => ({ uri: a.uri, name: a.name })),
-    ]);
+    addAttachments(result.assets.map((a) => ({ uri: a.uri, name: a.name, size: a.size })));
   };
 
   const removeAttachment = (uri: string) => {
@@ -157,18 +228,29 @@ export default function Coach() {
   // value, since React state updates aren't synchronous.
   const handleSend = async (textOverride?: string) => {
     const text = (textOverride ?? input).trim();
-    if (!text || sending) return;
+    // Suggestion chips send their own text and never carry files.
+    const sentAttachments = textOverride === undefined && mode === 'study' ? attachments : [];
+    if ((!text && !sentAttachments.length) || sending) return;
 
     setInput('');
     setAttachments([]);
     const optimisticId = `temp-${Date.now()}`;
     setMessages((prev) => [
       ...prev,
-      { id: optimisticId, role: 'user', content: text, createdAt: new Date().toISOString() },
+      {
+        id: optimisticId,
+        role: 'user',
+        content: text,
+        attachments: sentAttachments.length ? sentAttachments.map((a) => ({ filename: a.name })) : undefined,
+        createdAt: new Date().toISOString(),
+      },
     ]);
     setSending(true);
     try {
-      const reply = await coachService.send(mode, text);
+      const files = await Promise.all(
+        sentAttachments.map(async (a) => ({ filename: a.name, fileBase64: await new File(a.uri).base64() }))
+      );
+      const reply = await coachService.send(mode, text, files);
       setMessages((prev) => [...prev, reply]);
       setTypingMessageId(reply.id);
       if (reply.createdTaskIds?.length) {
@@ -191,11 +273,16 @@ export default function Coach() {
         setUpgradeTarget(mode);
       } else if (status === 429 && serverMessage) {
         Alert.alert("You've hit your AI Coach limit", serverMessage);
+      } else if (sentAttachments.length && (status === 400 || status === 502) && serverMessage) {
+        // Attachment problems (unsupported type, too large, unreadable) come
+        // back with a specific message worth showing as-is.
+        Alert.alert("Couldn't send your file", serverMessage);
       } else {
         Alert.alert("Couldn't send message", 'Check your connection and try again.');
       }
       setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
       setInput(text);
+      setAttachments(sentAttachments);
     } finally {
       setSending(false);
     }
@@ -276,7 +363,21 @@ export default function Coach() {
                 <View style={[styles.bubbleRow, m.role === 'user' ? styles.bubbleRowUser : styles.bubbleRowAssistant]}>
                   <View style={[styles.bubble, m.role === 'user' ? styles.bubbleUser : styles.bubbleAssistant]}>
                     {m.role === 'user' ? (
-                      <CoachMessageText content={m.content} variant="user" />
+                      <>
+                        {!!m.attachments?.length && (
+                          <View style={styles.bubbleAttachments}>
+                            {m.attachments.map((a, i) => (
+                              <View key={`${a.filename}-${i}`} style={styles.bubbleAttachment}>
+                                <IconSymbol name="doc.fill" color={Colors.white} size={12} />
+                                <Text style={styles.bubbleAttachmentText} numberOfLines={1}>
+                                  {a.filename}
+                                </Text>
+                              </View>
+                            ))}
+                          </View>
+                        )}
+                        {!!m.content && <CoachMessageText content={m.content} variant="user" />}
+                      </>
                     ) : (
                       <>
                         <TypingMessageText content={m.content} variant="assistant" animate={m.id === typingMessageId} />
@@ -348,7 +449,7 @@ export default function Coach() {
 
           <View style={styles.inputRow}>
             {mode === 'study' && (
-              <Pressable style={styles.attachButton} onPress={handlePickFile}>
+              <Pressable style={styles.attachButton} onPress={() => setAttachMenuOpen(true)}>
                 <IconSymbol name="paperclip" color={Colors.textSecondary} size={19} />
               </Pressable>
             )}
@@ -363,9 +464,9 @@ export default function Coach() {
               returnKeyType="send"
             />
             <Pressable
-              style={[styles.sendButton, (sending || !input.trim()) && styles.sendButtonDisabled]}
+              style={[styles.sendButton, (sending || (!input.trim() && !attachments.length)) && styles.sendButtonDisabled]}
               onPress={() => handleSend()}
-              disabled={sending || !input.trim()}
+              disabled={sending || (!input.trim() && !attachments.length)}
             >
               <IconSymbol name="arrow.right" color={Colors.white} size={20} />
             </Pressable>
@@ -373,6 +474,19 @@ export default function Coach() {
         </View>
         )}
       </View>
+
+      <BottomSheetModal visible={attachMenuOpen} onClose={() => setAttachMenuOpen(false)} maxHeightPct={40}>
+        <View style={styles.attachMenu}>
+          <Pressable style={styles.attachMenuRow} onPress={() => openFromAttachMenu(handlePickFile)}>
+            <IconSymbol name="doc.fill" color={Colors.textPrimary} size={19} />
+            <Text style={styles.attachMenuText}>Attach file</Text>
+          </Pressable>
+          <Pressable style={styles.attachMenuRow} onPress={() => openFromAttachMenu(handlePickImage)}>
+            <IconSymbol name="photo.fill" color={Colors.textPrimary} size={19} />
+            <Text style={styles.attachMenuText}>Attach image</Text>
+          </Pressable>
+        </View>
+      </BottomSheetModal>
 
       <UpgradeModal
         visible={!!upgradeTarget}
@@ -537,6 +651,42 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     fontWeight: '600',
     color: Colors.primaryLight,
+  },
+  bubbleAttachments: {
+    gap: 4,
+    marginBottom: 6,
+  },
+  bubbleAttachment: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    alignSelf: 'flex-start',
+    maxWidth: 220,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderRadius: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  bubbleAttachmentText: {
+    flexShrink: 1,
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.white,
+  },
+  attachMenu: {
+    gap: 2,
+  },
+  attachMenuRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 15,
+    paddingHorizontal: 4,
+  },
+  attachMenuText: {
+    fontSize: 15.5,
+    fontWeight: '600',
+    color: Colors.textPrimary,
   },
   fileChip: {
     flexDirection: 'row',

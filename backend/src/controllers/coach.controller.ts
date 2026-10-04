@@ -8,6 +8,10 @@ import { buildContextSummary } from '../services/coachContext';
 import { generateCoachReply } from '../services/coachChat';
 import { checkAndConsumeQuery } from '../services/aiUsageLimiter';
 import { FEATURE_MIN_TIER, hasTier } from '../constants/featureTiers';
+import { parseIncomingAttachments, storeCoachAttachment } from '../services/coachAttachments';
+
+// Stored as the message text when the user sends files with no message.
+const ATTACHMENT_ONLY_PROMPT = 'Please take a look at the attached file.';
 
 // How many past messages ride along as conversation history on each request —
 // caps token growth for a long-running chat rather than sending the full history.
@@ -38,10 +42,13 @@ export async function sendCoachMessage(req: AuthedRequest, res: Response) {
   assertValidMode(mode);
 
   const { content } = req.body ?? {};
-  if (!content || typeof content !== 'string' || !content.trim()) {
+  // Validated before anything is consumed or uploaded.
+  const incomingAttachments = parseIncomingAttachments(req.body?.attachments);
+  const typed = typeof content === 'string' ? content.trim() : '';
+  if (!typed && !incomingAttachments.length) {
     throw new ApiError(400, 'Message content is required.', 'general');
   }
-  const trimmed = content.trim();
+  const trimmed = typed || ATTACHMENT_ONLY_PROMPT;
 
   const [settings, subscription] = await Promise.all([
     Settings.findOne({ firebaseUid: req.userId }),
@@ -75,9 +82,25 @@ export async function sendCoachMessage(req: AuthedRequest, res: Response) {
   const recentDocs = await CoachMessage.find({ firebaseUid: req.userId, mode })
     .sort({ createdAt: -1 })
     .limit(HISTORY_LIMIT);
-  const history = recentDocs.reverse().map((m) => ({ role: m.role, content: m.content }));
+  const history = recentDocs
+    .reverse()
+    .map((m) => ({ role: m.role, content: m.content, attachments: m.attachments, createdAt: m.createdAt }));
 
-  await CoachMessage.create({ firebaseUid: req.userId, mode, role: 'user', content: trimmed });
+  let attachments;
+  try {
+    attachments = await Promise.all(incomingAttachments.map(storeCoachAttachment));
+  } catch (err) {
+    console.error('[coach] failed to store attachment', err);
+    throw new ApiError(502, "Couldn't read the attached file. Try again, or attach a different file.", 'general');
+  }
+
+  await CoachMessage.create({
+    firebaseUid: req.userId,
+    mode,
+    role: 'user',
+    content: trimmed,
+    attachments: attachments.length ? attachments : undefined,
+  });
 
   const consent = {
     tasks: settings?.aiAccessTasks ?? true,
@@ -90,6 +113,7 @@ export async function sendCoachMessage(req: AuthedRequest, res: Response) {
     contextSummary,
     history,
     userMessage: trimmed,
+    userAttachments: attachments,
     firebaseUid: req.userId!,
     canCreateTasks: consent.tasks,
   });
