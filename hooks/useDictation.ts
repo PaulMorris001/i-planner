@@ -28,6 +28,37 @@ export function joinDictationText(base: string, addition: string): string {
 // second), so it shouldn't false-positive mid-sentence.
 const SEGMENT_GAP_MS = 800;
 
+// Lowercase, punctuation stripped, whitespace collapsed -- recognizers revise
+// casing and punctuation of earlier words as they go ("the" -> "The,").
+function normalizeTranscript(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+const SAME_SEGMENT_OPENING_WORDS = 4;
+
+// Whether `next` is a revision of `prev` (the same segment, re-sent) rather
+// than a brand-new segment. iOS re-sends the WHOLE session transcript on every
+// update and revises earlier words along the way, so an exact prefix check
+// misfires there: a revision looked "new", the old transcript got baked in,
+// and the next update (which still contains it) was appended on top --
+// duplicating every paragraph spoken so far. Compare normalized text, and also
+// treat a shared opening as the same segment: a genuinely new segment (Android
+// after a pause) starts with different words.
+function isSameSegment(prev: string, next: string): boolean {
+  const a = normalizeTranscript(prev);
+  const b = normalizeTranscript(next);
+  if (!a || !b) return true;
+  if (a.startsWith(b) || b.startsWith(a)) return true;
+  const aWords = a.split(' ');
+  const bWords = b.split(' ');
+  if (aWords.length < SAME_SEGMENT_OPENING_WORDS || bWords.length < SAME_SEGMENT_OPENING_WORDS) return false;
+  return aWords.slice(0, SAME_SEGMENT_OPENING_WORDS).join(' ') === bWords.slice(0, SAME_SEGMENT_OPENING_WORDS).join(' ');
+}
+
 interface UseDictationOptions {
   // Called with the full text recognized so far *this recording session*
   // (previous sessions' text is the caller's concern, not this hook's) —
@@ -78,9 +109,9 @@ export function useDictation({ onTranscriptChange, onEnd }: UseDictationOptions)
     // or lightly revised, not new content. Comparing the two catches that
     // case (one contains the other, e.g. a straight prefix match either way)
     // so the segment doesn't get baked in twice — once here, once more via
-    // the isFinal branch below for the very same words.
-    const looksLikeSameSegment =
-      !!prevSegment && (segment.startsWith(prevSegment) || prevSegment.startsWith(segment));
+    // the isFinal branch below for the very same words. See isSameSegment for
+    // why this can't be a plain exact-prefix check.
+    const looksLikeSameSegment = !!prevSegment && isSameSegment(prevSegment, segment);
     if (prevSegment && !looksLikeSameSegment && now - lastEventAtRef.current > SEGMENT_GAP_MS) {
       finalTranscriptRef.current = joinDictationText(finalTranscriptRef.current, prevSegment);
       currentSegmentRef.current = '';

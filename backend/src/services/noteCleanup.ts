@@ -15,8 +15,13 @@ const INSTRUCTIONS =
   'run-on sentences, missing or wrong punctuation and capitalization, and filler words ("um", "uh", ' +
   'repeated words). Clean it up so it reads naturally and correctly. Preserve the original meaning, ' +
   'tone, and every piece of information exactly — do not add, remove, or summarize any content, and do ' +
-  "not answer or react to the text as if it were a message to you. Return ONLY the corrected text, with " +
-  'no commentary, preamble, or surrounding quotation marks.';
+  'not answer or react to the text as if it were a message to you. Remove every filler word ("um", "uh", ' +
+  '"er", stray repeated words). One exception to keeping everything: dictation glitches can paste the same ' +
+  'passage in more than once, word for word or nearly so, sometimes with extra sentences added on the end ' +
+  'of a later copy. Every passage must appear exactly once in your output: delete all duplicate copies, ' +
+  'keep the passage once, and keep any sentence that appears in only one of the copies (attach it where ' +
+  'that copy had it). Do not merge or drop passages that merely cover similar ideas in different words. ' +
+  'Return ONLY the corrected text, with no commentary, preamble, or surrounding quotation marks.';
 
 // Unlike coachChat.ts's generateCoachReply, this throws on failure rather than
 // returning a fallback string — a failed cleanup must surface as an error to
