@@ -1,3 +1,10 @@
+import { env } from '../config/env';
+
+// App icon, served from backend/public/email-logo.png (192px, so it stays sharp
+// at 56px on high-density screens). Must be an absolute https URL -- inboxes
+// fetch images themselves, there's no relative path in an email.
+const LOGO_URL = `${env.backendPublicUrl}/email-logo.png`;
+
 // Escaping matters here even though fullName/email come from Firebase (not
 // arbitrary freeform text like a note body) — a display name is still
 // user-chosen text that ends up interpolated into HTML an email client
@@ -24,6 +31,7 @@ function page(bodyHtml: string): string {
   </head>
   <body style="margin:0;padding:32px 20px;background:#F7F7FB;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#0F0E2A;">
     <div style="max-width:480px;margin:0 auto;background:#fff;border:1px solid #E4E3EF;border-radius:20px;padding:28px;">
+      <img src="${LOGO_URL}" width="56" height="56" alt="i-Planner" style="display:block;width:56px;height:56px;border:0;border-radius:14px;margin:0 0 20px;" />
       ${bodyHtml}
       <div style="margin-top:24px;padding-top:16px;border-top:1px solid #E4E3EF;font-size:12px;color:#A8A7BE;">
         i-Planner
