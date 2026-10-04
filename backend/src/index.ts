@@ -16,6 +16,7 @@ async function main() {
     console.log('[config] BACKEND_PUBLIC_URL:', env.backendPublicUrl);
     console.log('[config] Google client ID:', describeId(env.googleOAuthClientId), '| secret:', env.googleOAuthClientSecret ? 'set' : 'MISSING');
     console.log('[config] Microsoft client ID:', describeId(env.microsoftOAuthClientId), '| secret:', env.microsoftOAuthClientSecret ? 'set' : 'MISSING');
+    console.log('[config] Resend from:', env.resendFromEmail || 'MISSING', '| API key:', env.resendApiKey ? 'set' : 'MISSING');
   });
 }
 
