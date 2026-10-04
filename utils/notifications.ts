@@ -117,12 +117,13 @@ export function initNotificationHandler(): void {
   if (handlerRegistered) return;
   handlerRegistered = true;
   Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowBanner: true,
-      shouldShowList: true,
-      shouldPlaySound: true,
-      shouldSetBadge: false,
-    }),
+    // Only runs while the app is open. An "AI reply ready" push is for people
+    // who switched away mid-reply -- with the app open, the reply is already
+    // on screen, so stay quiet. Everything else shows as normal.
+    handleNotification: async (notification) => {
+      const show = (notification.request.content.data as Record<string, unknown> | undefined)?.kind !== 'ai-reply';
+      return { shouldShowBanner: show, shouldShowList: show, shouldPlaySound: show, shouldSetBadge: false };
+    },
   });
   ensureAlarmCategory();
   ensureAndroidChannels().catch((err) => console.error('[notifications] failed to ensure Android channels', err));
@@ -146,9 +147,10 @@ function buildAlarmData(kind: AlarmKind, id: string | undefined, title: string):
 async function handleAlarmResponse(response: Notifications.NotificationResponse): Promise<void> {
   const data = response.notification.request.content.data as Record<string, unknown> | undefined;
   const kind = data?.kind;
-  // Server-sent announcement (backend scripts/sendAnnouncement.ts): open the
-  // screen it names, if any. Only in-app paths — never an arbitrary URL.
-  if (kind === 'announcement') {
+  // Server-sent pushes (backend services/pushNotifications.ts) -- announcements,
+  // the 10 PM tasks-left nudge, AI replies: open the screen they name, if any.
+  // Only in-app paths, never an arbitrary URL.
+  if (kind === 'announcement' || kind === 'task-nudge' || kind === 'ai-reply') {
     const route = typeof data?.route === 'string' ? data.route : undefined;
     if (route?.startsWith('/')) router.push(route as Parameters<typeof router.push>[0]);
     return;

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Alert, Animated, StyleSheet } from 'react-native';
+import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Alert, Animated, StyleSheet, AppState } from 'react-native';
 import type { ReactNode } from 'react';
 import * as DocumentPicker from 'expo-document-picker';
 import { File } from 'expo-file-system';
@@ -163,6 +163,23 @@ export default function Coach() {
     };
   }, [mode]);
 
+  // Coming back to the app (e.g. from the "reply ready" notification): reload
+  // the conversation, so a reply written while the app was in the background
+  // shows up even if this screen's own request was cut off meanwhile.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') return;
+      coachService
+        .list(mode)
+        .then((msgs) =>
+          // Keep any optimistic (still-sending) message the server doesn't have yet.
+          setMessages((prev) => [...msgs, ...prev.filter((m) => m.id.startsWith('temp-') && !msgs.some((s) => s.content === m.content))])
+        )
+        .catch((err) => console.error('[Coach] failed to refresh on resume', err));
+    });
+    return () => subscription.remove();
+  }, [mode]);
+
   // Shared by both pickers: drops anything over the size limit and anything
   // past the per-message cap, telling the user which.
   const addAttachments = (picked: Attachment[]) => {
@@ -246,7 +263,8 @@ export default function Coach() {
 
     setInput('');
     setAttachments([]);
-    const optimisticId = `temp-${Date.now()}`;
+    const sentAt = Date.now();
+    const optimisticId = `temp-${sentAt}`;
     setMessages((prev) => [
       ...prev,
       {
@@ -264,7 +282,7 @@ export default function Coach() {
         sentAttachments.map(async (a) => ({ filename: a.name, fileBase64: await new File(a.uri).base64() }))
       );
       const reply = await coachService.send(mode, text, files, onUploadProgress);
-      setMessages((prev) => [...prev, reply]);
+      setMessages((prev) => (prev.some((m) => m.id === reply.id) ? prev : [...prev, reply]));
       setTypingMessageId(reply.id);
       if (reply.createdTaskIds?.length) {
         // AI-created tasks are already Google-synced server-side but still need
@@ -276,6 +294,17 @@ export default function Coach() {
       }
     } catch (err) {
       console.error('[Coach] failed to send message', err);
+      try {
+        const latest = await coachService.list(mode);
+        const last = latest[latest.length - 1];
+        if (last?.role === 'assistant' && new Date(last.createdAt).getTime() >= sentAt - 60_000) {
+          setMessages(latest);
+          setTypingMessageId(last.id);
+          return;
+        }
+      } catch {
+        // Couldn't check -- fall through to the normal error handling.
+      }
       // 429 (usage cap) carries a specific server message — show it as-is.
       const status = (err as { status?: number } | null)?.status;
       const field = (err as { field?: string } | null)?.field;
