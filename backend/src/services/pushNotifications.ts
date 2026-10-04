@@ -30,6 +30,8 @@ export interface PushSendResult {
   accepted: number;
   failed: number;
   removedTokens: number;
+  // Expo ticket ids for accepted messages -- pass to checkPushReceipts.
+  ticketIds: string[];
 }
 
 // Delivers one message to every given token. Tokens Expo rejects outright as
@@ -69,7 +71,31 @@ export async function sendPushToTokens(
   if (dead.length) await PushToken.deleteMany({ token: { $in: dead } });
 
   const accepted = tickets.filter(({ ticket }) => ticket.status === 'ok').length;
-  return { targeted: valid.length, accepted, failed: tickets.length - accepted, removedTokens: dead.length };
+  const ticketIds = tickets.flatMap(({ ticket }) => (ticket.status === 'ok' ? [ticket.id] : []));
+  return { targeted: valid.length, accepted, failed: tickets.length - accepted, removedTokens: dead.length, ticketIds };
+}
+
+export interface PushReceiptSummary {
+  delivered: number;
+  pending: number;
+  errors: { error?: string; message: string }[];
+}
+
+// "Accepted" only means Expo took the message. Whether Apple/Google actually
+// delivered it shows up a few seconds later as a receipt -- this is where
+// credential problems (e.g. InvalidCredentials) and dead devices surface.
+export async function checkPushReceipts(ticketIds: string[]): Promise<PushReceiptSummary> {
+  const summary: PushReceiptSummary = { delivered: 0, pending: 0, errors: [] };
+  for (const chunk of expo.chunkPushNotificationReceiptIds(ticketIds)) {
+    const receipts = await expo.getPushNotificationReceiptsAsync(chunk);
+    for (const id of chunk) {
+      const receipt = receipts[id];
+      if (!receipt) summary.pending++;
+      else if (receipt.status === 'ok') summary.delivered++;
+      else summary.errors.push({ error: receipt.details?.error, message: receipt.message });
+    }
+  }
+  return summary;
 }
 
 // Announcements go only to users who switched on "Product updates" in the app

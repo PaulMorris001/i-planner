@@ -15,7 +15,7 @@
 import mongoose from 'mongoose';
 import { connectDB } from '../config/db';
 import { firebaseAuth } from '../config/firebaseAdmin';
-import { announcementTokens, sendPushToTokens } from '../services/pushNotifications';
+import { announcementTokens, checkPushReceipts, sendPushToTokens } from '../services/pushNotifications';
 
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`);
@@ -82,6 +82,15 @@ async function main() {
       (result.failed ? ` | failed: ${result.failed}` : '') +
       (result.removedTokens ? ` | removed ${result.removedTokens} dead token(s)` : '')
   );
+
+  // Delivery results from Apple/Google arrive a few seconds after Expo accepts.
+  if (result.ticketIds.length) {
+    console.log('Checking delivery with Apple/Google…');
+    await new Promise((resolve) => setTimeout(resolve, 15_000));
+    const receipts = await checkPushReceipts(result.ticketIds);
+    console.log(`📬 Delivered: ${receipts.delivered}` + (receipts.pending ? ` | still pending: ${receipts.pending}` : ''));
+    for (const e of receipts.errors) console.log(`❌ ${e.error ?? 'Error'}: ${e.message}`);
+  }
   await mongoose.disconnect();
 }
 
