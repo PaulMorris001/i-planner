@@ -14,6 +14,8 @@ import { TypingMessageText } from '@/components/coach/TypingMessageText';
 import { AiDisclosureGate } from '@/components/coach/AiDisclosureGate';
 import { UpgradeModal } from '@/components/ui/UpgradeModal';
 import { BottomSheetModal } from '@/components/ui/BottomSheetModal';
+import { AnimatedProgressBar } from '@/components/ui/AnimatedProgressBar';
+import { useFakeExtractionProgress } from '@/hooks/useFakeExtractionProgress';
 import { useOnboarding } from '@/hooks/useOnboarding';
 import { useTasks } from '@/hooks/useTasks';
 import { useSettings } from '@/hooks/useSettings';
@@ -38,6 +40,9 @@ const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 // iOS can't present a picker while the attach menu (a native Modal) is still
 // sliding away -- the picker silently never opens. Wait out the animation.
 const MENU_CLOSE_DELAY_MS = 400;
+
+// Shown on the progress card once a message's files have finished uploading.
+const ATTACHMENT_STATUS_MESSAGES = ['Reading your file…', 'Going through the details…', 'Putting together a reply…'];
 
 const ATTACHMENT_TYPES = [
   'application/pdf',
@@ -106,6 +111,13 @@ export default function Coach() {
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [attachMenuOpen, setAttachMenuOpen] = useState(false);
+  // True while a message WITH files is in flight -- drives the upload card.
+  const [sendingFiles, setSendingFiles] = useState(false);
+  const {
+    progress: uploadProgress,
+    statusMessage: uploadStatusMessage,
+    onUploadProgress,
+  } = useFakeExtractionProgress(sendingFiles, ATTACHMENT_STATUS_MESSAGES);
   const [messages, setMessages] = useState<CoachMessage[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [sending, setSending] = useState(false);
@@ -246,11 +258,12 @@ export default function Coach() {
       },
     ]);
     setSending(true);
+    setSendingFiles(sentAttachments.length > 0);
     try {
       const files = await Promise.all(
         sentAttachments.map(async (a) => ({ filename: a.name, fileBase64: await new File(a.uri).base64() }))
       );
-      const reply = await coachService.send(mode, text, files);
+      const reply = await coachService.send(mode, text, files, onUploadProgress);
       setMessages((prev) => [...prev, reply]);
       setTypingMessageId(reply.id);
       if (reply.createdTaskIds?.length) {
@@ -285,6 +298,7 @@ export default function Coach() {
       setAttachments(sentAttachments);
     } finally {
       setSending(false);
+      setSendingFiles(false);
     }
   };
 
@@ -405,7 +419,19 @@ export default function Coach() {
               <AnimatedMessageRow>
                 <View style={[styles.bubbleRow, styles.bubbleRowAssistant]}>
                   <View style={[styles.bubble, styles.bubbleAssistant]}>
-                    <ActivityIndicator size="small" color={Colors.textMuted} />
+                    {sendingFiles ? (
+                      <View style={styles.uploadCard}>
+                        <View style={styles.uploadCardHeader}>
+                          <ActivityIndicator size="small" color={Colors.primaryLight} />
+                          <Text style={styles.uploadCardText}>{uploadStatusMessage}</Text>
+                        </View>
+                        <View style={styles.uploadTrack}>
+                          <AnimatedProgressBar pct={uploadProgress} color={Colors.primaryLight} />
+                        </View>
+                      </View>
+                    ) : (
+                      <ActivityIndicator size="small" color={Colors.textMuted} />
+                    )}
                   </View>
                 </View>
               </AnimatedMessageRow>
@@ -672,6 +698,27 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: Colors.white,
+  },
+  uploadCard: {
+    width: 210,
+    gap: 10,
+  },
+  uploadCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  uploadCardText: {
+    flexShrink: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  uploadTrack: {
+    height: 6,
+    borderRadius: 999,
+    backgroundColor: Colors.border,
+    overflow: 'hidden',
   },
   attachMenu: {
     gap: 2,

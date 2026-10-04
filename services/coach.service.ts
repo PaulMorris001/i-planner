@@ -12,11 +12,12 @@ export const coachService = {
     mode: CoachModeId,
     content: string,
     attachments: { filename: string; fileBase64: string }[] = [],
+    onUploadProgress?: (fraction: number) => void,
   ) =>
     authedRequest<CoachSendResult>(`/coach/${mode}`, {
       method: "POST",
       body: attachments.length ? { content, attachments } : { content },
       // Uploading and reading a document takes longer than a plain reply.
-      ...(attachments.length ? { timeoutMs: 120_000 } : {}),
+      ...(attachments.length ? { timeoutMs: 120_000, onUploadProgress } : {}),
     }),
 };

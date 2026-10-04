@@ -7,10 +7,14 @@ import { authedRequest } from "./authedRequest";
 export const syllabusService = {
   list: () => authedRequest<Syllabus[]>("/syllabi"),
 
-  extract: (input: { fileBase64: string; filename: string }) =>
+  extract: (
+    input: { fileBase64: string; filename: string },
+    onUploadProgress?: (fraction: number) => void,
+  ) =>
     authedRequest<SyllabusExtractionResult>("/syllabi/extract", {
       method: "POST",
       body: input,
+      onUploadProgress,
     }),
 
   create: (input: { fileName: string; courseName: string; classId?: string }) =>

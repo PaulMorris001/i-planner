@@ -66,7 +66,11 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
   // look like something the AI actually found.
   const [showingTopicsFallback, setShowingTopicsFallback] = useState(false);
   const [successSummary, setSuccessSummary] = useState<SuccessSummary | null>(null);
-  const { progress: extractProgress, statusMessage: extractStatusMessage } = useFakeExtractionProgress(
+  const {
+    progress: extractProgress,
+    statusMessage: extractStatusMessage,
+    onUploadProgress: onExtractUploadProgress,
+  } = useFakeExtractionProgress(
     step === 'extracting',
     EXTRACT_STATUS_MESSAGES
   );
@@ -141,7 +145,7 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
       // A photo already has base64 from the picker itself (see
       // handlePickPhoto) — only a document needs this separate disk read.
       const fileBase64 = asset.base64 ?? (await new File(asset.uri).base64());
-      const extraction = await syllabusService.extract({ fileBase64, filename: asset.name });
+      const extraction = await syllabusService.extract({ fileBase64, filename: asset.name }, onExtractUploadProgress);
       // The modal was closed (or a new pick/process started) while this was
       // in flight — reset() already bumped the generation, so applying this
       // now-stale result would resurrect state the user already walked away

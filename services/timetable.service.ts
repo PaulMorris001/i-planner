@@ -2,9 +2,13 @@ import type { TimetableExtractionResult } from "@/types/timetable.types";
 import { authedRequest } from "./authedRequest";
 
 export const timetableService = {
-  extract: (input: { fileBase64: string; filename: string }) =>
+  extract: (
+    input: { fileBase64: string; filename: string },
+    onUploadProgress?: (fraction: number) => void,
+  ) =>
     authedRequest<TimetableExtractionResult>("/timetables/extract", {
       method: "POST",
       body: input,
+      onUploadProgress,
     }),
 };

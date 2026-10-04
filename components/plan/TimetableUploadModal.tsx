@@ -127,7 +127,11 @@ export function TimetableUploadModal() {
   // a dynamic list of rows.
   const [semesterPickerOpen, setSemesterPickerOpen] = useState<'start' | 'end' | null>(null);
   const [successSummary, setSuccessSummary] = useState<SuccessSummary | null>(null);
-  const { progress: extractProgress, statusMessage: extractStatusMessage } = useFakeExtractionProgress(
+  const {
+    progress: extractProgress,
+    statusMessage: extractStatusMessage,
+    onUploadProgress: onExtractUploadProgress,
+  } = useFakeExtractionProgress(
     step === 'extracting',
     EXTRACT_STATUS_MESSAGES
   );
@@ -191,7 +195,7 @@ export function TimetableUploadModal() {
     setStep('extracting');
     try {
       const fileBase64 = asset.base64 ?? (await new File(asset.uri).base64());
-      const extraction = await timetableService.extract({ fileBase64, filename: asset.name });
+      const extraction = await timetableService.extract({ fileBase64, filename: asset.name }, onExtractUploadProgress);
       if (processGenerationRef.current !== generation) return;
 
       const meetingRows: DraftClassRow[] = extraction.meetings.map((m, i) => {
