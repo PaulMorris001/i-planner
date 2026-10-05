@@ -7,6 +7,7 @@ import {
   referralCodeExists,
   toPublicReferralProfile,
 } from '../services/referral';
+import { getLeaderboard } from '../services/referralLeaderboard';
 
 // Public (no sign-in), because the sign-up screen checks a code BEFORE the
 // account exists, so a typo can be fixed rather than silently dropped. Reveals
@@ -52,6 +53,12 @@ export async function signUpReferral(req: AuthedRequest, res: Response) {
   // Read again: a successful redemption just changed the points.
   const fresh = (await ReferralProfile.findOne({ firebaseUid: req.userId })) ?? profile;
   res.json({ ...toPublicReferralProfile(fresh), redeem: result });
+}
+
+// This week's top accounts by points earned this week, plus the caller's own rank.
+export async function getWeeklyLeaderboard(req: AuthedRequest, res: Response) {
+  await ensureReferralProfile(req.userId!);
+  res.json(await getLeaderboard(req.userId!));
 }
 
 export async function markWelcomeSeen(req: AuthedRequest, res: Response) {

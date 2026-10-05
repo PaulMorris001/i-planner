@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Text, TextInput, Pressable, Switch, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, TextInput, Pressable, Switch, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { BottomSheetModal } from '@/components/ui/BottomSheetModal';
 import { ModalCloseButton } from '@/components/ui/ModalCloseButton';
 import { Chip } from '@/components/ui/Chip';
@@ -387,13 +387,17 @@ export function NewTaskModal() {
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </Pressable>
             <Pressable
-              style={[styles.saveButton, !canSave && styles.saveButtonDisabled]}
+              style={[styles.saveButton, !canSave && !submitting && styles.saveButtonDisabled]}
               disabled={!canSave}
               onPress={handleCreate}
             >
-              <Text style={[styles.saveButtonText, !canSave && styles.saveButtonTextDisabled]}>
-                {editingTask ? 'Save changes' : 'Create task'}
-              </Text>
+              {submitting ? (
+                <ActivityIndicator color={Colors.white} size="small" />
+              ) : (
+                <Text style={[styles.saveButtonText, !canSave && styles.saveButtonTextDisabled]}>
+                  {editingTask ? 'Save changes' : 'Create task'}
+                </Text>
+              )}
             </Pressable>
           </View>
         </ScrollView>

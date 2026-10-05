@@ -4,10 +4,11 @@ import { Colors } from '@/constants/theme';
 import { useReferral } from '@/hooks/useReferral';
 import { formatPoints } from '@/utils/referralFormat';
 
-// The points counter next to the menu button in the header: a flame filled with
-// the app's blue and the number in white inside it. Tapping it opens the
-// referral code popup (ReferralModal). Hidden until a real profile has loaded, so
-// it never flashes "0" and then jumps to the real number.
+// The points counter next to the menu button in the header: a flame in the app's
+// blue with the number written beside it, so a big number can grow sideways
+// instead of being squeezed inside the icon. Tapping it opens the referral code
+// popup (ReferralModal). Hidden until a real profile has loaded, so it never
+// flashes "0" and then jumps to the real number.
 export function ReferralPointsBadge() {
   const { code, points, openModal } = useReferral();
   // No profile yet (still loading, or the request failed): show nothing rather than a misleading 0.
@@ -21,8 +22,7 @@ export function ReferralPointsBadge() {
       accessibilityLabel={`${points} points. Open your referral code.`}
       style={styles.button}
     >
-      <IconSymbol name="flame.fill" color={Colors.primaryLight} size={40} />
-      {/* Fixed size: scaled-up system fonts would spill outside the flame. */}
+      <IconSymbol name="flame.fill" color={Colors.primaryLight} size={28} />
       <Text style={styles.points} allowFontScaling={false} numberOfLines={1}>
         {formatPoints(points)}
       </Text>
@@ -33,17 +33,14 @@ export function ReferralPointsBadge() {
 const styles = StyleSheet.create({
   // Same 42pt height as the menu button beside it.
   button: {
-    width: 42,
     height: 42,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 2,
   },
   points: {
-    position: 'absolute',
-    bottom: 7,
-    fontSize: 12,
+    fontSize: 15,
     fontWeight: '800',
-    color: Colors.white,
-    letterSpacing: -0.2,
+    color: Colors.textPrimary,
   },
 });

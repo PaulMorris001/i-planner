@@ -8,6 +8,10 @@ export interface ReferralDocument extends Document {
   referredUid: string;
   referrerPoints: number;
   referredPoints: number;
+  // Flipped (atomically, once) right before each side's points are added, so a
+  // retry or a second request can never pay the same side twice.
+  referrerPaid: boolean;
+  referredPaid: boolean;
   createdAt: Date;
 }
 
@@ -17,6 +21,8 @@ const referralSchema = new Schema<ReferralDocument>(
     referredUid: { type: String, required: true, unique: true },
     referrerPoints: { type: Number, required: true },
     referredPoints: { type: Number, required: true },
+    referrerPaid: { type: Boolean, default: false },
+    referredPaid: { type: Boolean, default: false },
   },
   { timestamps: { createdAt: true, updatedAt: false } }
 );

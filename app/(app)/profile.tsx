@@ -1,6 +1,7 @@
 import { ScreenWrapper } from "@/components/layout/ScreenWrapper";
 import { DeleteAccountModal } from "@/components/profile/DeleteAccountModal";
 import { ReferralCodeCard } from "@/components/referral/ReferralCodeCard";
+import { ReferralLeaderboard } from "@/components/referral/ReferralLeaderboard";
 import { Button } from "@/components/ui/Button";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { SkeletonBlock } from "@/components/ui/Skeleton";
@@ -12,12 +13,22 @@ import { Colors, Spacing } from "@/constants/theme";
 import { usePurchases } from "@/contexts/PurchasesContext";
 import { useAuth } from "@/hooks/useAuth";
 import { useOnboarding } from "@/hooks/useOnboarding";
+import { useReferral } from "@/hooks/useReferral";
 import { useSettings } from "@/hooks/useSettings";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useState } from "react";
-import { Alert, Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import {
+  Alert,
+  Linking,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Switch,
+  Text,
+  View,
+} from "react-native";
 
 type PathId = "student" | "exam" | "professional";
 
@@ -50,6 +61,7 @@ export default function Profile() {
   const router = useRouter();
   const tabBarHeight = useBottomTabBarHeight();
   const { user, initializing, logout } = useAuth();
+  const { handle } = useReferral();
   const { focusProfile, setFocusProfile } = useOnboarding();
   const { tier } = usePurchases();
   const {
@@ -164,6 +176,17 @@ export default function Profile() {
     }
   };
 
+  // Android 14+ ships with "Alarms & reminders" OFF for new installs; without it
+  // the system delays reminders by minutes. There's no JS way to read the
+  // setting, so this just opens the screen where it lives.
+  const handleOpenExactAlarmSettings = async () => {
+    try {
+      await Linking.sendIntent("android.settings.REQUEST_SCHEDULE_EXACT_ALARM");
+    } catch {
+      Linking.openSettings();
+    }
+  };
+
   const handleToggleProductUpdates = async (value: boolean) => {
     if (!value) {
       await disableProductUpdates();
@@ -224,6 +247,9 @@ export default function Profile() {
             <Text style={styles.profilePlan}>
               I-Planner · {TIER_LABEL[tier]} plan
             </Text>
+            {handle ? (
+              <Text style={styles.profilePlan}>Leaderboard name · {handle}</Text>
+            ) : null}
           </View>
         </View>
 
@@ -314,6 +340,7 @@ export default function Profile() {
           with it.
         </Text>
         <ReferralCodeCard />
+        <ReferralLeaderboard />
 
         <Text style={[styles.eyebrow, { marginTop: Spacing.lg }]}>
           CALENDAR SYNC
@@ -507,6 +534,31 @@ export default function Profile() {
               </Text>
             </Pressable>
           </View>
+
+          {Platform.OS === "android" && Number(Platform.Version) >= 31 ? (
+            <View style={styles.calendarRow}>
+              <View style={styles.calendarIconBox}>
+                <IconSymbol
+                  name="clock"
+                  color={Colors.textPrimary}
+                  size={17}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.consentLabel}>On-time reminders</Text>
+                <Text style={styles.consentDesc}>
+                  Allow &ldquo;Alarms &amp; reminders&rdquo; for this app so reminders arrive
+                  exactly on time, not minutes late
+                </Text>
+              </View>
+              <Pressable
+                style={styles.calendarActionBtn}
+                onPress={handleOpenExactAlarmSettings}
+              >
+                <Text style={styles.calendarActionText}>Open</Text>
+              </Pressable>
+            </View>
+          ) : null}
 
           <View style={styles.consentRow}>
             <View style={{ flex: 1 }}>

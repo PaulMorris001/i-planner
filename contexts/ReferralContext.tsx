@@ -9,6 +9,7 @@ interface ReferralContextValue {
   // False until the first load for the signed-in account has finished.
   loaded: boolean;
   code: string;
+  handle: string;
   points: number;
   referralCount: number;
   referredBy: boolean;
@@ -93,6 +94,7 @@ export function ReferralProvider({ children }: { children: ReactNode }) {
       value={{
         loaded,
         code: profile?.code ?? '',
+        handle: profile?.handle ?? '',
         points: profile?.points ?? 0,
         referralCount: profile?.referralCount ?? 0,
         referredBy: profile?.referredBy ?? false,

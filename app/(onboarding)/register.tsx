@@ -16,14 +16,15 @@ import { useState } from "react";
 import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 export default function Register() {
-  const { register, loading } = useAuth();
+  const { register } = useAuth();
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [referralCode, setReferralCode] = useState("");
-  // True while the referral code is being checked, before the account is created.
-  const [checkingCode, setCheckingCode] = useState(false);
+  // Stays true from the tap (code check, then account creation) until the next screen takes
+  // over; cleared only on failure, so the button never flips back to idle mid-way.
+  const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<{
     fullName?: string;
     email?: string;
@@ -46,22 +47,21 @@ export default function Register() {
   const handleRegister = async () => {
     if (!validate()) return;
     setErrors({});
+    setSubmitting(true);
     const code = referralCode.trim();
     if (code) {
       // Checked BEFORE creating the account, so a typo can be fixed instead of the
       // code being silently dropped (it cannot be added after sign-up).
-      setCheckingCode(true);
       try {
         const { valid } = await referralService.validate(code);
         if (!valid) {
           setErrors({ referralCode: "That referral code doesn't exist. Check it, or leave it blank." });
+          setSubmitting(false);
           return;
         }
       } catch {
         // Could not check (no signal, busy). Do not block sign-up on it: the code is
         // kept and applied once the account exists.
-      } finally {
-        setCheckingCode(false);
       }
     }
     try {
@@ -69,6 +69,7 @@ export default function Register() {
       router.replace(Routes.NOTIFICATIONS_PROMPT);
     } catch (e: any) {
       setErrors({ general: e.message });
+      setSubmitting(false);
     }
   };
 
@@ -137,7 +138,7 @@ export default function Register() {
           <Button
             label="Create account"
             onPress={handleRegister}
-            loading={loading || checkingCode}
+            loading={submitting}
             style={styles.cta}
           />
 

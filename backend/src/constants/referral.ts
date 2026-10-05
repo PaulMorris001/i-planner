@@ -9,6 +9,13 @@ export const REFERRED_POINTS = 50; // the new account that used it
 export const REFERRAL_CODE_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
 export const REFERRAL_CODE_LENGTH = 8;
 
+// The anonymous name shown on the weekly leaderboard: "user" + 7 random characters,
+// e.g. user7k2m9qx. No vowels (so the random part can't spell a word) and no 0/1/l/o
+// lookalikes. Assigned once per account and never changes.
+export const HANDLE_PREFIX = 'user';
+export const HANDLE_ALPHABET = '23456789bcdfghjkmnpqrstvwxz';
+export const HANDLE_RANDOM_LENGTH = 7;
+
 // A code can only be entered by a NEW account: it has to be redeemed within this
 // long of the account being created. Stops an old account from collecting points
 // by entering a code later.

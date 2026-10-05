@@ -8,6 +8,7 @@ import { ApiError } from '../utils/ApiError';
 import { findOwnedOrThrow } from '../utils/ownedDoc';
 import { isDuplicateKeyError } from '../utils/mongoErrors';
 import { shortId } from '../utils/shortId';
+import { slugFromShareId, titledShareId } from '../utils/shareSlug';
 import { env } from '../config/env';
 import { NOTE_TITLE_MAX_LENGTH, NOTE_BODY_MAX_LENGTH } from '../constants/noteLimits';
 import { isRichBody, sanitizeBody } from '../utils/richText';
@@ -18,10 +19,14 @@ import { buildSharedNoteHtml, buildSharedNoteUnavailableHtml } from '../services
 // is bogus, or if the note it points at has since been deleted; callers turn
 // that into whatever "not available" response fits their context (an HTML
 // page for the web route, a 404 ApiError for the JSON routes).
-// A link carries either the short slug (/n/<slug>) or, for links made before
-// short links existed, the original UUID token (/shared/<token>).
-function findShare(id: string) {
-  return SharedNote.findOne({ $or: [{ slug: id }, { token: id }] });
+// A link carries the short slug (/n/<slug>), the slug with the note's title in
+// front (/n/<title-words>-<slug>), or, for links made before short links
+// existed, the original UUID token (/shared/<token>). The words in front are
+// only for readers: the slug after the last hyphen is what identifies the note.
+async function findShare(id: string) {
+  const exact = await SharedNote.findOne({ $or: [{ slug: id }, { token: id }] });
+  if (exact || !id.includes('-')) return exact;
+  return SharedNote.findOne({ slug: slugFromShareId(id) });
 }
 
 async function resolveSharedNote(id: string) {
@@ -29,7 +34,7 @@ async function resolveSharedNote(id: string) {
   if (!shared) return null;
   const note = await Note.findOne({ _id: shared.noteId, firebaseUid: shared.firebaseUid });
   if (!note) return null;
-  return note;
+  return { note, shared };
 }
 
 export async function createShare(req: AuthedRequest, res: Response) {
@@ -61,25 +66,26 @@ export async function createShare(req: AuthedRequest, res: Response) {
       }
     }
   }
-  res.json({ url: `${env.shareBaseUrl}/n/${shared.slug}` });
+  res.json({ url: `${env.shareBaseUrl}/n/${titledShareId(note.title, shared.slug!)}` });
 }
 
 // Unauthenticated — anyone with the link can view the preview page, same as
 // clicking a shared Google Doc link before being asked to sign in.
 export async function getSharedNoteWebPage(req: Request, res: Response) {
-  const note = await resolveSharedNote(req.params.token);
+  const resolved = await resolveSharedNote(req.params.token);
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  if (!note) {
+  if (!resolved) {
     res.status(404).send(buildSharedNoteUnavailableHtml());
     return;
   }
-  res.send(buildSharedNoteHtml({ title: note.title, body: note.body }, req.params.token));
+  // The app is opened with the real slug, not the title-prefixed one from the URL.
+  res.send(buildSharedNoteHtml({ title: resolved.note.title, body: resolved.note.body }, resolved.shared.slug ?? resolved.shared.token));
 }
 
 export async function getSharedNotePreview(req: AuthedRequest, res: Response) {
-  const note = await resolveSharedNote(req.params.token);
-  if (!note) throw new ApiError(404, 'This note is no longer available.', 'general');
-  res.json({ title: note.title, body: note.body });
+  const resolved = await resolveSharedNote(req.params.token);
+  if (!resolved) throw new ApiError(404, 'This note is no longer available.', 'general');
+  res.json({ title: resolved.note.title, body: resolved.note.body });
 }
 
 export async function importSharedNote(req: AuthedRequest, res: Response) {

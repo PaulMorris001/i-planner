@@ -5,6 +5,9 @@ export interface ReferralProfileDocument extends Document {
   firebaseUid: string;
   // The code other people enter when they sign up. Unique, upper-case.
   code: string;
+  // Anonymous leaderboard name (user7k2m9qx). Unique; assigned lazily, so older
+  // profiles get one the next time they are loaded.
+  handle?: string;
   points: number;
   // How many people signed up with this account's code.
   referralCount: number;
@@ -19,6 +22,7 @@ const referralProfileSchema = new Schema<ReferralProfileDocument>(
   {
     firebaseUid: { type: String, required: true, unique: true, index: true },
     code: { type: String, required: true, unique: true, index: true },
+    handle: { type: String, unique: true, sparse: true },
     points: { type: Number, default: 0, min: 0 },
     referralCount: { type: Number, default: 0, min: 0 },
     referredByUid: { type: String },

@@ -1,11 +1,14 @@
 import crypto from 'crypto';
 import { ReferralProfile, ReferralProfileDocument } from '../models/ReferralProfile';
-import { Referral } from '../models/Referral';
+import { Referral, ReferralDocument } from '../models/Referral';
 import { firebaseAuth } from '../config/firebaseAdmin';
 import { isDuplicateKeyError } from '../utils/mongoErrors';
 import {
   NEW_ACCOUNT_WINDOW_MS,
   REFERRAL_CODE_ALPHABET,
+  HANDLE_ALPHABET,
+  HANDLE_PREFIX,
+  HANDLE_RANDOM_LENGTH,
   REFERRAL_CODE_LENGTH,
   REFERRAL_REDEEM_WINDOW_MS,
   REFERRED_POINTS,
@@ -26,6 +29,21 @@ export function generateReferralCode(): string {
     }
   }
   return code;
+}
+
+// "user" + 7 random characters, every character equally likely (same rejection
+// sampling as the referral code).
+export function generateHandle(): string {
+  const size = HANDLE_ALPHABET.length;
+  const limit = 256 - (256 % size);
+  let random = '';
+  while (random.length < HANDLE_RANDOM_LENGTH) {
+    for (const byte of crypto.randomBytes(HANDLE_RANDOM_LENGTH * 2)) {
+      if (byte < limit) random += HANDLE_ALPHABET[byte % size];
+      if (random.length === HANDLE_RANDOM_LENGTH) break;
+    }
+  }
+  return HANDLE_PREFIX + random;
 }
 
 // What someone typed or pasted -> the stored form. Case, spaces and dashes
@@ -53,12 +71,12 @@ async function accountCreatedWithin(firebaseUid: string, windowMs: number): Prom
 // "welcome" popup; an older one doesn't, since it never signed up just now.
 export async function ensureReferralProfile(firebaseUid: string): Promise<ReferralProfileDocument> {
   const existing = await ReferralProfile.findOne({ firebaseUid });
-  if (existing) return existing;
+  if (existing) return existing.handle ? existing : assignHandle(existing);
 
   const isNewAccount = await accountCreatedWithin(firebaseUid, NEW_ACCOUNT_WINDOW_MS);
   for (let attempt = 0; attempt < 6; attempt++) {
     try {
-      return await ReferralProfile.create({ firebaseUid, code: generateReferralCode(), welcomePending: isNewAccount });
+      return await ReferralProfile.create({ firebaseUid, code: generateReferralCode(), handle: generateHandle(), welcomePending: isNewAccount });
     } catch (err) {
       if (!isDuplicateKeyError(err)) throw err;
       // Either another request just created this account's profile (use it)
@@ -70,9 +88,31 @@ export async function ensureReferralProfile(firebaseUid: string): Promise<Referr
   throw new Error('Could not generate a unique referral code.');
 }
 
+// Gives a profile that predates leaderboard names its handle. The update only
+// matches while the profile still has none, so two requests can't set it twice.
+async function assignHandle(profile: ReferralProfileDocument): Promise<ReferralProfileDocument> {
+  for (let attempt = 0; attempt < 6; attempt++) {
+    try {
+      const updated = await ReferralProfile.findOneAndUpdate(
+        { firebaseUid: profile.firebaseUid, handle: { $exists: false } },
+        { $set: { handle: generateHandle() } },
+        { new: true }
+      );
+      if (updated) return updated;
+      // Lost the race to a concurrent request: it already set one.
+      return (await ReferralProfile.findOne({ firebaseUid: profile.firebaseUid })) ?? profile;
+    } catch (err) {
+      if (!isDuplicateKeyError(err)) throw err;
+      // The random handle collided with someone else's: try another.
+    }
+  }
+  return profile;
+}
+
 export function toPublicReferralProfile(profile: ReferralProfileDocument) {
   return {
     code: profile.code,
+    handle: profile.handle ?? '',
     points: profile.points,
     referralCount: profile.referralCount,
     welcomePending: profile.welcomePending,
@@ -102,21 +142,46 @@ export async function redeemReferralCode(firebaseUid: string, rawCode: unknown):
   if (!(await accountCreatedWithin(firebaseUid, REFERRAL_REDEEM_WINDOW_MS))) return { redeemed: false, reason: 'too_late' };
 
   // The claim: only one request can ever create this account's Referral row.
+  let claim: ReferralDocument;
   try {
-    await Referral.create({
+    claim = await Referral.create({
       referrerUid: referrer.firebaseUid,
       referredUid: firebaseUid,
       referrerPoints: REFERRER_POINTS,
       referredPoints: REFERRED_POINTS,
     });
   } catch (err) {
-    if (isDuplicateKeyError(err)) return { redeemed: false, reason: 'already' };
-    throw err;
+    if (!isDuplicateKeyError(err)) throw err;
+    // A claim already exists (a repeat, or a request that was cut off after
+    // claiming): finish paying whatever side is still unpaid, never twice.
+    const existing = await Referral.findOne({ referredUid: firebaseUid });
+    if (existing) await payReferral(existing);
+    return { redeemed: false, reason: 'already' };
   }
 
-  await Promise.all([
-    ReferralProfile.updateOne({ firebaseUid }, { $set: { referredByUid: referrer.firebaseUid }, $inc: { points: REFERRED_POINTS } }),
-    ReferralProfile.updateOne({ firebaseUid: referrer.firebaseUid }, { $inc: { points: REFERRER_POINTS, referralCount: 1 } }),
-  ]);
+  await payReferral(claim);
   return { redeemed: true };
+}
+
+// Pays each side of a claim at most once. A side's paid flag is flipped first, in
+// one atomic update that only matches while it is still false; only the request
+// that wins that flip adds the points, so concurrent or repeated calls can't
+// double-pay. (A crash between the flip and the add loses that side's points
+// rather than ever duplicating them.)
+async function payReferral(claim: ReferralDocument): Promise<void> {
+  const [referredWon, referrerWon] = await Promise.all([
+    Referral.updateOne({ _id: claim._id, referredPaid: false }, { $set: { referredPaid: true } }),
+    Referral.updateOne({ _id: claim._id, referrerPaid: false }, { $set: { referrerPaid: true } }),
+  ]);
+  await Promise.all([
+    referredWon.modifiedCount === 1
+      ? ReferralProfile.updateOne(
+          { firebaseUid: claim.referredUid },
+          { $set: { referredByUid: claim.referrerUid }, $inc: { points: claim.referredPoints } }
+        )
+      : undefined,
+    referrerWon.modifiedCount === 1
+      ? ReferralProfile.updateOne({ firebaseUid: claim.referrerUid }, { $inc: { points: claim.referrerPoints, referralCount: 1 } })
+      : undefined,
+  ]);
 }

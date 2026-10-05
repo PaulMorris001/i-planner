@@ -16,12 +16,15 @@ import { Colors, Spacing, Typography } from '@/constants/theme';
 import { Routes } from '@/constants/routes';
 
 export default function Login() {
-  const { login, loading } = useAuth();
+  const { login } = useAuth();
   const { completeOnboarding, setFocusProfile } = useOnboarding();
 
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors]     = useState<{ email?: string; password?: string; general?: string }>({});
+  // Stays true from the tap until the next screen takes over (cleared only on failure), so the
+  // button never flips back to idle during the settings lookup between sign-in and navigation.
+  const [submitting, setSubmitting] = useState(false);
 
   const validate = () => {
     const nextErrors: typeof errors = {};
@@ -33,6 +36,7 @@ export default function Login() {
 
   const handleLogin = async () => {
     if (!validate()) return;
+    setSubmitting(true);
     try {
       await login({ email, password });
       // The Login screen is only ever reached with no local onboarding state
@@ -64,6 +68,7 @@ export default function Login() {
       }
     } catch (e: any) {
       setErrors({ general: e.message });
+      setSubmitting(false);
     }
   };
 
@@ -110,7 +115,7 @@ export default function Login() {
           <Button
             label="Sign in"
             onPress={handleLogin}
-            loading={loading}
+            loading={submitting}
             style={styles.cta}
           />
 
