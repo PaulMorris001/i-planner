@@ -28,6 +28,13 @@ const TASK_FREQ_OPTIONS: { key: TaskFrequency; label: string }[] = [
   { key: 'weekdays', label: 'Weekdays' },
   { key: 'daily',    label: 'Every day' },
 ];
+// One-tap shortcuts for a task that is due soon: they set the due date AND time together.
+const QUICK_DUE_OPTIONS: { minutes: number; label: string }[] = [
+  { minutes: 15, label: 'In 15 min' },
+  { minutes: 30, label: 'In 30 min' },
+  { minutes: 60, label: 'In 1 hour' },
+];
+
 // Falls back to Planner's fixed "today" column when no due date is picked.
 const DEFAULT_DAY_INDEX = 1;
 
@@ -41,6 +48,9 @@ export function NewTaskModal() {
   const [dueTime, setDueTime] = useState<Date | null>(null);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [dueDate, setDueDate] = useState<Date | null>(null);
+  // Which quick option (in minutes) is currently applied, so its chip shows as selected.
+  // Cleared as soon as the date or time is changed by hand.
+  const [quickMinutes, setQuickMinutes] = useState<number | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [recurring, setRecurring] = useState(false);
   const [freq, setFreq] = useState<TaskFrequency>('weekly');
@@ -63,6 +73,7 @@ export function NewTaskModal() {
     setPriority('medium');
     setDueTime(null);
     setDueDate(null);
+    setQuickMinutes(null);
     setRecurring(false);
     setFreq('weekly');
     setSelectedDays([]);
@@ -78,6 +89,7 @@ export function NewTaskModal() {
       setPriority(editingTask.priority);
       setDueTime(editingTask.time ? parseTimeToDate(editingTask.time) : null);
       setDueDate(editingTask.dueDate ? parseISODateLocal(editingTask.dueDate) : null);
+      setQuickMinutes(null);
       setRecurring(editingTask.recurring);
       setFreq(editingTask.freq ?? 'weekly');
       setSelectedDays(editingTask.freq === 'weekly' ? editingTask.dayIdxs ?? [] : []);
@@ -95,6 +107,18 @@ export function NewTaskModal() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, editingTask, draft]);
+
+  // Due in `minutes` from now. The time is stored as hh:mm, so the target is rounded UP to a
+  // whole minute: "in 15 minutes" is never earlier than promised. Crossing midnight moves the
+  // date to tomorrow too, which is why both are set together.
+  const applyQuickDue = (minutes: number) => {
+    const target = new Date(Math.ceil((Date.now() + minutes * 60_000) / 60_000) * 60_000);
+    setDueDate(target);
+    setDueTime(target);
+    setShowDatePicker(false);
+    setShowTimePicker(false);
+    setQuickMinutes(minutes);
+  };
 
   const handleClose = () => {
     close();
@@ -207,10 +231,30 @@ export function NewTaskModal() {
             })}
           </View>
 
+          <Text style={styles.eyebrow}>Quick due time</Text>
+          <View style={styles.chipWrap}>
+            {QUICK_DUE_OPTIONS.map((o) => (
+              <Chip
+                key={o.minutes}
+                label={o.label}
+                selected={quickMinutes === o.minutes}
+                onPress={() => applyQuickDue(o.minutes)}
+                activeColor={Colors.primaryLight}
+                size="compact"
+              />
+            ))}
+          </View>
+
           <View style={styles.fieldLabelRow}>
             <Text style={styles.eyebrow}>Due date</Text>
             {dueDate && (
-              <Pressable onPress={() => setDueDate(null)} hitSlop={8}>
+              <Pressable
+                onPress={() => {
+                  setDueDate(null);
+                  setQuickMinutes(null);
+                }}
+                hitSlop={8}
+              >
                 <Text style={styles.clearLabel}>Clear</Text>
               </Pressable>
             )}
@@ -229,14 +273,23 @@ export function NewTaskModal() {
             visible={showDatePicker}
             value={dueDate ?? new Date()}
             mode="date"
-            onChange={setDueDate}
+            onChange={(d) => {
+              setDueDate(d);
+              setQuickMinutes(null);
+            }}
             onDismiss={() => setShowDatePicker(false)}
           />
 
           <View style={styles.fieldLabelRow}>
             <Text style={styles.eyebrow}>Due time</Text>
             {dueTime && (
-              <Pressable onPress={() => setDueTime(null)} hitSlop={8}>
+              <Pressable
+                onPress={() => {
+                  setDueTime(null);
+                  setQuickMinutes(null);
+                }}
+                hitSlop={8}
+              >
                 <Text style={styles.clearLabel}>Clear</Text>
               </Pressable>
             )}
@@ -255,7 +308,10 @@ export function NewTaskModal() {
             visible={showTimePicker}
             value={dueTime ?? new Date()}
             mode="time"
-            onChange={setDueTime}
+            onChange={(t) => {
+              setDueTime(t);
+              setQuickMinutes(null);
+            }}
             onDismiss={() => setShowTimePicker(false)}
           />
 

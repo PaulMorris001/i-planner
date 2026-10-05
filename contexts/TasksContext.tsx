@@ -102,6 +102,9 @@ export function TasksProvider({ children }: { children: ReactNode }) {
       await markTaskScheduled(created, notificationIds);
     } catch (err) {
       setTasks((prev) => prev.filter((t) => t.id !== tempId));
+      // The reminders above were scheduled before the save. With no task, nothing would
+      // ever cancel them, and they would keep firing for a task that does not exist.
+      await cancelNotifications(notificationIds);
       throw err;
     }
   };
@@ -215,17 +218,26 @@ export function TasksProvider({ children }: { children: ReactNode }) {
   // Takes the task itself rather than an id: caller (coach.tsx) awaits refetch() then
   // this in the same handler, so this closure's `tasks` is still the pre-refetch
   // snapshot and a lookup here would always miss.
+  //
+  // The refetch that produced `task` already ran the reminder reconcile, which schedules
+  // reminders for every task it has not seen. Scheduling again here used to double every
+  // reminder and orphan the first set (nothing tracks those ids, so an edit or delete could
+  // never cancel them). So reminders are only scheduled when the task has none yet.
   const syncExternallyCreatedTask = async (task: Task) => {
-    const appleEventIds = appleCalendarConnected ? await syncTaskToAppleCalendar(task) : [];
-    const notificationIds = remindersEnabled ? await scheduleTaskNotifications(task) : [];
-    if (!appleEventIds.length && !notificationIds.length) return;
+    const appleEventIds = appleCalendarConnected && !task.appleEventIds?.length ? await syncTaskToAppleCalendar(task) : [];
+    const newNotificationIds = remindersEnabled && !task.notificationIds?.length ? await scheduleTaskNotifications(task) : [];
+    if (!appleEventIds.length && !newNotificationIds.length) return;
     const patch: Partial<NewTaskInput> = {};
     if (appleEventIds.length) patch.appleEventIds = appleEventIds;
+    // Keep the ids the task already has, so the server copy returned below does not drop them.
+    const notificationIds = newNotificationIds.length ? newNotificationIds : task.notificationIds ?? [];
     if (notificationIds.length) patch.notificationIds = notificationIds;
     try {
       const updated = await taskService.update(task.id, patch);
       setTasks((prev) => prev.map((t) => (t.id === task.id ? updated : t)));
-      await markTaskScheduled({ ...task, ...patch }, notificationIds);
+      // Only when this call scheduled something: marking with an empty list would wipe the
+      // ids the reconcile pass recorded.
+      if (newNotificationIds.length) await markTaskScheduled({ ...task, ...patch }, newNotificationIds);
     } catch (err) {
       console.error('[TasksProvider] failed to sync externally-created task', err);
     }

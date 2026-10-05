@@ -300,6 +300,8 @@ export default function Coach() {
         if (last?.role === 'assistant' && new Date(last.createdAt).getTime() >= sentAt - 60_000) {
           setMessages(latest);
           setTypingMessageId(last.id);
+          // The reply may have created tasks. Refetching also schedules their reminders.
+          refetchTasks().catch((e) => console.error('[Coach] failed to refresh tasks after recovery', e));
           return;
         }
       } catch {

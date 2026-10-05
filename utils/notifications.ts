@@ -13,6 +13,11 @@ import type { StudentPlan } from '@/types/plan.types';
 // Shared by Tasks and Classes: each gets two notifications per occurrence — one
 // REMINDER_LEAD_MINUTES before, one exactly at the due/start time.
 const REMINDER_LEAD_MINUTES = 15;
+// A task with a due DATE but no time (syllabus deadlines, AI Coach tasks with no time given)
+// gets one reminder at this time of day on the due date, instead of none at all.
+const DATE_ONLY_REMINDER_TIME = '9:00 AM';
+// See scheduleOccurrence: a lead reminder due within this long of NOW (either side) is skipped.
+const LEAD_NEAR_NOW_MS = 90_000;
 // iOS's hard, fixed pending-local-notification cap, shared across every
 // reminder this app has ever scheduled (lead+exact for every task/class/bill,
 // plus escalation extras for alarms) — anything scheduled past this ceiling
@@ -514,6 +519,13 @@ async function scheduleOccurrence(spec: OccurrenceSpec): Promise<string[]> {
     if (due.getTime() <= Date.now()) return []; // already passed — nothing to notify about
 
     const idealFireAt = new Date(due.getTime() - spec.leadMinutes * 60_000);
+    // A heads-up due right about NOW (a moment ago, or in the next minute or so) means the
+    // task was set up about `leadMinutes` before it is due, typically a "due in 15 minutes"
+    // quick task. The person just made it, so "Due in 15 minutes" seconds later is noise; the
+    // due-time reminder still fires. Heads-ups missed by longer still fire (see the note above).
+    if (spec.leadMinutes > 0 && Math.abs(idealFireAt.getTime() - Date.now()) < LEAD_NEAR_NOW_MS) {
+      return [];
+    }
     const fireAt = idealFireAt.getTime() > Date.now() ? idealFireAt : new Date(Date.now() + 3_000);
     const minutesUntil = Math.round((due.getTime() - fireAt.getTime()) / 60_000);
 
@@ -645,6 +657,23 @@ export async function scheduleTaskNotifications(task: {
   dayIdxs?: number[];
   alarmEnabled?: boolean;
 }): Promise<string[]> {
+  // No time of day (a due date only): one "due today" reminder in the morning. There is no
+  // meaningful 15-minute lead for it, and no alarm (the alarm toggle needs a time).
+  if (!task.time?.trim()) {
+    if (!task.dueDate) return [];
+    return scheduleOccurrence({
+      title: `Task: ${task.title}`,
+      bodyForMinutes: () => 'Due today',
+      dateIso: task.dueDate,
+      time: DATE_ONLY_REMINDER_TIME,
+      recurring: task.recurring,
+      freq: task.freq,
+      dayIdxs: task.dayIdxs,
+      leadMinutes: 0,
+      deferUntilStart: true,
+    });
+  }
+
   // Only the due-time notification (leadMinutes: 0) ever gets isAlarm — the
   // 15-min lead stays a normal, gentle heads-up either way, regardless of
   // the Alarm toggle. Set per-call below, not in this shared spec factory.
