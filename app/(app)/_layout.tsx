@@ -5,6 +5,7 @@ import { Colors } from '@/constants/theme';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { TabBarFAB } from '@/components/ui/TabBarFAB';
 import { CreateTaskHint } from '@/components/ui/CreateTaskHint';
+import { ReferralModal } from '@/components/referral/ReferralModal';
 
 // Tab bar geometry, shared with the hint's position below.
 const TAB_BAR_CONTENT_HEIGHT = 60;
@@ -79,6 +80,7 @@ export default function AppLayout() {
         />
       </Tabs>
       {showCreateTaskHint && <CreateTaskHint bottomOffset={fabTop + 6} />}
+      <ReferralModal />
     </View>
   );
 }

@@ -13,6 +13,7 @@ import type {
 import type { User } from "@/types/user.types";
 import { cancelAllDeviceReminders } from "@/utils/notificationReconcile";
 import { unregisterPushToken } from "@/utils/pushNotifications";
+import { clearPendingReferralCode } from "@/utils/referralPending";
 import {
   deleteUser,
   EmailAuthProvider,
@@ -120,6 +121,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await cancelAllDeviceReminders();
     // Before signOut — the backend call needs the still-valid session.
     await unregisterPushToken();
+    // A referral code that never reached the server belonged to this account only.
+    await clearPendingReferralCode();
     await signOut(auth);
     setError(null);
   };

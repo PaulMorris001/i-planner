@@ -7,6 +7,8 @@ export interface RegisterPayload {
   fullName: string;
   email: string;
   password: string;
+  // Optional code from a friend; both of you earn points (see ReferralContext).
+  referralCode?: string;
 }
 
 export interface AuthResponse {

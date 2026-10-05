@@ -4,6 +4,7 @@ import { Stack, type ErrorBoundaryProps } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { PurchasesProvider } from '@/contexts/PurchasesContext';
+import { ReferralProvider } from '@/contexts/ReferralContext';
 import { OnboardingProvider } from '@/contexts/OnboardingContext';
 import { HabitsProvider } from '@/contexts/HabitsContext';
 import { NotesProvider } from '@/contexts/NotesContext';
@@ -57,6 +58,7 @@ export default function RootLayout() {
 
   return (
     <AuthProvider>
+      <ReferralProvider>
       <PurchasesProvider>
         <OnboardingProvider>
           <PlanProvider>
@@ -91,6 +93,7 @@ export default function RootLayout() {
           </PlanProvider>
         </OnboardingProvider>
       </PurchasesProvider>
+      </ReferralProvider>
     </AuthProvider>
   );
 }

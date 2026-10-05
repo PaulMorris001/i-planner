@@ -1,6 +1,7 @@
 import { auth } from "@/config/firebase";
 import { authEmailService } from "@/services/authEmail.service";
 import { getDeviceInfo } from "@/utils/deviceId";
+import { clearPendingReferralCode, savePendingReferralCode } from "@/utils/referralPending";
 import type {
   AuthError,
   AuthResponse,
@@ -83,6 +84,10 @@ export const authService = {
   },
 
   register: async (payload: RegisterPayload): Promise<AuthResponse> => {
+    const referralCode = payload.referralCode?.trim();
+    // Remembered BEFORE the account exists: signing in triggers the referral loader
+    // the instant the account is created, and it has to find the code waiting.
+    if (referralCode) await savePendingReferralCode(referralCode);
     try {
       const cred = await createUserWithEmailAndPassword(
         auth,
@@ -96,6 +101,8 @@ export const authService = {
         .catch((err) => console.error("[auth] failed to send welcome email", err));
       return { user: mapFirebaseUser(cred.user) };
     } catch (err) {
+      // No account was made, so there is nothing for the code to apply to.
+      if (referralCode) await clearPendingReferralCode();
       throw mapFirebaseError(err);
     }
   },

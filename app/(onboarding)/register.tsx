@@ -9,6 +9,7 @@ import { PRIVACY_URL, TERMS_URL } from "@/constants/legal";
 import { Routes } from "@/constants/routes";
 import { Colors, Spacing, Typography } from "@/constants/theme";
 import { useAuth } from "@/hooks/useAuth";
+import { referralService } from "@/services/referral.service";
 import { router } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useState } from "react";
@@ -20,10 +21,14 @@ export default function Register() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [referralCode, setReferralCode] = useState("");
+  // True while the referral code is being checked, before the account is created.
+  const [checkingCode, setCheckingCode] = useState(false);
   const [errors, setErrors] = useState<{
     fullName?: string;
     email?: string;
     password?: string;
+    referralCode?: string;
     general?: string;
   }>({});
 
@@ -41,8 +46,26 @@ export default function Register() {
   const handleRegister = async () => {
     if (!validate()) return;
     setErrors({});
+    const code = referralCode.trim();
+    if (code) {
+      // Checked BEFORE creating the account, so a typo can be fixed instead of the
+      // code being silently dropped (it cannot be added after sign-up).
+      setCheckingCode(true);
+      try {
+        const { valid } = await referralService.validate(code);
+        if (!valid) {
+          setErrors({ referralCode: "That referral code doesn't exist. Check it, or leave it blank." });
+          return;
+        }
+      } catch {
+        // Could not check (no signal, busy). Do not block sign-up on it: the code is
+        // kept and applied once the account exists.
+      } finally {
+        setCheckingCode(false);
+      }
+    }
     try {
-      await register({ fullName, email, password });
+      await register({ fullName, email, password, referralCode: code || undefined });
       router.replace(Routes.NOTIFICATIONS_PROMPT);
     } catch (e: any) {
       setErrors({ general: e.message });
@@ -100,10 +123,21 @@ export default function Register() {
             error={errors.password}
           />
 
+          <Input
+            label="Referral code (optional)"
+            placeholder="Have a code from a friend?"
+            value={referralCode}
+            onChangeText={setReferralCode}
+            autoCapitalize="characters"
+            autoCorrect={false}
+            maxLength={12}
+            error={errors.referralCode}
+          />
+
           <Button
             label="Create account"
             onPress={handleRegister}
-            loading={loading}
+            loading={loading || checkingCode}
             style={styles.cta}
           />
 

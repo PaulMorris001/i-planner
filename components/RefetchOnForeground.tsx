@@ -11,6 +11,7 @@ import { useSavingsGoals } from '@/hooks/useSavingsGoals';
 import { useGoals } from '@/hooks/useGoals';
 import { usePlan } from '@/hooks/usePlan';
 import { useSyllabi } from '@/hooks/useSyllabi';
+import { useReferral } from '@/hooks/useReferral';
 
 // Renders nothing — exists purely to re-fetch every data context whenever the
 // app returns to the foreground. Every context here already fetches once on
@@ -36,6 +37,7 @@ export function RefetchOnForeground() {
   const { refetch: refetchGoals } = useGoals();
   const { refetch: refetchPlan } = usePlan();
   const { refetch: refetchSyllabi } = useSyllabi();
+  const { refresh: refreshReferral } = useReferral();
 
   // Refs, not deps on the effect below — these values are read at the moment
   // the app actually foregrounds, not captured stale at effect-setup time, so
@@ -43,11 +45,11 @@ export function RefetchOnForeground() {
   // just because a context re-rendered or the user logged in/out meanwhile.
   const latest = useRef({
     user, refetchTasks, refetchHabits, refetchNotes, refetchFolders, refetchBills,
-    refetchSavingsGoals, refetchGoals, refetchPlan, refetchSyllabi,
+    refetchSavingsGoals, refetchGoals, refetchPlan, refetchSyllabi, refreshReferral,
   });
   latest.current = {
     user, refetchTasks, refetchHabits, refetchNotes, refetchFolders, refetchBills,
-    refetchSavingsGoals, refetchGoals, refetchPlan, refetchSyllabi,
+    refetchSavingsGoals, refetchGoals, refetchPlan, refetchSyllabi, refreshReferral,
   };
 
   useEffect(() => {
@@ -73,7 +75,7 @@ export function RefetchOnForeground() {
           // again.
           Promise.all([
             r.refetchTasks(), r.refetchHabits(), r.refetchNotes(), r.refetchFolders(), r.refetchBills(),
-            r.refetchSavingsGoals(), r.refetchGoals(), r.refetchPlan(), r.refetchSyllabi(),
+            r.refetchSavingsGoals(), r.refetchGoals(), r.refetchPlan(), r.refetchSyllabi(), r.refreshReferral(),
           ])
         ).catch((err) => console.error('[RefetchOnForeground] failed to refetch on foreground', err));
       }

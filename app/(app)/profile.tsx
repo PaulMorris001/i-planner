@@ -1,5 +1,6 @@
 import { ScreenWrapper } from "@/components/layout/ScreenWrapper";
 import { DeleteAccountModal } from "@/components/profile/DeleteAccountModal";
+import { ReferralCodeCard } from "@/components/referral/ReferralCodeCard";
 import { Button } from "@/components/ui/Button";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { SkeletonBlock } from "@/components/ui/Skeleton";
@@ -304,6 +305,15 @@ export default function Profile() {
             size={20}
           />
         </Pressable>
+
+        <Text style={[styles.eyebrow, { marginTop: Spacing.lg }]}>
+          REFERRAL CODE
+        </Text>
+        <Text style={styles.sectionDesc}>
+          Share your code with friends. You both earn points when they sign up
+          with it.
+        </Text>
+        <ReferralCodeCard />
 
         <Text style={[styles.eyebrow, { marginTop: Spacing.lg }]}>
           CALENDAR SYNC

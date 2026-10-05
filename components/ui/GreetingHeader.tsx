@@ -1,3 +1,4 @@
+import { ReferralPointsBadge } from "@/components/referral/ReferralPointsBadge";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { SkeletonBlock } from "@/components/ui/Skeleton";
 import { Colors, Spacing, Radius } from "@/constants/theme";
@@ -50,11 +51,14 @@ export function GreetingHeader({
           <Text style={styles.name}>{displayName}</Text>
         )}
       </View>
-      {onMenuPress && (
-        <Pressable style={styles.menuButton} onPress={onMenuPress} hitSlop={8}>
-          <IconSymbol name="line.3.horizontal" color={Colors.textPrimary} size={22} />
-        </Pressable>
-      )}
+      <View style={styles.actions}>
+        <ReferralPointsBadge />
+        {onMenuPress && (
+          <Pressable style={styles.menuButton} onPress={onMenuPress} hitSlop={8}>
+            <IconSymbol name="line.3.horizontal" color={Colors.textPrimary} size={22} />
+          </Pressable>
+        )}
+      </View>
     </View>
   );
 }
@@ -78,6 +82,12 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: Colors.textPrimary,
     marginTop: 1,
+  },
+  // Points badge and menu button, side by side on the right.
+  actions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
   // Same 42x42 footprint the old circular avatar had, so the header's height
   // doesn't shift now that it's a menu trigger instead of a user badge.
