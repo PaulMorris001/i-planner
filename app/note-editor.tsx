@@ -130,6 +130,13 @@ export default function NoteEditor() {
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dictationBaseHtmlRef = useRef('');
   const dictationBaseLengthRef = useRef(0);
+  // Dictation can start before the editor has finished loading (the mic works the
+  // moment a note opens). What is said until then waits here and is put into the
+  // note once it has loaded; `ended` records that dictation already stopped.
+  const dictationBufferRef = useRef<{ text: string; ended: boolean } | null>(null);
+  // Whether dictationBase* describe the note as it stands now. They are captured
+  // when dictation starts, or at the first update if the note had not loaded yet.
+  const dictationBaseSetRef = useRef(false);
 
   const applyBody = (stored: string) => {
     bodyRef.current = stored;
@@ -213,6 +220,17 @@ export default function NoteEditor() {
       baselineReadyRef.current = true;
       lastSavedRef.current = { title: lastSavedRef.current.title, body: stored };
       applyBody(stored);
+      // The mic was tapped before the note finished loading: add what was said.
+      const buffered = dictationBufferRef.current;
+      if (buffered) {
+        dictationBufferRef.current = null;
+        suppressUntilRef.current = Date.now() + EDITOR_ECHO_MS;
+        if (buffered.text) applyDictationText(buffered.text);
+        if (buffered.ended) {
+          dictationActiveRef.current = false;
+          await syncBodyFromEditor();
+        }
+      }
     })().catch((err) => console.error('[NoteEditor] failed to load the note into the editor', err));
     return () => {
       cancelled = true;
@@ -333,18 +351,40 @@ export default function NoteEditor() {
     notifyNoteFull();
   };
 
+  // Records the note as it stands as the text dictation adds onto.
+  const setDictationBase = (stored: string) => {
+    dictationBaseHtmlRef.current = bodyToEditorHtml(stored);
+    dictationBaseLengthRef.current = bodyToPlainText(stored).length;
+    dictationBaseSetRef.current = true;
+  };
+
+  // Dictation owns the editor's content while it runs: each update replaces the
+  // previous update's text after the original note, so changes made through the
+  // editor itself are ignored until it ends.
+  const applyDictationText = (liveText: string) => {
+    if (!dictationBaseSetRef.current) setDictationBase(bodyRef.current);
+    const room = Math.max(0, NOTE_BODY_MAX_LENGTH - dictationBaseLengthRef.current);
+    const text = liveText.length > room ? liveText.slice(0, room) : liveText;
+    editor.setContent(appendTextToEditorHtml(dictationBaseHtmlRef.current, text));
+    if (liveText.length > room) notifyNoteFull();
+  };
+
   const dictation = useDictation({
     onTranscriptChange: (liveText) => {
       dictationActiveRef.current = true;
-      // Dictation owns the editor's content while it runs: each update replaces
-      // the previous session's text after the original note, so changes made
-      // through the editor itself are ignored until it ends.
-      const room = Math.max(0, NOTE_BODY_MAX_LENGTH - dictationBaseLengthRef.current);
-      const text = liveText.length > room ? liveText.slice(0, room) : liveText;
-      editor.setContent(appendTextToEditorHtml(dictationBaseHtmlRef.current, text));
-      if (liveText.length > room) notifyNoteFull();
+      if (!baselineReadyRef.current) {
+        // The note is still loading: keep what has been said until it is in.
+        dictationBufferRef.current = { text: liveText, ended: dictationBufferRef.current?.ended ?? false };
+        return;
+      }
+      applyDictationText(liveText);
     },
     onEnd: () => {
+      if (!baselineReadyRef.current) {
+        // Stopped before the note loaded: finish up once it has.
+        dictationBufferRef.current = { text: dictationBufferRef.current?.text ?? '', ended: true };
+        return;
+      }
       dictationActiveRef.current = false;
       // Whatever was dictated becomes part of the note.
       suppressUntilRef.current = Date.now() + EDITOR_ECHO_MS;
@@ -367,10 +407,10 @@ export default function NoteEditor() {
       dictation.stop();
       return;
     }
-    if (!baselineReadyRef.current) return;
-    const stored = await currentBody();
-    dictationBaseHtmlRef.current = bodyToEditorHtml(stored);
-    dictationBaseLengthRef.current = bodyToPlainText(stored).length;
+    // Starts right away, even if the editor is still loading (see dictationBufferRef).
+    dictationBufferRef.current = null;
+    dictationBaseSetRef.current = false;
+    if (baselineReadyRef.current) setDictationBase(await currentBody());
     dictation.start();
   };
 
