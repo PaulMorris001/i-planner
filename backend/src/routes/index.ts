@@ -20,6 +20,7 @@ import { subscriptionRouter } from './subscription.routes';
 import { calendarImportRouter } from './calendarImport.routes';
 import { pushRouter } from './push.routes';
 import { referralRouter } from './referral.routes';
+import { studyRouter } from './study.routes';
 
 export const router = Router();
 
@@ -47,6 +48,7 @@ router.use('/subscription', subscriptionRouter);
 router.use('/calendar', calendarImportRouter);
 router.use('/push', pushRouter);
 router.use('/referral', referralRouter);
+router.use('/study', studyRouter);
 
 // Sibling to /settings, not nested — settingsRouter blanket-applies requireAuth,
 // but this unauthenticated browser redirect can't carry one.

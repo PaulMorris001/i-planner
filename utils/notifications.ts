@@ -27,7 +27,7 @@ const LEAD_NEAR_NOW_MS = 90_000;
 // callers that can schedule many of those at once (bulk timetable import —
 // see getNotificationHeadroom below) need to check for themselves first.
 const IOS_NOTIFICATION_CAP = 64;
-const ANDROID_CHANNEL_ID = 'planner-reminders';
+export const ANDROID_CHANNEL_ID = 'planner-reminders';
 // Separate channel, not a change to the one above — Android channel settings
 // are effectively fixed once created, and this must not retroactively change
 // behavior for every existing non-alarm task/class/bill reminder already
@@ -990,4 +990,44 @@ export async function cancelNotifications(notificationIds: string[] | undefined)
       })
     )
   );
+}
+
+// A study session's weekly reminder: one repeating notification per chosen day, at
+// the session's start time. Only reminds; the session itself only counts once the
+// person taps Start. Returns the ids so the session can store them and cancel them
+// on edit/delete.
+export async function scheduleStudySessionNotifications(session: {
+  name: string;
+  days: number[];
+  startMinute: number | null;
+}): Promise<string[]> {
+  if (!session.days.length || session.startMinute === null) return [];
+  if (!(await hasPermission())) return [];
+
+  const hour = Math.floor(session.startMinute / 60);
+  const minute = session.startMinute % 60;
+  const channelId = Platform.OS === 'android' ? ANDROID_CHANNEL_ID : undefined;
+
+  const ids = await Promise.all(
+    session.days.map((dayIdx) =>
+      Notifications.scheduleNotificationAsync({
+        content: {
+          title: 'Study time',
+          body: `Time to start "${session.name}". Open the app and tap Start to log it.`,
+          data: { kind: 'study' },
+        },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
+          weekday: toExpoWeekday(dayIdx),
+          hour,
+          minute,
+          channelId,
+        },
+      }).catch((err) => {
+        console.error('[notifications] failed to schedule study reminder', err);
+        return null;
+      })
+    )
+  );
+  return ids.filter((id): id is string => !!id);
 }

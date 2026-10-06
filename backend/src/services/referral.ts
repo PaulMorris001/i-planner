@@ -3,6 +3,7 @@ import { ReferralProfile, ReferralProfileDocument } from '../models/ReferralProf
 import { Referral, ReferralDocument } from '../models/Referral';
 import { firebaseAuth } from '../config/firebaseAdmin';
 import { isDuplicateKeyError } from '../utils/mongoErrors';
+import { recordPointEvent } from './pointEvents';
 import {
   NEW_ACCOUNT_WINDOW_MS,
   REFERRAL_CODE_ALPHABET,
@@ -172,6 +173,14 @@ async function payReferral(claim: ReferralDocument): Promise<void> {
   const [referredWon, referrerWon] = await Promise.all([
     Referral.updateOne({ _id: claim._id, referredPaid: false }, { $set: { referredPaid: true } }),
     Referral.updateOne({ _id: claim._id, referrerPaid: false }, { $set: { referrerPaid: true } }),
+  ]);
+  await Promise.all([
+    referredWon.modifiedCount === 1
+      ? recordPointEvent(claim.referredUid, `referral:referred:${claim.referredUid}`, 'referral', claim.referredPoints)
+      : undefined,
+    referrerWon.modifiedCount === 1
+      ? recordPointEvent(claim.referrerUid, `referral:referrer:${claim.referredUid}`, 'referral', claim.referrerPoints)
+      : undefined,
   ]);
   await Promise.all([
     referredWon.modifiedCount === 1

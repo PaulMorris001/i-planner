@@ -307,6 +307,30 @@ export function ProfileInfoModal({
                   size={18}
                 />
               </Pressable>
+              {pathId !== 'professional' && (
+                <Pressable style={styles.manageRow} onPress={() => goTo(Routes.STUDY)}>
+                  <View style={styles.manageLabelRow}>
+                    <IconSymbol name="book.fill" color={Colors.primaryLight} size={18} />
+                    <Text style={styles.manageText}>Study time</Text>
+                  </View>
+                  <IconSymbol
+                    name="chevron.right"
+                    color={Colors.primaryLight}
+                    size={18}
+                  />
+                </Pressable>
+              )}
+              <Pressable style={styles.manageRow} onPress={() => goTo(Routes.LEADERBOARD)}>
+                <View style={styles.manageLabelRow}>
+                  <IconSymbol name="trophy.fill" color={Colors.primaryLight} size={18} />
+                  <Text style={styles.manageText}>Leaderboard</Text>
+                </View>
+                <IconSymbol
+                  name="chevron.right"
+                  color={Colors.primaryLight}
+                  size={18}
+                />
+              </Pressable>
               <Pressable style={styles.manageRow} onPress={() => goTo(Routes.NOTES)}>
                 <View style={styles.manageLabelRow}>
                   <IconSymbol name="note.text" color={Colors.primaryLight} size={18} />

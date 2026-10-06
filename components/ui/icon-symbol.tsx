@@ -32,6 +32,7 @@ const MAPPING = {
   'clock': 'schedule',
   'flame.fill': 'local-fire-department',
   'target': 'track-changes',
+  'trophy.fill': 'emoji-events',
   'arrow.right': 'arrow-forward',
   'star.fill': 'star',
   'xmark': 'close',

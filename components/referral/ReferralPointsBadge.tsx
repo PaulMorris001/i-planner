@@ -25,6 +25,7 @@ export function ReferralPointsBadge() {
       <IconSymbol name="flame.fill" color={Colors.primaryLight} size={28} />
       <Text style={styles.points} allowFontScaling={false} numberOfLines={1}>
         {formatPoints(points)}
+        <Text style={styles.unit}> pts</Text>
       </Text>
     </Pressable>
   );
@@ -42,5 +43,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '800',
     color: Colors.textPrimary,
+  },
+  // Smaller and lighter than the number, so it reads as its unit.
+  unit: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.textSecondary,
   },
 });

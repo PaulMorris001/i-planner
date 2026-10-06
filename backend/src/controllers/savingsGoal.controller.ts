@@ -3,6 +3,8 @@ import { SavingsGoal, toPublicSavingsGoal } from '../models/SavingsGoal';
 import { AuthedRequest } from '../middleware/requireAuth';
 import { ApiError } from '../utils/ApiError';
 import { findOwnedOrThrow } from '../utils/ownedDoc';
+import { awardPointsSafely, isOldEnoughForPoints, utcDateKey } from '../services/points';
+import { POINTS } from '../constants/points';
 
 export async function listSavingsGoals(req: AuthedRequest, res: Response) {
   const goals = await SavingsGoal.find({ firebaseUid: req.userId }).sort({ targetDate: 1 });
@@ -52,6 +54,8 @@ export async function updateSavingsGoal(req: AuthedRequest, res: Response) {
     }
     goal.targetAmount = targetAmount;
   }
+  const savedBefore = goal.savedAmount;
+  const targetBefore = goal.targetAmount;
   if (savedAmount !== undefined) {
     if (typeof savedAmount !== 'number' || savedAmount < 0) {
       throw new ApiError(400, 'Saved amount must be 0 or more.', 'general');
@@ -66,6 +70,20 @@ export async function updateSavingsGoal(req: AuthedRequest, res: Response) {
   }
 
   await goal.save();
+
+  // Points: a little for every update that adds money (once per goal per day, so
+  // adding in many small bits earns once), and a bigger bonus once, when the goal
+  // reaches its target. Both need the goal to have existed for a few minutes.
+  if (isOldEnoughForPoints(goal)) {
+    if (goal.savedAmount > savedBefore) {
+      await awardPointsSafely(req.userId!, `savings:${goal.id}:${utcDateKey()}`, 'savings', POINTS.savingsUpdate);
+    }
+    const wasComplete = savedBefore >= targetBefore;
+    if (goal.savedAmount >= goal.targetAmount && !wasComplete) {
+      await awardPointsSafely(req.userId!, `savings-done:${goal.id}`, 'savings', POINTS.savingsDone);
+    }
+  }
+
   res.json(toPublicSavingsGoal(goal));
 }
 

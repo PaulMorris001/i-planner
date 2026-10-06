@@ -1,7 +1,8 @@
 import { ScreenWrapper } from "@/components/layout/ScreenWrapper";
 import { DeleteAccountModal } from "@/components/profile/DeleteAccountModal";
+import { PointsFaq } from "@/components/profile/PointsFaq";
 import { ReferralCodeCard } from "@/components/referral/ReferralCodeCard";
-import { ReferralLeaderboard } from "@/components/referral/ReferralLeaderboard";
+import { StudyHoursLine } from "@/components/study/StudyHoursLine";
 import { Button } from "@/components/ui/Button";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { SkeletonBlock } from "@/components/ui/Skeleton";
@@ -247,9 +248,13 @@ export default function Profile() {
             <Text style={styles.profilePlan}>
               I-Planner · {TIER_LABEL[tier]} plan
             </Text>
+            {user?.fullName && user?.email ? (
+              <Text style={styles.profilePlan}>{user.email}</Text>
+            ) : null}
             {handle ? (
               <Text style={styles.profilePlan}>Leaderboard name · {handle}</Text>
             ) : null}
+            {currentPath !== "professional" ? <StudyHoursLine /> : null}
           </View>
         </View>
 
@@ -340,7 +345,6 @@ export default function Profile() {
           with it.
         </Text>
         <ReferralCodeCard />
-        <ReferralLeaderboard />
 
         <Text style={[styles.eyebrow, { marginTop: Spacing.lg }]}>
           CALENDAR SYNC
@@ -599,6 +603,9 @@ export default function Profile() {
             </View>
           ))}
         </View>
+
+        <Text style={[styles.eyebrow, { marginTop: Spacing.lg }]}>FAQ</Text>
+        <PointsFaq showStudy={currentPath !== "professional"} />
 
         <Text style={[styles.eyebrow, { marginTop: Spacing.lg }]}>LEGAL</Text>
         <View style={styles.legalCard}>

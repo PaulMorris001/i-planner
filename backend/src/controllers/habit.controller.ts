@@ -3,6 +3,8 @@ import { Habit, toPublicHabit, toDateKey, HabitFrequency } from '../models/Habit
 import { AuthedRequest } from '../middleware/requireAuth';
 import { ApiError } from '../utils/ApiError';
 import { findOwnedOrThrow } from '../utils/ownedDoc';
+import { awardPointsSafely, isOldEnoughForPoints, isPlausibleToday } from '../services/points';
+import { POINTS } from '../constants/points';
 
 const VALID_FREQS: HabitFrequency[] = ['daily', 'weekdays', 'weekly', 'monthly'];
 const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -79,6 +81,22 @@ export async function toggleHabitToday(req: AuthedRequest, res: Response) {
       { $addToSet: { completedDates: todayKey } },
       { new: true }
     ));
+
+  // Points: once per habit per day (unticking and re-ticking pays nothing more),
+  // plus a bonus the first time a streak reaches 7 and 30 days.
+  if (!pulled && habit && isPlausibleToday(todayKey) && isOldEnoughForPoints(habit)) {
+    await awardPointsSafely(req.userId!, `habit:${habit.id}:${todayKey}`, 'habit', POINTS.habit);
+    if (habit.freq === 'daily' || habit.freq === 'weekdays') {
+      const streak = toPublicHabit(habit, todayKey).streak;
+      const bonus = streak === 7 ? POINTS.habitStreak7 : streak === 30 ? POINTS.habitStreak30 : 0;
+      if (bonus) {
+        // Keyed by the first day of the run so un/re-ticking the same day can't pay it again.
+        const dates = [...new Set(habit.completedDates)].filter((d) => d <= todayKey).sort();
+        const runStart = dates[dates.length - streak] ?? todayKey;
+        await awardPointsSafely(req.userId!, `habit-streak${streak}:${habit.id}:${runStart}`, 'habit-streak', bonus);
+      }
+    }
+  }
 
   res.json(toPublicHabit(habit!, todayKey));
 }

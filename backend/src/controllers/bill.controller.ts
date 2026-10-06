@@ -3,6 +3,8 @@ import { Bill, toPublicBill, BILL_CATEGORIES, BillCategory } from '../models/Bil
 import { AuthedRequest } from '../middleware/requireAuth';
 import { ApiError } from '../utils/ApiError';
 import { findOwnedOrThrow } from '../utils/ownedDoc';
+import { awardPointsSafely, isCycleNearToday, isOldEnoughForPoints, isPaidOnTime } from '../services/points';
+import { POINTS } from '../constants/points';
 
 function isValidCategory(value: unknown): value is BillCategory {
   return typeof value === 'string' && (BILL_CATEGORIES as readonly string[]).includes(value);
@@ -73,6 +75,7 @@ export async function updateBill(req: AuthedRequest, res: Response) {
   if (notificationIds !== undefined) {
     bill.notificationIds = Array.isArray(notificationIds) ? notificationIds : undefined;
   }
+  const previousCycle = bill.lastPaidCycle;
   if (lastPaidCycle !== undefined) {
     bill.lastPaidCycle = typeof lastPaidCycle === 'string' && lastPaidCycle ? lastPaidCycle : undefined;
   } else if (scheduleChanged) {
@@ -80,6 +83,25 @@ export async function updateBill(req: AuthedRequest, res: Response) {
   }
 
   await bill.save();
+
+  // Points: once per bill per cycle. The cycle has to be a real date close to today
+  // and later than the one before (so a cycle can't be re-paid or made up), and the
+  // bill has to have existed for a few minutes. Paying on or before the due date
+  // earns a little extra.
+  const paidCycle = typeof lastPaidCycle === 'string' ? lastPaidCycle : '';
+  if (
+    paidCycle &&
+    paidCycle !== previousCycle &&
+    (!previousCycle || paidCycle > previousCycle) &&
+    isCycleNearToday(paidCycle) &&
+    isOldEnoughForPoints(bill)
+  ) {
+    await awardPointsSafely(req.userId!, `bill:${bill.id}:${paidCycle}`, 'bill', POINTS.bill);
+    if (isPaidOnTime(paidCycle)) {
+      await awardPointsSafely(req.userId!, `bill-ontime:${bill.id}:${paidCycle}`, 'bill', POINTS.billOnTime);
+    }
+  }
+
   res.json(toPublicBill(bill));
 }
 

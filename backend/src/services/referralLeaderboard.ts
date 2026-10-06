@@ -1,5 +1,6 @@
-import { Referral } from '../models/Referral';
+import { PointEvent } from '../models/PointEvent';
 import { ReferralProfile } from '../models/ReferralProfile';
+import { ensureReferralEventsBackfilled } from './pointEvents';
 
 export const LEADERBOARD_SIZE = 10;
 const CACHE_MS = 60 * 1000;
@@ -21,22 +22,16 @@ interface Standing {
   points: number;
 }
 
-// Points per account for the week: each referral pays its referrer and its
-// referred account, so one row counts for two people. Highest first, ties broken
-// by uid so the order never flips between requests.
+// Points per account for the week, from the points record (every award, whatever
+// it was for). `reachedAt` is when the account last earned points this week, i.e.
+// when it reached its current total.
+// Order: most points first; on a tie, whoever reached the total EARLIER ranks
+// higher (so every position is unique and the podium never has two thirds); a
+// tie on the exact same instant falls back to uid so the order never flips.
 function standingsPipeline(start: Date, end: Date) {
   return [
     { $match: { createdAt: { $gte: start, $lt: end } } },
-    {
-      $project: {
-        entries: [
-          { uid: '$referrerUid', points: '$referrerPoints' },
-          { uid: '$referredUid', points: '$referredPoints' },
-        ],
-      },
-    },
-    { $unwind: '$entries' },
-    { $group: { _id: '$entries.uid', points: { $sum: '$entries.points' } } },
+    { $group: { _id: '$firebaseUid', points: { $sum: '$points' }, reachedAt: { $max: '$createdAt' } } },
   ];
 }
 
@@ -44,9 +39,9 @@ let topCache: { weekStart: number; at: number; top: Standing[] } | null = null;
 
 async function topStandings(start: Date, end: Date): Promise<Standing[]> {
   if (topCache && topCache.weekStart === start.getTime() && Date.now() - topCache.at < CACHE_MS) return topCache.top;
-  const rows = await Referral.aggregate<{ _id: string; points: number }>([
+  const rows = await PointEvent.aggregate<{ _id: string; points: number }>([
     ...standingsPipeline(start, end),
-    { $sort: { points: -1, _id: 1 } },
+    { $sort: { points: -1, reachedAt: 1, _id: 1 } },
     { $limit: LEADERBOARD_SIZE },
   ]);
   const top = rows.map((r) => ({ uid: r._id, points: r.points }));
@@ -79,34 +74,41 @@ export interface Leaderboard {
 }
 
 export async function getLeaderboard(uid: string, now: number = Date.now()): Promise<Leaderboard> {
+  await ensureReferralEventsBackfilled();
   const { start, end } = weekBounds(now);
   const top = await topStandings(start, end);
 
-  const mine = await Referral.aggregate<{ _id: string; points: number }>([
+  const mine = await PointEvent.aggregate<{ _id: string; points: number; reachedAt: Date }>([
     ...standingsPipeline(start, end),
     { $match: { _id: uid } },
   ]);
   const myPoints = mine[0]?.points ?? 0;
   let myRank: number | null = null;
   if (myPoints > 0) {
-    const ahead = await Referral.aggregate<{ n: number }>([
+    const ahead = await PointEvent.aggregate<{ n: number }>([
       ...standingsPipeline(start, end),
-      { $match: { points: { $gt: myPoints } } },
+      {
+        $match: {
+          $or: [
+            { points: { $gt: myPoints } },
+            { points: myPoints, reachedAt: { $lt: mine[0].reachedAt } },
+            { points: myPoints, reachedAt: mine[0].reachedAt, _id: { $lt: uid } },
+          ],
+        },
+      },
       { $count: 'n' },
     ]);
-    myRank = (ahead[0]?.n ?? 0) + 1; // ties share a rank
+    myRank = (ahead[0]?.n ?? 0) + 1;
   }
 
   const names = await namesFor(top.map((t) => t.uid));
-  // Ties share a rank, same as "you" above.
-  let previous: Standing | null = null;
-  let previousRank = 0;
-  const entries = top.map((t, index) => {
-    const rank = previous && previous.points === t.points ? previousRank : index + 1;
-    previous = t;
-    previousRank = rank;
-    return { rank, name: names.get(t.uid) ?? 'user', points: t.points, isYou: t.uid === uid };
-  });
+  // Ranks are positions: unique, so no two people share one.
+  const entries = top.map((t, index) => ({
+    rank: index + 1,
+    name: names.get(t.uid) ?? 'user',
+    points: t.points,
+    isYou: t.uid === uid,
+  }));
 
   return { weekStart: start.toISOString(), weekEnd: end.toISOString(), top: entries, you: { rank: myRank, points: myPoints } };
 }

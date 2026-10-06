@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { onPointsMayHaveChanged } from '@/utils/pointsSignal';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '@/config/firebase';
 import { referralService } from '@/services/referral.service';
@@ -65,6 +66,24 @@ export function ReferralProvider({ children }: { children: ReactNode }) {
       loadingRef.current = false;
     }
   };
+
+  // Something that can earn points was just saved (a task, habit, bill...): re-read the
+  // total shortly after, so the badge changes right away. The wait lets a burst of saves
+  // collapse into one request, and the latest `load` is used via the ref.
+  const loadRef = useRef(load);
+  loadRef.current = load;
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const unsubscribe = onPointsMayHaveChanged(() => {
+      if (!auth.currentUser) return;
+      clearTimeout(timer);
+      timer = setTimeout(() => loadRef.current(), 800);
+    });
+    return () => {
+      clearTimeout(timer);
+      unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {

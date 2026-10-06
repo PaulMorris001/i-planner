@@ -3,6 +3,8 @@ import { Goal, toPublicGoal } from '../models/Goal';
 import { AuthedRequest } from '../middleware/requireAuth';
 import { ApiError } from '../utils/ApiError';
 import { findOwnedOrThrow } from '../utils/ownedDoc';
+import { awardPointsSafely, isOldEnoughForPoints } from '../services/points';
+import { POINTS } from '../constants/points';
 import { generateGoalMilestones } from '../services/goalMilestones';
 
 interface NewMilestoneInput {
@@ -64,6 +66,8 @@ export async function updateGoal(req: AuthedRequest, res: Response) {
   if (targetRole !== undefined) goal.targetRole = targetRole;
   if (targetIndustry !== undefined) goal.targetIndustry = targetIndustry;
   if (targetDate !== undefined) goal.targetDate = targetDate;
+  const idsBefore = new Set(goal.milestones.map((m) => String(m._id)));
+  const doneBefore = new Set(goal.milestones.filter((m) => m.done).map((m) => String(m._id)));
   if (Array.isArray(milestones)) {
     // Preserve _id for referenced milestones so React list keys don't churn client-side.
     const incoming = milestones.filter(
@@ -83,6 +87,21 @@ export async function updateGoal(req: AuthedRequest, res: Response) {
   }
 
   await goal.save();
+
+  // Points: once per milestone and once when a whole goal is finished, however many
+  // times they are ticked and unticked. Only a milestone that existed before this
+  // request and was just ticked pays; the goal bonus also needs one of those, so
+  // deleting the unfinished milestones can't "complete" a goal.
+  if (isOldEnoughForPoints(goal)) {
+    const justTicked = goal.milestones.filter((m) => m.done && idsBefore.has(String(m._id)) && !doneBefore.has(String(m._id)));
+    for (const m of justTicked) {
+      await awardPointsSafely(req.userId!, `milestone:${goal.id}:${m._id}`, 'milestone', POINTS.milestone);
+    }
+    if (justTicked.length > 0 && goal.milestones.every((m) => m.done)) {
+      await awardPointsSafely(req.userId!, `goal-done:${goal.id}`, 'goal', POINTS.goalDone);
+    }
+  }
+
   res.json(toPublicGoal(goal));
 }
 

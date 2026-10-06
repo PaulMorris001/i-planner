@@ -17,6 +17,8 @@ export const Routes = {
   PROFILE:    '/(app)/profile',
   GOALS:      '/goals',
   HABITS:     '/habits',
+  LEADERBOARD: '/leaderboard',
+  STUDY:      '/study',
   NOTES:      '/notes',
   NOTE_EDITOR: '/note-editor',
   NOTES_FOLDER: '/notes-folder',

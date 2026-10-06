@@ -5,6 +5,8 @@ import { ApiError } from '../utils/ApiError';
 import { findOwnedOrThrow } from '../utils/ownedDoc';
 import { createTaskDoc } from '../services/taskCreation';
 import { syncTaskToCalendars, unsyncTaskFromCalendars } from '../services/calendarSync';
+import { awardPointsSafely, isOldEnoughForPoints, isPlausibleToday } from '../services/points';
+import { POINTS } from '../constants/points';
 
 export async function listTasks(req: AuthedRequest, res: Response) {
   const tasks = await Task.find({ firebaseUid: req.userId });
@@ -63,6 +65,9 @@ export async function updateTask(req: AuthedRequest, res: Response) {
   const hasContentChange = [title, category, priority, day, hour, time, dueDate, recurring, freq, dayIdxs, notes]
     .some((v) => v !== undefined);
 
+  const wasDone = task.done;
+  const previousDates = new Set(task.completedDates ?? []);
+
   if (title !== undefined) task.title = title;
   if (category !== undefined) task.category = category;
   if (priority !== undefined) task.priority = priority;
@@ -88,6 +93,23 @@ export async function updateTask(req: AuthedRequest, res: Response) {
   }
 
   await task.save();
+
+  // Points: once per task (or once per day for a recurring task's occurrences),
+  // however many times it is ticked and unticked. Only for tasks that existed
+  // for a few minutes (see isOldEnoughForPoints).
+  if (isOldEnoughForPoints(task)) {
+    if (!task.recurring && task.done && !wasDone) {
+      await awardPointsSafely(req.userId!, `task:${task.id}`, 'task', POINTS.task);
+    }
+    if (task.recurring) {
+      for (const date of task.completedDates ?? []) {
+        if (!previousDates.has(date) && isPlausibleToday(date)) {
+          await awardPointsSafely(req.userId!, `task:${task.id}:${date}`, 'task', POINTS.task);
+        }
+      }
+    }
+  }
+
   res.json(toPublicTask(task));
 }
 

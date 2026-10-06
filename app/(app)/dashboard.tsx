@@ -162,7 +162,7 @@ export default function Dashboard() {
     <View style={styles.quickLinksRow}>
       <Pressable
         style={styles.quickLinkCard}
-        onPress={() => router.push(Routes.PLANNER)}
+        onPress={() => router.push(Routes.LEADERBOARD)}
       >
         <View
           style={[
@@ -171,13 +171,13 @@ export default function Dashboard() {
           ]}
         >
           <IconSymbol
-            name="calendar"
+            name="trophy.fill"
             color={Colors.primaryLight}
             size={20}
           />
         </View>
-        <Text style={styles.quickLinkTitle}>Calendar</Text>
-        <Text style={styles.quickLinkSub}>Sync & timeline</Text>
+        <Text style={styles.quickLinkTitle}>Leaderboard</Text>
+        <Text style={styles.quickLinkSub}>Weekly rankings</Text>
       </Pressable>
       <Pressable
         style={styles.quickLinkCard}

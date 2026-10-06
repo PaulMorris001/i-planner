@@ -19,6 +19,9 @@ import { KnownDevice } from '../models/KnownDevice';
 import { PushToken } from '../models/PushToken';
 import { ReferralProfile } from '../models/ReferralProfile';
 import { Referral } from '../models/Referral';
+import { PointEvent } from '../models/PointEvent';
+import { StudySession } from '../models/StudySession';
+import { StudyRun } from '../models/StudyRun';
 import { AuthedRequest } from '../middleware/requireAuth';
 
 // Wipes every piece of app data owned by this user. Firebase Auth account deletion
@@ -48,6 +51,9 @@ export async function deleteAccount(req: AuthedRequest, res: Response) {
     // Their own code and points, and the records of referrals they made or came from.
     // Points already paid to the other side of a referral stay with that person.
     ReferralProfile.deleteMany({ firebaseUid }),
+    PointEvent.deleteMany({ firebaseUid }),
+    StudySession.deleteMany({ firebaseUid }),
+    StudyRun.deleteMany({ firebaseUid }),
     Referral.deleteMany({ $or: [{ referrerUid: firebaseUid }, { referredUid: firebaseUid }] }),
   ]);
 
