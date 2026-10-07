@@ -31,7 +31,7 @@ export function CollaboratorsSheet({ visible, onClose, noteId }: CollaboratorsSh
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState<{ text: string; tone: 'error' | 'ok' } | null>(null);
   // The row currently being changed (resend / role / remove), so it can show a spinner.
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const [busyPersonId, setBusyPersonId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -70,8 +70,8 @@ export function CollaboratorsSheet({ visible, onClose, noteId }: CollaboratorsSh
     }
   };
 
-  const run = async (memberId: string, action: () => Promise<unknown>, failure: string) => {
-    setBusyId(memberId);
+  const runPersonAction = async (personId: string, action: () => Promise<unknown>, failure: string) => {
+    setBusyPersonId(personId);
     setMessage(null);
     try {
       await action();
@@ -79,7 +79,7 @@ export function CollaboratorsSheet({ visible, onClose, noteId }: CollaboratorsSh
     } catch (err) {
       setMessage({ text: errorMessage(err, failure), tone: 'error' });
     } finally {
-      setBusyId(null);
+      setBusyPersonId(null);
     }
   };
 
@@ -94,11 +94,11 @@ export function CollaboratorsSheet({ visible, onClose, noteId }: CollaboratorsSh
           : `The invitation sent to ${person.email ?? person.label} will stop working.`,
       confirmLabel: person.status === 'accepted' ? 'Remove' : 'Cancel invitation',
       destructive: true,
-      onConfirm: () => run(id, () => collaborationService.remove(noteId, id), "Couldn't remove them."),
+      onConfirm: () => runPersonAction(id, () => collaborationService.remove(noteId, id), "Couldn't remove them."),
     });
   };
 
-  const statusText = (p: NotePerson): string => {
+  const describeAccess = (p: NotePerson): string => {
     if (p.status === 'accepted') return ROLE_LABEL[p.role];
     if (p.status === 'declined') return 'Declined';
     if (p.expired) return 'Invitation expired';
@@ -169,9 +169,9 @@ export function CollaboratorsSheet({ visible, onClose, noteId }: CollaboratorsSh
                     {p.email}
                   </Text>
                 )}
-                <Text style={[styles.memberStatus, (p.status === 'declined' || p.expired) && styles.memberStatusMuted]}>{statusText(p)}</Text>
+                <Text style={[styles.memberStatus, (p.status === 'declined' || p.expired) && styles.memberStatusMuted]}>{describeAccess(p)}</Text>
               </View>
-              {busyId === p.id ? (
+              {busyPersonId === p.id ? (
                 <ActivityIndicator color={Colors.primaryLight} size="small" />
               ) : (
                 !!p.id && (
@@ -179,13 +179,13 @@ export function CollaboratorsSheet({ visible, onClose, noteId }: CollaboratorsSh
                     {p.status === 'accepted' && (
                       <Pressable
                         hitSlop={6}
-                        onPress={() => run(p.id!, () => collaborationService.changeRole(noteId, p.id!, p.role === 'editor' ? 'viewer' : 'editor'), "Couldn't change that.")}
+                        onPress={() => runPersonAction(p.id!, () => collaborationService.changeRole(noteId, p.id!, p.role === 'editor' ? 'viewer' : 'editor'), "Couldn't change that.")}
                       >
                         <Text style={styles.action}>{p.role === 'editor' ? 'Make viewer' : 'Make editor'}</Text>
                       </Pressable>
                     )}
                     {p.status !== 'accepted' && (
-                      <Pressable hitSlop={6} onPress={() => run(p.id!, () => collaborationService.resend(noteId, p.id!), "Couldn't resend.")}>
+                      <Pressable hitSlop={6} onPress={() => runPersonAction(p.id!, () => collaborationService.resend(noteId, p.id!), "Couldn't resend.")}>
                         <Text style={styles.action}>{p.status === 'declined' ? 'Invite again' : 'Resend'}</Text>
                       </Pressable>
                     )}

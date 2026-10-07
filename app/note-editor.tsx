@@ -43,7 +43,7 @@ const AUTOSAVE_INTERVAL_MS = 8_000;
 const REMOTE_CHECK_MS = 12_000;
 
 // The latest copy of the note when a save was refused because someone else changed it first.
-function conflictNote(err: unknown): Note | null {
+function latestNoteFromConflict(err: unknown): Note | null {
   const e = err as { status?: number; data?: { note?: Note } } | null;
   return e?.status === 409 && e.data?.note ? e.data.note : null;
 }
@@ -311,7 +311,7 @@ export default function NoteEditor() {
     } catch (err) {
       console.error('[NoteEditor] autosave failed', err);
       setAutosaveStatus('idle');
-      const latest = conflictNote(err);
+      const latest = latestNoteFromConflict(err);
       if (latest) setConflict(latest);
     } finally {
       busyRef.current = false;
@@ -519,7 +519,7 @@ export default function NoteEditor() {
       lastSavedRef.current = { title: t, body: b };
     } catch (err) {
       console.error('[NoteEditor] failed to save note before leaving', err);
-      const latest = conflictNote(err);
+      const latest = latestNoteFromConflict(err);
       if (latest) {
         setConflict(latest);
         Alert.alert('Someone else changed this note', 'Choose whether to load their version or keep yours.');
@@ -606,7 +606,7 @@ export default function NoteEditor() {
       setAutosaveStatus('saved');
     } catch (err) {
       console.error('[NoteEditor] failed to save note', err);
-      const latest = conflictNote(err);
+      const latest = latestNoteFromConflict(err);
       if (latest) setConflict(latest);
       else Alert.alert("Couldn't save", 'Check your connection and try again.');
     } finally {
@@ -631,7 +631,7 @@ export default function NoteEditor() {
   const handleDelete = () => {
     if (!editing || !isOwner) return;
     confirmDelete(editing.title, () => {
-      leftRef.current = true;
+      isClosingRef.current = true;
       // A deleted note has nothing left to keep, revert, or save — clear both
       // guards before this delete's own router.back() fires. Unlike
       // handleSave, this is safe to do synchronously right here: deleteNote
@@ -692,7 +692,7 @@ export default function NoteEditor() {
   // ---- Collaboration ---------------------------------------------------------
   // Set once the screen is on its way out (deleted, left, or access lost), so the check
   // below doesn't announce a note as "unavailable" because of the screen's own action.
-  const leftRef = useRef(false);
+  const isClosingRef = useRef(false);
 
   // Makes the server's newer copy of the note what the screen shows AND its last saved state
   // (so it doesn't count as unsaved), without reading the editor back.
@@ -737,14 +737,14 @@ export default function NoteEditor() {
       destructive: true,
       onConfirm: () => {
         const previous = lastSavedRef.current;
-        leftRef.current = true;
+        isClosingRef.current = true;
         setCleanupState('idle');
         lastSavedRef.current = { title, body };
         leaveSharedNote(noteId)
           .then(() => router.back())
           .catch((err) => {
             console.error('[NoteEditor] failed to leave note', err);
-            leftRef.current = false;
+            isClosingRef.current = false;
             lastSavedRef.current = previous;
             Alert.alert("Couldn't leave", 'Check your connection and try again.');
           });
@@ -755,16 +755,16 @@ export default function NoteEditor() {
   // Picks up what other people save while this note is open. Skipped while there is anything
   // unsaved here (typing is never overwritten: saving it then reports the conflict instead),
   // while saving, dictating, or reviewing an AI cleanup, and while the app is in the background.
-  const remoteStateRef = useRef({ dirty: false, version: 0, cleanup: 'idle' as string, role });
-  remoteStateRef.current = { dirty: isDirty, version: editing?.version ?? 0, cleanup: cleanupState, role };
+  const remoteCheckStateRef = useRef({ dirty: false, version: 0, cleanup: 'idle' as string, role });
+  remoteCheckStateRef.current = { dirty: isDirty, version: editing?.version ?? 0, cleanup: cleanupState, role };
   useEffect(() => {
     if (!savedId) return;
     const timer = setInterval(async () => {
       if (AppState.currentState !== 'active') return;
-      if (busyRef.current || conflictRef.current || dictationActiveRef.current || remoteStateRef.current.cleanup !== 'idle') return;
+      if (busyRef.current || conflictRef.current || dictationActiveRef.current || remoteCheckStateRef.current.cleanup !== 'idle') return;
       try {
         const { note: latest, role: serverRole } = await collaborationService.getNote(savedId);
-        const state = remoteStateRef.current;
+        const state = remoteCheckStateRef.current;
         // The owner changed what this person may do (view <-> edit): take effect at once.
         if (serverRole !== 'owner' && state.role !== 'owner' && serverRole !== state.role) {
           setSharedRoleRef.current(savedId, serverRole);
@@ -780,8 +780,8 @@ export default function NoteEditor() {
         if ((latest.version ?? 0) <= state.version || state.dirty || busyRef.current) return;
         adoptServerNoteRef.current(latest);
       } catch (err) {
-        if ((err as { status?: number } | null)?.status === 404 && !leftRef.current) {
-          leftRef.current = true;
+        if ((err as { status?: number } | null)?.status === 404 && !isClosingRef.current) {
+          isClosingRef.current = true;
           Alert.alert('Note unavailable', 'This note was deleted, or you no longer have access to it.', [
             { text: 'OK', onPress: () => router.back() },
           ]);

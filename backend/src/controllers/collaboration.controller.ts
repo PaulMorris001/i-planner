@@ -1,163 +1,54 @@
-import crypto from 'crypto';
 import { Request, Response } from 'express';
 import { Note, toPublicNote } from '../models/Note';
 import { NoteMember, NoteMemberDocument } from '../models/NoteMember';
 import { AuthedRequest } from '../middleware/requireAuth';
 import { ApiError } from '../utils/ApiError';
 import { isDuplicateKeyError } from '../utils/mongoErrors';
-import { firebaseAuth } from '../config/firebaseAdmin';
-import { env } from '../config/env';
-import { sendEmail } from '../utils/email';
-import { getNoteAccess, requireNoteAccess } from '../services/noteAccess';
-import { buildCollabInviteEmailHtml, flattenText } from '../services/collabEmailHtml';
+import { requireNoteAccess } from '../services/noteAccess';
+import { accountNameOf, displayLabelFor, labelShownToCollaborators, shortenLabel } from '../services/collabLabels';
+import { createInviteToken, hashInviteToken } from '../services/inviteTokens';
+import { captureInvitationState, isInviteExpired, newInviteExpiry } from '../services/inviteState';
+import { assertInvitationKeepsItsPlace, assertMayInvite } from '../services/inviteLimits';
+import { requireInviteeEmail, requireRole } from '../services/inviteValidation';
+import { sendInvitationOrUndo } from '../services/inviteEmail';
 import { buildInviteMessageHtml, buildInvitePageHtml } from '../services/inviteHtml';
-import {
-  COLLABORATION_UPGRADE_MESSAGE,
-  INVITE_TTL_DAYS,
-  MAX_INVITES_PER_RECIPIENT_PER_DAY,
-  MAX_LABEL_LENGTH,
-  MAX_INVITE_EMAILS_PER_DAY,
-  MAX_MEMBERS_PER_NOTE,
-  MAX_SENDS_PER_INVITE,
-  NOTE_ROLES,
-  NoteRole,
-  RESEND_COOLDOWN_MS,
-  canUseCollaboration,
-} from '../constants/collaboration';
+import { COLLABORATION_UPGRADE_MESSAGE, NoteRole, canUseCollaboration } from '../constants/collaboration';
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-// Loose on purpose: a real check is the email arriving. This only rejects obvious typos.
-const EMAIL_RE = /^[^\s@<>"',;]+@[^\s@<>"',;]+\.[^\s@<>"',;]{2,}$/;
+// ---------------------------------------------------------------------------------------------
+// Shared helpers
+// ---------------------------------------------------------------------------------------------
 
-function sha256(value: string): string {
-  return crypto.createHash('sha256').update(value).digest('hex');
-}
+const notFound = () => new ApiError(404, 'Not found.', 'general');
+const inviteUnavailable = () => new ApiError(404, 'This invitation is no longer available.', 'general');
+const alreadyHasAccess = (field: 'email' | 'general') => new ApiError(409, 'That person already has access to this note.', field);
 
-// The secret in the emailed link. Only its hash is stored.
-function newInviteToken(): { token: string; tokenHash: string } {
-  const token = crypto.randomBytes(32).toString('base64url');
-  return { token, tokenHash: sha256(token) };
-}
-
-function normalizeEmail(raw: unknown): string {
-  return typeof raw === 'string' ? raw.trim().toLowerCase() : '';
-}
-
-function requireRole(raw: unknown): NoteRole {
-  if (typeof raw !== 'string' || !(NOTE_ROLES as string[]).includes(raw)) {
-    throw new ApiError(400, 'Choose whether they can view or edit.', 'general');
-  }
-  return raw as NoteRole;
-}
-
-function requireCollaboration(uid: string) {
+function requireCollaborationEnabled(uid: string): void {
   if (!canUseCollaboration(uid)) throw new ApiError(402, COLLABORATION_UPGRADE_MESSAGE, 'general');
 }
 
-const cleanLabel = (value: string | undefined | null, fallback = 'Someone') => flattenText(value ?? '', MAX_LABEL_LENGTH) || fallback;
-
-async function labelFor(uid: string, fallbackEmail?: string): Promise<string> {
-  try {
-    const user = await firebaseAuth.getUser(uid);
-    return cleanLabel(user.displayName || user.email || fallbackEmail);
-  } catch {
-    return cleanLabel(fallbackEmail);
-  }
-}
-
-// "vw@example.com" -> "v***@example.com": enough to recognise, never the whole address.
-function maskEmail(email: string): string {
-  const at = email.lastIndexOf('@');
-  if (at < 1) return '***';
-  return `${email[0]}***${email.slice(at)}`;
-}
-
-// A person other than the viewer, as other collaborators see them: their name if their account
-// has one, otherwise a masked address.
-async function nameOf(uid: string | undefined): Promise<string | null> {
-  if (!uid) return null;
-  try {
-    const user = await firebaseAuth.getUser(uid);
-    return flattenText(user.displayName ?? '', MAX_LABEL_LENGTH) || null;
-  } catch {
-    return null;
-  }
-}
-
-async function publicLabelFor(memberUid: string | undefined, email: string): Promise<string> {
-  return (await nameOf(memberUid)) ?? maskEmail(email);
-}
-
-const isExpired = (m: Pick<NoteMemberDocument, 'status' | 'expiresAt'>) => m.status === 'pending' && m.expiresAt.getTime() <= Date.now();
-
-// What the owner sees for each person. Never includes the token.
-function toPublicMember(m: NoteMemberDocument) {
-  return {
-    id: m.id as string,
-    email: m.email,
-    role: m.role,
-    status: m.status,
-    expired: isExpired(m),
-    createdAt: m.createdAt.toISOString(),
-    respondedAt: m.respondedAt ? m.respondedAt.toISOString() : null,
-  };
-}
-
-// Only the note's OWNER manages who has access.
+// Only a note's OWNER manages who has access to it.
 async function requireOwnedNote(req: AuthedRequest) {
   const access = await requireNoteAccess(req.userId!, req.params.id);
   if (access.role !== 'owner') throw new ApiError(403, 'Only the owner of a note can do that.', 'general');
   return access.note;
 }
 
-// Invitation emails this owner has sent in the last day (new invites and resends).
-async function emailsSentToday(ownerUid: string): Promise<number> {
-  const since = new Date(Date.now() - DAY_MS);
-  const rows = await NoteMember.find({ ownerUid, lastSentAt: { $gte: since } }).select('_id').lean();
-  return rows.length;
-}
-
-// Invitation emails ONE ADDRESS received in the last day, from anyone.
-async function emailsToAddressToday(email: string): Promise<number> {
-  const since = new Date(Date.now() - DAY_MS);
-  return NoteMember.countDocuments({ email, lastSentAt: { $gte: since } });
-}
-
-// Who counts against a note's people limit: everyone who accepted, and invitations that can
-// still be accepted. Expired and declined invitations do not use a place.
-const countsTowardLimit = (noteId: string) => ({
-  noteId,
-  $or: [{ status: 'accepted' }, { status: 'pending', expiresAt: { $gt: new Date() } }],
-});
-
-// The fields an invitation write changes, so a failed email can put them back exactly.
-const SNAPSHOT_FIELDS = ['role', 'status', 'tokenHash', 'expiresAt', 'inviterLabel', 'lastSentAt', 'sendCount', 'memberUid', 'respondedAt'] as const;
-function snapshotOf(m: NoteMemberDocument) {
-  const set: Record<string, unknown> = {};
-  const unset: Record<string, ''> = {};
-  for (const key of SNAPSHOT_FIELDS) {
-    const value = (m as unknown as Record<string, unknown>)[key];
-    if (value === undefined || value === null) unset[key] = '';
-    else set[key] = value;
-  }
-  return { set, unset };
-}
-async function restoreSnapshot(id: unknown, snapshot: ReturnType<typeof snapshotOf>) {
-  await NoteMember.updateOne({ _id: id }, { $set: snapshot.set, ...(Object.keys(snapshot.unset).length ? { $unset: snapshot.unset } : {}) });
-}
-
-async function deliverInvite(member: NoteMemberDocument, token: string, noteTitle: string): Promise<void> {
-  const { subject, html, text } = buildCollabInviteEmailHtml({
-    inviterLabel: member.inviterLabel,
-    noteTitle,
+// What the owner sees for each invitation. Never includes the token.
+function toPublicMember(member: NoteMemberDocument) {
+  return {
+    id: member.id as string,
+    email: member.email,
     role: member.role,
-    inviteUrl: `${env.backendPublicUrl.replace(/\/+$/, '')}/invite/${token}`,
-    expiresInDays: INVITE_TTL_DAYS,
-  });
-  await sendEmail({ to: member.email, subject, html, text });
+    status: member.status,
+    expired: isInviteExpired(member),
+    createdAt: member.createdAt.toISOString(),
+    respondedAt: member.respondedAt ? member.respondedAt.toISOString() : null,
+  };
 }
 
-// ---------- the owner's side ----------
+// ---------------------------------------------------------------------------------------------
+// The owner's side: inviting people and managing their access
+// ---------------------------------------------------------------------------------------------
 
 export async function listMembers(req: AuthedRequest, res: Response) {
   const note = await requireOwnedNote(req);
@@ -165,140 +56,92 @@ export async function listMembers(req: AuthedRequest, res: Response) {
   res.json(members.map(toPublicMember));
 }
 
-export async function inviteMember(req: AuthedRequest, res: Response) {
-  requireCollaboration(req.userId!);
-  const note = await requireOwnedNote(req);
-  const email = normalizeEmail(req.body?.email);
-  const role = requireRole(req.body?.role);
+interface InvitationToSave {
+  noteId: string;
+  ownerUid: string;
+  email: string;
+  role: NoteRole;
+  tokenHash: string;
+  inviterLabel: string;
+  // This address's earlier invitation to the note (declined, expired or still pending), if any.
+  existing: NoteMemberDocument | null;
+}
 
-  if (!email || email.length > 254 || !EMAIL_RE.test(email)) throw new ApiError(400, 'Enter a valid email address.', 'email');
-  if (req.userEmail && email === req.userEmail.toLowerCase()) throw new ApiError(400, "That's your own email address.", 'email');
-
-  const existing = await NoteMember.findOne({ noteId: note.id, email });
-  if (existing && existing.status === 'accepted') throw new ApiError(409, 'That person already has access to this note.', 'email');
-  // However many times someone is invited (or re-invited after declining), they get a limited number of emails.
-  if (existing && existing.sendCount >= MAX_SENDS_PER_INVITE) {
-    throw new ApiError(429, 'That person has been invited too many times already.', 'email');
-  }
-
-  // The note's people are capped. Re-inviting someone whose invitation is still live does not add one.
-  const counted = await NoteMember.countDocuments(countsTowardLimit(note.id));
-  const aliveAlready = !!existing && existing.status === 'pending' && existing.expiresAt.getTime() > Date.now();
-  if (!aliveAlready && counted >= MAX_MEMBERS_PER_NOTE) {
-    throw new ApiError(400, `A note can have up to ${MAX_MEMBERS_PER_NOTE} people invited.`, 'general');
-  }
-  if ((await emailsSentToday(req.userId!)) >= MAX_INVITE_EMAILS_PER_DAY) {
-    throw new ApiError(429, "You've sent a lot of invitations today. Try again tomorrow.", 'general');
-  }
-  if ((await emailsToAddressToday(email)) >= MAX_INVITES_PER_RECIPIENT_PER_DAY) {
-    throw new ApiError(429, "We can't send another invitation to that address right now. Try again tomorrow.", 'email');
-  }
-  if (existing && existing.status === 'pending' && Date.now() - existing.lastSentAt.getTime() < RESEND_COOLDOWN_MS) {
-    throw new ApiError(429, 'That person was just invited. Give it a minute before sending again.', 'general');
-  }
-
-  const { token, tokenHash } = newInviteToken();
-  const now = new Date();
-  const fields = {
-    noteId: note.id,
-    ownerUid: req.userId!,
-    email,
-    role,
-    status: 'pending' as const,
-    tokenHash,
-    expiresAt: new Date(now.getTime() + INVITE_TTL_DAYS * DAY_MS),
-    inviterLabel: await labelFor(req.userId!, req.userEmail),
-    lastSentAt: now,
-  };
-  const before = existing ? snapshotOf(existing) : null;
-
-  let member: NoteMemberDocument;
+// Creates the invitation, or renews this address's earlier one with a new link.
+async function saveInvitation({ noteId, ownerUid, email, role, tokenHash, inviterLabel, existing }: InvitationToSave): Promise<NoteMemberDocument> {
+  const fields = { noteId, ownerUid, email, role, tokenHash, inviterLabel, status: 'pending' as const, expiresAt: newInviteExpiry(), lastSentAt: new Date() };
   try {
-    member = existing
-      ? ((await NoteMember.findOneAndUpdate(
-          { _id: existing._id, status: { $ne: 'accepted' } },
-          { $set: { ...fields, sendCount: existing.sendCount + 1 }, $unset: { memberUid: '', respondedAt: '' } },
-          { new: true }
-        )) as NoteMemberDocument)
-      : await NoteMember.create({ ...fields, sendCount: 1 });
+    if (!existing) return await NoteMember.create({ ...fields, sendCount: 1 });
+
+    const renewed = await NoteMember.findOneAndUpdate(
+      { _id: existing._id, status: { $ne: 'accepted' } },
+      { $set: { ...fields, sendCount: existing.sendCount + 1 }, $unset: { memberUid: '', respondedAt: '' } },
+      { new: true }
+    );
+    // Null means they accepted in the meantime.
+    if (!renewed) throw alreadyHasAccess('email');
+    return renewed;
   } catch (err) {
     if (isDuplicateKeyError(err)) throw new ApiError(409, 'That person was just invited.', 'email');
     throw err;
   }
-  if (!member) throw new ApiError(409, 'That person already has access to this note.', 'email');
-
-  // Several invitations can get past the check above at the same moment. Settle it by order of
-  // creation: only the first MAX_MEMBERS_PER_NOTE places stand, the rest are taken back.
-  const standing = await NoteMember.find(countsTowardLimit(note.id)).sort({ _id: 1 }).limit(MAX_MEMBERS_PER_NOTE).select('_id').lean();
-  if (!standing.some((row) => String(row._id) === String(member._id))) {
-    if (before) await restoreSnapshot(member._id, before);
-    else await NoteMember.deleteOne({ _id: member._id });
-    throw new ApiError(400, `A note can have up to ${MAX_MEMBERS_PER_NOTE} people invited.`, 'general');
-  }
-
-  try {
-    await deliverInvite(member, token, note.title);
-  } catch (err) {
-    console.error('[collaboration] invitation email failed', err);
-    // An invitation nobody received must not replace one that was working: put everything back exactly.
-    if (before) await restoreSnapshot(member._id, before);
-    else await NoteMember.deleteOne({ _id: member._id });
-    throw new ApiError(502, "We couldn't send the invitation email. Check the address and try again.", 'general');
-  }
-  res.status(201).json(toPublicMember(member));
 }
 
-export async function resendInvite(req: AuthedRequest, res: Response) {
-  requireCollaboration(req.userId!);
+export async function inviteMember(req: AuthedRequest, res: Response) {
+  const ownerUid = req.userId!;
+  requireCollaborationEnabled(ownerUid);
   const note = await requireOwnedNote(req);
-  const member = await NoteMember.findOne({ _id: req.params.memberId, noteId: note.id }).catch(() => null);
-  if (!member) throw new ApiError(404, 'Not found.', 'general');
-  if (member.status === 'accepted') throw new ApiError(409, 'That person already has access to this note.', 'general');
-  if (member.sendCount >= MAX_SENDS_PER_INVITE) throw new ApiError(429, 'That invitation has been sent too many times already.', 'general');
-  if (Date.now() - member.lastSentAt.getTime() < RESEND_COOLDOWN_MS) {
-    throw new ApiError(429, 'That person was just invited. Give it a minute before sending again.', 'general');
-  }
-  if ((await emailsSentToday(req.userId!)) >= MAX_INVITE_EMAILS_PER_DAY) {
-    throw new ApiError(429, "You've sent a lot of invitations today. Try again tomorrow.", 'general');
-  }
-  if ((await emailsToAddressToday(member.email)) >= MAX_INVITES_PER_RECIPIENT_PER_DAY) {
-    throw new ApiError(429, "We can't send another invitation to that address right now. Try again tomorrow.", 'email');
-  }
-  // A declined or expired invitation coming back to life takes a place again.
-  const wasLive = member.status === 'pending' && member.expiresAt.getTime() > Date.now();
-  if (!wasLive && (await NoteMember.countDocuments(countsTowardLimit(note.id))) >= MAX_MEMBERS_PER_NOTE) {
-    throw new ApiError(400, `A note can have up to ${MAX_MEMBERS_PER_NOTE} people invited.`, 'general');
-  }
+  const email = requireInviteeEmail(req.body?.email, req.userEmail);
+  const role = requireRole(req.body?.role);
 
-  // A fresh link: the earlier one stops working once this one has been sent.
-  const { token, tokenHash } = newInviteToken();
-  const now = new Date();
-  const before = snapshotOf(member);
-  const updated = await NoteMember.findOneAndUpdate(
-    { _id: member._id, status: { $ne: 'accepted' } },
+  const existing = await NoteMember.findOne({ noteId: note.id, email });
+  if (existing?.status === 'accepted') throw alreadyHasAccess('email');
+  await assertMayInvite({ ownerUid, noteId: note.id, email, existing });
+
+  const { token, tokenHash } = createInviteToken();
+  const previousState = existing ? captureInvitationState(existing) : null;
+  const inviterLabel = await displayLabelFor(ownerUid, req.userEmail);
+
+  const invitation = await saveInvitation({ noteId: note.id, ownerUid, email, role, tokenHash, inviterLabel, existing });
+  await assertInvitationKeepsItsPlace(invitation, previousState);
+  await sendInvitationOrUndo(invitation, token, note.title, previousState);
+  res.status(201).json(toPublicMember(invitation));
+}
+
+// Sends the same invitation again with a fresh link (the earlier link stops working once the new
+// email has gone out).
+export async function resendInvite(req: AuthedRequest, res: Response) {
+  const ownerUid = req.userId!;
+  requireCollaborationEnabled(ownerUid);
+  const note = await requireOwnedNote(req);
+
+  const invitation = await NoteMember.findOne({ _id: req.params.memberId, noteId: note.id }).catch(() => null);
+  if (!invitation) throw notFound();
+  if (invitation.status === 'accepted') throw alreadyHasAccess('general');
+  await assertMayInvite({ ownerUid, noteId: note.id, email: invitation.email, existing: invitation });
+
+  const { token, tokenHash } = createInviteToken();
+  const previousState = captureInvitationState(invitation);
+  const renewed = await NoteMember.findOneAndUpdate(
+    { _id: invitation._id, status: { $ne: 'accepted' } },
     {
-      $set: { tokenHash, status: 'pending', expiresAt: new Date(now.getTime() + INVITE_TTL_DAYS * DAY_MS), lastSentAt: now, sendCount: member.sendCount + 1 },
+      $set: { tokenHash, status: 'pending', expiresAt: newInviteExpiry(), lastSentAt: new Date(), sendCount: invitation.sendCount + 1 },
       $unset: { respondedAt: '' },
     },
     { new: true }
   );
-  if (!updated) throw new ApiError(409, 'That person already has access to this note.', 'general');
-  try {
-    await deliverInvite(updated, token, note.title);
-  } catch (err) {
-    console.error('[collaboration] invitation email failed', err);
-    // The email never went out, so the earlier link must keep working.
-    await restoreSnapshot(updated._id, before);
-    throw new ApiError(502, "We couldn't send the invitation email. Try again.", 'general');
-  }
-  res.json(toPublicMember(updated));
+  if (!renewed) throw alreadyHasAccess('general');
+
+  await assertInvitationKeepsItsPlace(renewed, previousState);
+  await sendInvitationOrUndo(renewed, token, note.title, previousState);
+  res.json(toPublicMember(renewed));
 }
 
 export async function changeMemberRole(req: AuthedRequest, res: Response) {
   const note = await requireOwnedNote(req);
   const role = requireRole(req.body?.role);
   const member = await NoteMember.findOneAndUpdate({ _id: req.params.memberId, noteId: note.id }, { $set: { role } }, { new: true }).catch(() => null);
-  if (!member) throw new ApiError(404, 'Not found.', 'general');
+  if (!member) throw notFound();
   res.json(toPublicMember(member));
 }
 
@@ -306,130 +149,150 @@ export async function changeMemberRole(req: AuthedRequest, res: Response) {
 export async function removeMember(req: AuthedRequest, res: Response) {
   const note = await requireOwnedNote(req);
   const removed = await NoteMember.findOneAndDelete({ _id: req.params.memberId, noteId: note.id }).catch(() => null);
-  if (!removed) throw new ApiError(404, 'Not found.', 'general');
+  if (!removed) throw notFound();
   res.status(204).send();
 }
 
-// The note's people with their access: the owner, and each collaborator with a role. Anyone with
-// access can see it. The OWNER also gets every invitation (pending, declined, expired) with the
-// address and an id to manage it; everyone else sees only people who accepted, by name (or a
-// masked address), with no addresses and no ids.
+// ---------------------------------------------------------------------------------------------
+// Who has access to a note
+// ---------------------------------------------------------------------------------------------
+
+// The owner knows every address: an accepted person is shown by name, anyone else by address.
+async function labelSeenByOwner(member: NoteMemberDocument): Promise<string> {
+  if (member.status !== 'accepted') return member.email;
+  return (await accountNameOf(member.memberUid)) ?? member.email;
+}
+
+async function describePerson(member: NoteMemberDocument, viewer: { uid: string; isOwner: boolean }) {
+  const label = viewer.isOwner ? await labelSeenByOwner(member) : await labelShownToCollaborators(member.memberUid, member.email);
+  return {
+    // Only the owner gets the address and the id needed to manage the invitation.
+    ...(viewer.isOwner ? { id: member.id as string, email: member.email } : {}),
+    label,
+    role: member.role,
+    status: member.status,
+    expired: isInviteExpired(member),
+    isYou: member.memberUid === viewer.uid,
+  };
+}
+
+// The owner and each collaborator with their role. Anyone with access can ask. The OWNER sees every
+// invitation (pending, declined, expired too); everyone else sees only the people who accepted,
+// by name (or a masked address), with no addresses and no ids.
 export async function getNotePeople(req: AuthedRequest, res: Response) {
   const access = await requireNoteAccess(req.userId!, req.params.id);
   const isOwner = access.role === 'owner';
-  const rows = await NoteMember.find(isOwner ? { noteId: access.note.id } : { noteId: access.note.id, status: 'accepted' }).sort({ createdAt: 1 });
+  const viewer = { uid: req.userId!, isOwner };
 
-  const people = await Promise.all(
-    rows.map(async (m) => {
-      // The owner knows the address, so it is the fallback; everyone else only ever gets a masked one.
-      const label = isOwner ? (m.status === 'accepted' ? (await nameOf(m.memberUid)) ?? m.email : m.email) : await publicLabelFor(m.memberUid, m.email);
-      return {
-        ...(isOwner ? { id: m.id as string, email: m.email } : {}),
-        label,
-        role: m.role,
-        status: m.status,
-        expired: isExpired(m),
-        isYou: m.memberUid === req.userId,
-      };
-    })
-  );
+  const shownMembers = await NoteMember.find(isOwner ? { noteId: access.note.id } : { noteId: access.note.id, status: 'accepted' }).sort({ createdAt: 1 });
+  const people = await Promise.all(shownMembers.map((member) => describePerson(member, viewer)));
+
   res.json({
     role: access.role,
-    owner: { label: isOwner ? 'You' : await labelFor(access.note.firebaseUid), isYou: isOwner },
+    owner: { label: isOwner ? 'You' : await displayLabelFor(access.note.firebaseUid), isYou: isOwner },
     people,
   });
 }
 
-// ---------- the member's side ----------
+// ---------------------------------------------------------------------------------------------
+// The invited person's side: notes shared with them
+// ---------------------------------------------------------------------------------------------
 
-// Notes other people shared with me (accepted invitations only), with my role.
+// Notes other people shared with me (accepted invitations only), most recently edited first.
 export async function listSharedWithMe(req: AuthedRequest, res: Response) {
   const memberships = await NoteMember.find({ memberUid: req.userId, status: 'accepted' });
-  if (!memberships.length) {
+  if (memberships.length === 0) {
     res.json([]);
     return;
   }
-  const notes = await Note.find({ _id: { $in: memberships.map((m) => m.noteId) } });
-  const byId = new Map(notes.map((n) => [n.id as string, n]));
-  const result = memberships
-    .map((m) => {
-      const note = byId.get(m.noteId);
-      return note ? { note: toPublicNote(note), role: m.role, ownerLabel: cleanLabel(m.inviterLabel) } : null;
-    })
-    .filter((row): row is NonNullable<typeof row> => !!row)
-    .sort((a, b) => b.note.updatedAt.localeCompare(a.note.updatedAt));
-  res.json(result);
+  const notes = await Note.find({ _id: { $in: memberships.map((membership) => membership.noteId) } });
+  const noteById = new Map(notes.map((note) => [note.id as string, note]));
+
+  const sharedNotes = memberships.flatMap((membership) => {
+    const note = noteById.get(membership.noteId);
+    // A note that no longer exists simply isn't listed.
+    return note ? [{ note: toPublicNote(note), role: membership.role, ownerLabel: shortenLabel(membership.inviterLabel) }] : [];
+  });
+  sharedNotes.sort((a, b) => b.note.updatedAt.localeCompare(a.note.updatedAt));
+  res.json(sharedNotes);
 }
 
-// One shared note, fresh from the server (the app refreshes it before and while editing).
+// One note I have access to, fresh from the server, with my role (the app polls this to pick up
+// other people's edits and role changes).
 export async function getSharedNote(req: AuthedRequest, res: Response) {
   const access = await requireNoteAccess(req.userId!, req.params.id);
   res.json({ note: toPublicNote(access.note), role: access.role });
 }
 
-// A member stepping away from a note shared with them.
+// An invited person stepping away from a note shared with them.
 export async function leaveNote(req: AuthedRequest, res: Response) {
-  const removed = await NoteMember.findOneAndDelete({ noteId: req.params.id, memberUid: req.userId, status: 'accepted' }).catch(() => null);
-  if (!removed) throw new ApiError(404, 'Not found.', 'general');
+  const left = await NoteMember.findOneAndDelete({ noteId: req.params.id, memberUid: req.userId, status: 'accepted' }).catch(() => null);
+  if (!left) throw notFound();
   res.status(204).send();
 }
 
-// ---------- invitations (the emailed link) ----------
+// ---------------------------------------------------------------------------------------------
+// Invitations (the emailed link)
+// ---------------------------------------------------------------------------------------------
 
-// The invitation behind a token, whatever its state; null when the token is unknown.
-async function findInvite(token: string) {
-  if (typeof token !== 'string' || token.length < 20 || token.length > 100) return null;
-  const member = await NoteMember.findOne({ tokenHash: sha256(token) });
-  if (!member) return null;
-  const note = await Note.findById(member.noteId).select('title firebaseUid');
-  return { member, note };
+const MIN_TOKEN_LENGTH = 20;
+const MAX_TOKEN_LENGTH = 100;
+
+// The invitation behind a token, in whatever state it is in. null when the token is unknown.
+async function findInviteByToken(token: unknown) {
+  if (typeof token !== 'string' || token.length < MIN_TOKEN_LENGTH || token.length > MAX_TOKEN_LENGTH) return null;
+  const invitation = await NoteMember.findOne({ tokenHash: hashInviteToken(token) });
+  if (!invitation) return null;
+  const note = await Note.findById(invitation.noteId).select('title firebaseUid');
+  return { invitation, note };
 }
 
 export async function previewInvite(req: AuthedRequest, res: Response) {
-  const found = await findInvite(req.params.token);
-  if (!found || !found.note) throw new ApiError(404, 'This invitation is no longer available.', 'general');
-  const { member, note } = found;
+  const lookup = await findInviteByToken(req.params.token);
+  if (!lookup?.note) throw inviteUnavailable();
+  const { invitation, note } = lookup;
   res.json({
     noteTitle: note.title,
-    role: member.role,
-    inviterLabel: member.inviterLabel,
-    // 'pending' | 'accepted' | 'declined', plus whether the link has run out.
-    status: member.status,
-    expired: isExpired(member),
-    // True when this very account already has access (e.g. it opened the link twice).
-    alreadyYours: member.status === 'accepted' && member.memberUid === req.userId,
+    role: invitation.role,
+    inviterLabel: invitation.inviterLabel,
+    status: invitation.status,
+    expired: isInviteExpired(invitation),
+    // This very account already has access (for example it opened the link twice).
+    alreadyYours: invitation.status === 'accepted' && invitation.memberUid === req.userId,
     isOwner: note.firebaseUid === req.userId,
   });
 }
 
 export async function acceptInvite(req: AuthedRequest, res: Response) {
-  requireCollaboration(req.userId!);
-  const found = await findInvite(req.params.token);
-  if (!found || !found.note) throw new ApiError(404, 'This invitation is no longer available.', 'general');
-  const { member, note } = found;
+  const uid = req.userId!;
+  requireCollaborationEnabled(uid);
+  const lookup = await findInviteByToken(req.params.token);
+  if (!lookup?.note) throw inviteUnavailable();
+  const { invitation, note } = lookup;
 
-  if (note.firebaseUid === req.userId) throw new ApiError(400, "This is your own note, so you don't need an invitation.", 'general');
-  // Accepting twice from the same account is harmless: it just reports the access it already has.
-  if (member.status === 'accepted') {
-    if (member.memberUid === req.userId) {
-      res.json({ noteId: member.noteId, role: member.role });
+  if (note.firebaseUid === uid) throw new ApiError(400, "This is your own note, so you don't need an invitation.", 'general');
+
+  if (invitation.status === 'accepted') {
+    // Accepting twice from the same account is harmless: it just reports the access it already has.
+    if (invitation.memberUid === uid) {
+      res.json({ noteId: invitation.noteId, role: invitation.role });
       return;
     }
     throw new ApiError(410, 'This invitation has already been used.', 'general');
   }
-  if (member.status === 'declined') throw new ApiError(410, 'This invitation was declined. Ask for a new one.', 'general');
-  if (isExpired(member)) throw new ApiError(410, 'This invitation has expired. Ask for a new one.', 'general');
+  if (invitation.status === 'declined') throw new ApiError(410, 'This invitation was declined. Ask for a new one.', 'general');
+  if (isInviteExpired(invitation)) throw new ApiError(410, 'This invitation has expired. Ask for a new one.', 'general');
 
-  // One accepted place per account per note, however many invitations it holds.
-  const alreadyMember = await NoteMember.findOne({ noteId: member.noteId, memberUid: req.userId, status: 'accepted' });
+  // An account has one place per note, however many invitations it holds.
+  const alreadyMember = await NoteMember.findOne({ noteId: invitation.noteId, memberUid: uid, status: 'accepted' });
   if (alreadyMember) throw new ApiError(409, 'You already have access to this note.', 'general');
 
-  // The claim: only a still-pending, unexpired invitation can be accepted, and only once.
+  // Only a still-pending, unexpired invitation can be accepted, and only once.
   let accepted: NoteMemberDocument | null;
   try {
     accepted = await NoteMember.findOneAndUpdate(
-      { _id: member._id, status: 'pending', expiresAt: { $gt: new Date() } },
-      { $set: { status: 'accepted', memberUid: req.userId, respondedAt: new Date() } },
+      { _id: invitation._id, status: 'pending', expiresAt: { $gt: new Date() } },
+      { $set: { status: 'accepted', memberUid: uid, respondedAt: new Date() } },
       { new: true }
     );
   } catch (err) {
@@ -440,70 +303,58 @@ export async function acceptInvite(req: AuthedRequest, res: Response) {
   res.json({ noteId: accepted.noteId, role: accepted.role });
 }
 
-// Declining never needs an account: the link in the email is enough (see the public page).
-async function declinePending(token: string): Promise<boolean> {
-  const found = await findInvite(token);
-  if (!found) return false;
-  const declined = await NoteMember.findOneAndUpdate(
-    { _id: found.member._id, status: 'pending' },
-    { $set: { status: 'declined', respondedAt: new Date() } },
-    { new: true }
-  );
-  return !!declined;
+// Marks a still-pending invitation as declined. Declining never needs an account: the link in the
+// email is enough.
+async function declinePendingInvite(invitationId: unknown): Promise<void> {
+  await NoteMember.findOneAndUpdate({ _id: invitationId, status: 'pending' }, { $set: { status: 'declined', respondedAt: new Date() } });
 }
 
 export async function declineInvite(req: AuthedRequest, res: Response) {
-  const found = await findInvite(req.params.token);
-  if (!found) throw new ApiError(404, 'This invitation is no longer available.', 'general');
-  if (found.member.status === 'accepted') throw new ApiError(409, 'This invitation was already accepted.', 'general');
-  await declinePending(req.params.token);
+  const lookup = await findInviteByToken(req.params.token);
+  if (!lookup) throw inviteUnavailable();
+  if (lookup.invitation.status === 'accepted') throw new ApiError(409, 'This invitation was already accepted.', 'general');
+  await declinePendingInvite(lookup.invitation._id);
   res.status(204).send();
 }
 
-// ---------- the public pages (no sign-in) ----------
+// ---------------------------------------------------------------------------------------------
+// The public pages behind the emailed link (no sign-in)
+// ---------------------------------------------------------------------------------------------
+
+const UNAVAILABLE_PAGE = buildInviteMessageHtml('Invitation unavailable', 'This invitation is no longer available, or the link is incorrect.');
 
 export async function getInviteWebPage(req: Request, res: Response) {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  const found = await findInvite(req.params.token);
-  if (!found || !found.note) {
-    res.status(404).send(buildInviteMessageHtml('Invitation unavailable', 'This invitation is no longer available, or the link is incorrect.'));
+  const lookup = await findInviteByToken(req.params.token);
+  if (!lookup?.note) {
+    res.status(404).send(UNAVAILABLE_PAGE);
     return;
   }
-  const { member, note } = found;
-  if (member.status === 'accepted') {
+  const { invitation, note } = lookup;
+
+  if (invitation.status === 'accepted') {
     res.send(buildInviteMessageHtml('Already accepted', 'This invitation was already accepted. Open i-Planner to find the note under Shared with me.'));
-    return;
-  }
-  if (member.status === 'declined') {
+  } else if (invitation.status === 'declined') {
     res.send(buildInviteMessageHtml('Invitation declined', 'This invitation was declined.'));
-    return;
-  }
-  if (isExpired(member)) {
+  } else if (isInviteExpired(invitation)) {
     res.send(buildInviteMessageHtml('Invitation expired', 'This invitation has expired. Ask the sender to invite you again.'));
-    return;
+  } else {
+    res.send(buildInvitePageHtml({ inviterLabel: invitation.inviterLabel, noteTitle: note.title, role: invitation.role, token: req.params.token }));
   }
-  res.send(buildInvitePageHtml({ inviterLabel: member.inviterLabel, noteTitle: note.title, role: member.role, token: req.params.token }));
 }
 
 // POST only: a GET (which email scanners and link previews perform) must never decline anything.
 export async function declineInviteWebPage(req: Request, res: Response) {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  const found = await findInvite(req.params.token);
-  if (!found) {
-    res.status(404).send(buildInviteMessageHtml('Invitation unavailable', 'This invitation is no longer available, or the link is incorrect.'));
+  const lookup = await findInviteByToken(req.params.token);
+  if (!lookup) {
+    res.status(404).send(UNAVAILABLE_PAGE);
     return;
   }
-  if (found.member.status === 'accepted') {
+  if (lookup.invitation.status === 'accepted') {
     res.send(buildInviteMessageHtml('Already accepted', 'This invitation was already accepted, so it can no longer be declined here.'));
     return;
   }
-  await declinePending(req.params.token);
+  await declinePendingInvite(lookup.invitation._id);
   res.send(buildInviteMessageHtml('Invitation declined', "You've declined the invitation. The sender won't be notified by email, and you won't get access to the note."));
 }
-
-// Used by the note controller: does this note currently have anyone invited or accepted?
-export async function noteHasCollaborators(noteId: string): Promise<boolean> {
-  return !!(await NoteMember.exists({ noteId, status: 'accepted' }));
-}
-
-export { getNoteAccess };

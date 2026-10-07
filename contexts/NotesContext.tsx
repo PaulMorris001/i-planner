@@ -65,7 +65,6 @@ export function NotesProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     });
     return unsubscribe;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const createNote = async (input: NewNoteInput) => {

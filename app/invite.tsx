@@ -21,7 +21,7 @@ export default function Invite() {
   const { refetch: refetchNotes } = useNotes();
   const [status, setStatus] = useState<Status>('loading');
   const [invite, setInvite] = useState<InvitePreview | null>(null);
-  const [working, setWorking] = useState<'accept' | 'decline' | null>(null);
+  const [pendingAction, setPendingAction] = useState<'accept' | 'decline' | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -47,8 +47,8 @@ export default function Invite() {
   const goToNotes = () => router.replace(Routes.NOTES);
 
   const accept = async () => {
-    if (!token || working) return;
-    setWorking('accept');
+    if (!token || pendingAction) return;
+    setPendingAction('accept');
     setError('');
     try {
       const { noteId } = await collaborationService.acceptInvite(token);
@@ -58,13 +58,13 @@ export default function Invite() {
     } catch (err) {
       console.error('[Invite] failed to accept', err);
       setError((err as { message?: string })?.message || "Couldn't accept the invitation. Try again.");
-      setWorking(null);
+      setPendingAction(null);
     }
   };
 
   const decline = async () => {
-    if (!token || working) return;
-    setWorking('decline');
+    if (!token || pendingAction) return;
+    setPendingAction('decline');
     setError('');
     try {
       await collaborationService.declineInvite(token);
@@ -73,7 +73,7 @@ export default function Invite() {
     } catch (err) {
       console.error('[Invite] failed to decline', err);
       setError((err as { message?: string })?.message || "Couldn't decline. Try again.");
-      setWorking(null);
+      setPendingAction(null);
     }
   };
 
@@ -160,11 +160,11 @@ export default function Invite() {
       </View>
 
       <View style={styles.footer}>
-        <Pressable style={styles.primaryBtn} onPress={accept} disabled={!!working}>
-          {working === 'accept' ? <ActivityIndicator color={Colors.white} size="small" /> : <Text style={styles.primaryText}>Accept</Text>}
+        <Pressable style={styles.primaryBtn} onPress={accept} disabled={!!pendingAction}>
+          {pendingAction === 'accept' ? <ActivityIndicator color={Colors.white} size="small" /> : <Text style={styles.primaryText}>Accept</Text>}
         </Pressable>
-        <Pressable style={styles.secondaryBtn} onPress={decline} disabled={!!working}>
-          {working === 'decline' ? <ActivityIndicator color={Colors.textSecondary} size="small" /> : <Text style={styles.secondaryText}>Decline</Text>}
+        <Pressable style={styles.secondaryBtn} onPress={decline} disabled={!!pendingAction}>
+          {pendingAction === 'decline' ? <ActivityIndicator color={Colors.textSecondary} size="small" /> : <Text style={styles.secondaryText}>Decline</Text>}
         </Pressable>
       </View>
     </ScreenWrapper>
