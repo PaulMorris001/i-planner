@@ -1,17 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, TextInput, Pressable, StyleSheet, Alert, Keyboard, ActivityIndicator, Share, Platform } from 'react-native';
+import { View, Text, TextInput, Pressable, StyleSheet, Alert, Keyboard, ActivityIndicator, Share, Platform, AppState } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useNavigation, usePreventRemove } from '@react-navigation/native';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { FolderPickerModal } from '@/components/notes/FolderPickerModal';
 import { ShareOptionsModal } from '@/components/notes/ShareOptionsModal';
+import { CollaboratorsSheet } from '@/components/notes/CollaboratorsSheet';
+import { NotePeopleSheet } from '@/components/notes/NotePeopleSheet';
+import { requestConfirm } from '@/components/ui/ConfirmModal';
 import { Colors, Spacing, Radius } from '@/constants/theme';
 import { useNotes } from '@/hooks/useNotes';
 import { useFolders } from '@/hooks/useFolders';
 import { useDictation } from '@/hooks/useDictation';
 import { noteService } from '@/services/note.service';
 import { sharedNoteService } from '@/services/sharedNote.service';
+import { collaborationService } from '@/services/collaboration.service';
+import type { Note } from '@/types/note.types';
+import type { NoteAccessRole } from '@/types/collaboration.types';
 import { confirmDelete } from '@/utils/confirmDelete';
 import { formatShortDate, formatTimeLabel } from '@/utils/date';
 import { shareNote } from '@/utils/exportNote';
@@ -33,6 +39,14 @@ const NOTE_BODY_MAX_LENGTH = 100_000;
 const NOTE_TITLE_MAX_LENGTH = 200;
 
 const AUTOSAVE_INTERVAL_MS = 8_000;
+// How often an open note is checked for changes other people have saved.
+const REMOTE_CHECK_MS = 12_000;
+
+// The latest copy of the note when a save was refused because someone else changed it first.
+function conflictNote(err: unknown): Note | null {
+  const e = err as { status?: number; data?: { note?: Note } } | null;
+  return e?.status === 409 && e.data?.note ? e.data.note : null;
+}
 // Typing is read out of the editor (a WebView) this long after the last change.
 const EDITOR_SYNC_DEBOUNCE_MS = 250;
 // How long the editor's own echo of an app-made change is ignored.
@@ -50,7 +64,7 @@ function deriveFallbackTitle(body: string): string {
 
 export default function NoteEditor() {
   const { id, folderId: folderIdParam } = useLocalSearchParams<{ id?: string; folderId?: string }>();
-  const { notes, createNote, updateNote, deleteNote } = useNotes();
+  const { notes, sharedNotes, createNote, updateNote, deleteNote, leaveSharedNote, applyServerNote, setSharedRole } = useNotes();
   const { folders } = useFolders();
   const navigation = useNavigation();
 
@@ -74,7 +88,18 @@ export default function NoteEditor() {
   // pulled into `body` (typing is debounced). Counts as unsaved, so leaving the
   // screen in that gap can't lose the last few keystrokes.
   const [pendingSync, setPendingSync] = useState(false);
-  const editing = savedId ? notes.find((n) => n.id === savedId) ?? null : null;
+  // A note is either one of this account's own, or one someone invited it to (with a role).
+  const sharedEntry = savedId ? sharedNotes.find((s) => s.note.id === savedId) : undefined;
+  const role: NoteAccessRole = sharedEntry ? sharedEntry.role : 'owner';
+  const isOwner = role === 'owner';
+  // A viewer can read the note but nothing on this screen changes it.
+  const canEdit = role !== 'viewer';
+  const editing = savedId ? notes.find((n) => n.id === savedId) ?? sharedEntry?.note ?? null : null;
+  const [peopleOpen, setPeopleOpen] = useState(false);
+  // The read-only people list an invited person can open.
+  const [viewPeopleOpen, setViewPeopleOpen] = useState(false);
+  // Set when a save was refused because someone else saved first: the latest copy, shown in a banner.
+  const [conflict, setConflict] = useState<Note | null>(null);
 
   const warnedMaxLengthRef = useRef(false);
   // Snapshot of `body` taken right before a Clean request fires, restored on Revert.
@@ -97,6 +122,10 @@ export default function NoteEditor() {
   newNoteFolderIdRef.current = newNoteFolderId;
   const savedIdRef = useRef(savedId);
   savedIdRef.current = savedId;
+  const canEditRef = useRef(canEdit);
+  canEditRef.current = canEdit;
+  const conflictRef = useRef(conflict);
+  conflictRef.current = conflict;
   // True while any save (autosave or manual) is in flight, so the two can
   // never race each other into creating the same not-yet-saved note twice.
   const busyRef = useRef(false);
@@ -164,7 +193,7 @@ export default function NoteEditor() {
   const currentBody = async (): Promise<string> => (syncTimerRef.current ? syncBodyFromEditor() : bodyRef.current);
 
   onEditorChangeRef.current = () => {
-    if (!baselineReadyRef.current || dictationActiveRef.current || Date.now() < suppressUntilRef.current) return;
+    if (!canEditRef.current || !baselineReadyRef.current || dictationActiveRef.current || Date.now() < suppressUntilRef.current) return;
     setPendingSync(true);
     if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
     syncTimerRef.current = setTimeout(() => {
@@ -250,6 +279,8 @@ export default function NoteEditor() {
   // Shared by the autosave interval and the max-length hard stop.
   const runAutosave = async () => {
     if (busyRef.current) return;
+    // A viewer never saves; and while a conflict is waiting for a choice nothing is retried.
+    if (!canEditRef.current || conflictRef.current) return;
     // Never silently commit an unconfirmed AI-cleanup decision — the editor is
     // also locked (not editable) during review, so nothing else can change while
     // this holds, but the 8s interval itself has no other reason to skip a tick.
@@ -280,6 +311,8 @@ export default function NoteEditor() {
     } catch (err) {
       console.error('[NoteEditor] autosave failed', err);
       setAutosaveStatus('idle');
+      const latest = conflictNote(err);
+      if (latest) setConflict(latest);
     } finally {
       busyRef.current = false;
     }
@@ -314,7 +347,7 @@ export default function NoteEditor() {
   // Save is only offered when there's an unsaved change worth keeping. States:
   // grey (nothing new: just opened, or unchanged since the last save), blue
   // (unsaved change), green "Saved" (a save went through, nothing edited since).
-  const canSave = isDirty && hasSaveableText && !submitting;
+  const canSave = isDirty && hasSaveableText && !submitting && canEdit && !conflict;
   const showSaved = !isDirty && hasSaved && !submitting;
   // While editing, the note's own folderId is the source of truth (kept live
   // by NotesContext's optimistic update) — newNoteFolderId only matters
@@ -397,10 +430,10 @@ export default function NoteEditor() {
   // before Clean ran, so a manual edit during review would be silently lost).
   useEffect(() => {
     if (!editorState.isReady) return;
-    editor.setEditable(!dictation.recording && cleanupState !== 'reviewing');
+    editor.setEditable(canEdit && !dictation.recording && cleanupState !== 'reviewing');
     if (!dictation.recording) dictationActiveRef.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editorState.isReady, dictation.recording, cleanupState]);
+  }, [editorState.isReady, dictation.recording, cleanupState, canEdit]);
 
   const handleToggleDictation = async () => {
     if (dictation.recording) {
@@ -486,7 +519,13 @@ export default function NoteEditor() {
       lastSavedRef.current = { title: t, body: b };
     } catch (err) {
       console.error('[NoteEditor] failed to save note before leaving', err);
-      Alert.alert("Couldn't save", 'Check your connection and try again.');
+      const latest = conflictNote(err);
+      if (latest) {
+        setConflict(latest);
+        Alert.alert('Someone else changed this note', 'Choose whether to load their version or keep yours.');
+      } else {
+        Alert.alert("Couldn't save", 'Check your connection and try again.');
+      }
     } finally {
       setSubmitting(false);
       busyRef.current = false;
@@ -567,7 +606,9 @@ export default function NoteEditor() {
       setAutosaveStatus('saved');
     } catch (err) {
       console.error('[NoteEditor] failed to save note', err);
-      Alert.alert("Couldn't save", 'Check your connection and try again.');
+      const latest = conflictNote(err);
+      if (latest) setConflict(latest);
+      else Alert.alert("Couldn't save", 'Check your connection and try again.');
     } finally {
       setSubmitting(false);
       busyRef.current = false;
@@ -588,8 +629,9 @@ export default function NoteEditor() {
   };
 
   const handleDelete = () => {
-    if (!editing) return;
+    if (!editing || !isOwner) return;
     confirmDelete(editing.title, () => {
+      leftRef.current = true;
       // A deleted note has nothing left to keep, revert, or save — clear both
       // guards before this delete's own router.back() fires. Unlike
       // handleSave, this is safe to do synchronously right here: deleteNote
@@ -647,6 +689,108 @@ export default function NoteEditor() {
     setShareMenuOpen(true);
   };
 
+  // ---- Collaboration ---------------------------------------------------------
+  // Set once the screen is on its way out (deleted, left, or access lost), so the check
+  // below doesn't announce a note as "unavailable" because of the screen's own action.
+  const leftRef = useRef(false);
+
+  // Makes the server's newer copy of the note what the screen shows AND its last saved state
+  // (so it doesn't count as unsaved), without reading the editor back.
+  const adoptServerNote = (latest: Note) => {
+    if (syncTimerRef.current) {
+      clearTimeout(syncTimerRef.current);
+      syncTimerRef.current = null;
+    }
+    lastSavedRef.current = { title: latest.title, body: latest.body };
+    setTitle(latest.title);
+    restoreBody(latest.body);
+    applyServerNote(latest);
+  };
+  const adoptServerNoteRef = useRef(adoptServerNote);
+  adoptServerNoteRef.current = adoptServerNote;
+  const setSharedRoleRef = useRef(setSharedRole);
+  setSharedRoleRef.current = setSharedRole;
+
+  const handleLoadTheirVersion = () => {
+    if (!conflict) return;
+    adoptServerNote(conflict);
+    setConflict(null);
+  };
+
+  // Keeps what is on screen: the saved copy is brought up to date (so the next save is based on
+  // the latest version), then the save is tried again and replaces their change.
+  const handleKeepMine = () => {
+    if (!conflict) return;
+    applyServerNote(conflict);
+    setConflict(null);
+    setTimeout(() => runAutosaveRef.current(), 400);
+  };
+
+  // Someone invited to this note stepping away from it.
+  const handleLeave = () => {
+    if (!editing || isOwner) return;
+    const noteId = editing.id;
+    requestConfirm({
+      title: 'Leave this note?',
+      message: "You won't be able to open it again unless the owner invites you again.",
+      confirmLabel: 'Leave',
+      destructive: true,
+      onConfirm: () => {
+        const previous = lastSavedRef.current;
+        leftRef.current = true;
+        setCleanupState('idle');
+        lastSavedRef.current = { title, body };
+        leaveSharedNote(noteId)
+          .then(() => router.back())
+          .catch((err) => {
+            console.error('[NoteEditor] failed to leave note', err);
+            leftRef.current = false;
+            lastSavedRef.current = previous;
+            Alert.alert("Couldn't leave", 'Check your connection and try again.');
+          });
+      },
+    });
+  };
+
+  // Picks up what other people save while this note is open. Skipped while there is anything
+  // unsaved here (typing is never overwritten: saving it then reports the conflict instead),
+  // while saving, dictating, or reviewing an AI cleanup, and while the app is in the background.
+  const remoteStateRef = useRef({ dirty: false, version: 0, cleanup: 'idle' as string, role });
+  remoteStateRef.current = { dirty: isDirty, version: editing?.version ?? 0, cleanup: cleanupState, role };
+  useEffect(() => {
+    if (!savedId) return;
+    const timer = setInterval(async () => {
+      if (AppState.currentState !== 'active') return;
+      if (busyRef.current || conflictRef.current || dictationActiveRef.current || remoteStateRef.current.cleanup !== 'idle') return;
+      try {
+        const { note: latest, role: serverRole } = await collaborationService.getNote(savedId);
+        const state = remoteStateRef.current;
+        // The owner changed what this person may do (view <-> edit): take effect at once.
+        if (serverRole !== 'owner' && state.role !== 'owner' && serverRole !== state.role) {
+          setSharedRoleRef.current(savedId, serverRole);
+          if (serverRole === 'viewer') {
+            // Anything typed but not saved is not kept: a viewer can no longer save it.
+            adoptServerNoteRef.current(latest);
+            Alert.alert('Your access changed', 'You can now only view this note. Edits you had not saved were not kept.');
+          } else {
+            Alert.alert('Your access changed', 'You can now edit this note.');
+          }
+          return;
+        }
+        if ((latest.version ?? 0) <= state.version || state.dirty || busyRef.current) return;
+        adoptServerNoteRef.current(latest);
+      } catch (err) {
+        if ((err as { status?: number } | null)?.status === 404 && !leftRef.current) {
+          leftRef.current = true;
+          Alert.alert('Note unavailable', 'This note was deleted, or you no longer have access to it.', [
+            { text: 'OK', onPress: () => router.back() },
+          ]);
+        }
+      }
+    }, REMOTE_CHECK_MS);
+    return () => clearInterval(timer);
+  }, [savedId]);
+
   return (
     // 'bottom' matters here specifically because of the mic/Clean FABs and the
     // review banner pinned to the bottom of the page card — without it, they
@@ -660,21 +804,32 @@ export default function NoteEditor() {
 
         <View style={styles.headerTitleWrap} pointerEvents="none">
           <Text style={styles.headerTitle} numberOfLines={1}>
-            {editing ? 'Edit note' : 'New note'}
+            {editing ? (role === 'viewer' ? 'View note' : 'Edit note') : 'New note'}
           </Text>
         </View>
 
         <View style={styles.headerActions}>
-          {!!editing && (
+          {!!editing && isOwner && (
             <Pressable hitSlop={10} onPress={handleShare} disabled={sharing} style={styles.shareBtn}>
               <IconSymbol name="square.and.arrow.up" color={Colors.textPrimary} size={17} />
             </Pressable>
           )}
-          {!!editing && (
+          {!!editing && isOwner && (
             <Pressable hitSlop={10} onPress={handleDelete} style={styles.deleteBtn}>
               <IconSymbol name="trash" color={Colors.error} size={17} />
             </Pressable>
           )}
+          {!!editing && !isOwner && (
+            <Pressable hitSlop={10} onPress={() => setViewPeopleOpen(true)} style={styles.shareBtn} accessibilityLabel="Who has access">
+              <IconSymbol name="person.fill" color={Colors.textPrimary} size={17} />
+            </Pressable>
+          )}
+          {!!editing && !isOwner && (
+            <Pressable hitSlop={10} onPress={handleLeave} style={styles.deleteBtn} accessibilityLabel="Leave this note">
+              <IconSymbol name="rectangle.portrait.and.arrow.right" color={Colors.error} size={17} />
+            </Pressable>
+          )}
+          {canEdit && (
           <Pressable
             hitSlop={10}
             onPress={handleSave}
@@ -693,6 +848,7 @@ export default function NoteEditor() {
               <Text style={[styles.saveBtnText, !canSave && styles.saveBtnTextDisabled]}>Save</Text>
             )}
           </Pressable>
+          )}
         </View>
       </View>
 
@@ -704,6 +860,7 @@ export default function NoteEditor() {
           placeholderTextColor={Colors.textMuted}
           style={styles.titleInput}
           multiline
+          editable={canEdit}
           autoFocus={!editing}
           maxLength={NOTE_TITLE_MAX_LENGTH}
         />
@@ -717,20 +874,44 @@ export default function NoteEditor() {
               {autosaveStatus === 'saving' ? ' · Saving…' : autosaveStatus === 'saved' ? ' · Saved' : ''}
             </Text>
           )}
-          <Pressable style={styles.folderChip} onPress={() => setFolderPickerOpen(true)} hitSlop={6}>
-            <IconSymbol name="folder.fill" color={Colors.primaryLight} size={12} />
-            <Text style={styles.folderChipText} numberOfLines={1}>
-              {currentFolderName ?? 'No folder'}
-            </Text>
-            <IconSymbol name="chevron.right" color={Colors.primaryLight} size={11} />
-          </Pressable>
+          {isOwner ? (
+            <Pressable style={styles.folderChip} onPress={() => setFolderPickerOpen(true)} hitSlop={6}>
+              <IconSymbol name="folder.fill" color={Colors.primaryLight} size={12} />
+              <Text style={styles.folderChipText} numberOfLines={1}>
+                {currentFolderName ?? 'No folder'}
+              </Text>
+              <IconSymbol name="chevron.right" color={Colors.primaryLight} size={11} />
+            </Pressable>
+          ) : (
+            <View style={styles.folderChip}>
+              <IconSymbol name="person.fill" color={Colors.primaryLight} size={12} />
+              <Text style={styles.folderChipText} numberOfLines={1}>
+                {role === 'viewer' ? 'View only' : 'Can edit'}
+                {sharedEntry ? ` · from ${sharedEntry.ownerLabel}` : ''}
+              </Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.editorWrap}>
           <RichText editor={editor} style={styles.richText} />
         </View>
 
-        {cleanupState === 'reviewing' ? (
+        {!!conflict && (
+          <View style={[styles.reviewBanner, styles.conflictBanner]}>
+            <Text style={styles.reviewBannerText}>Someone else changed this note while you were editing. Your changes aren&apos;t saved yet.</Text>
+            <View style={styles.reviewBannerActions}>
+              <Pressable style={styles.revertBtn} onPress={handleLoadTheirVersion}>
+                <Text style={styles.revertBtnText}>Load their version</Text>
+              </Pressable>
+              <Pressable style={styles.keepBtn} onPress={handleKeepMine}>
+                <Text style={styles.keepBtnText}>Keep mine</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
+
+        {!canEdit ? null : cleanupState === 'reviewing' ? (
           <View style={styles.reviewBanner}>
             <Text style={styles.reviewBannerText}>AI cleaned this note (formatting is reset). Read it over, then choose:</Text>
             <View style={styles.reviewBannerActions}>
@@ -765,7 +946,7 @@ export default function NoteEditor() {
         )}
       </View>
 
-      {editorState.isFocused && !dictation.recording && cleanupState === 'idle' && <NoteFormatToolbar editor={editor} />}
+      {canEdit && editorState.isFocused && !dictation.recording && cleanupState === 'idle' && <NoteFormatToolbar editor={editor} />}
 
       <FolderPickerModal
         visible={folderPickerOpen}
@@ -780,7 +961,11 @@ export default function NoteEditor() {
         onClose={() => setShareMenuOpen(false)}
         onSharePdf={handleSharePdf}
         onShareLink={handleShareLink}
+        onInvite={isOwner && editing ? () => setPeopleOpen(true) : undefined}
       />
+
+      {!!editing && isOwner && <CollaboratorsSheet visible={peopleOpen} onClose={() => setPeopleOpen(false)} noteId={editing.id} />}
+      {!!editing && !isOwner && <NotePeopleSheet visible={viewPeopleOpen} onClose={() => setViewPeopleOpen(false)} noteId={editing.id} />}
 
       {cleanupState === 'loading' && (
         <View style={styles.cleaningOverlay}>
@@ -793,6 +978,11 @@ export default function NoteEditor() {
 }
 
 const styles = StyleSheet.create({
+  // Sits above the AI-cleanup banner if both ever show at once.
+  conflictBanner: {
+    zIndex: 5,
+    borderColor: Colors.primaryLight,
+  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',

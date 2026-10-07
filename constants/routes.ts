@@ -24,6 +24,7 @@ export const Routes = {
   NOTES_FOLDER: '/notes-folder',
   SHARED_NOTE: '/shared-note',
   SHARED_FOLDER: '/shared-folder',
+  INVITE:     '/invite',
   PLANS:      '/plans',
   CERT_TRACKER: '/cert-tracker',
   CLASSES:    '/classes',

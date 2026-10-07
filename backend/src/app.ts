@@ -5,6 +5,7 @@ import { env } from './config/env';
 import { router } from './routes';
 import { sharedNoteWebRouter } from './routes/sharedNoteWeb.routes';
 import { sharedFolderWebRouter } from './routes/sharedFolderWeb.routes';
+import { inviteWebRouter } from './routes/inviteWeb.routes';
 import { errorHandler } from './middleware/errorHandler';
 
 export function createApp() {
@@ -40,6 +41,8 @@ export function createApp() {
   app.use('/n', sharedNoteWebRouter);
   // Shared folder preview pages (/f/<folder-name>-<slug>).
   app.use('/f', sharedFolderWebRouter);
+  // Note collaboration invitations (/invite/<token>).
+  app.use('/invite', inviteWebRouter);
 
   app.use('/api', router);
 

@@ -95,6 +95,9 @@ export async function apiRequest<T>(
         message: data?.message ?? 'Something went wrong.',
         field: data?.field ?? 'general',
         status: response.status,
+        // The whole error body, for the few responses that carry more than a message
+        // (a note save refused because someone else changed it returns the latest note).
+        data,
       };
     }
 

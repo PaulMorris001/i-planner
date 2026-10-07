@@ -5,6 +5,9 @@ export interface Note {
   // Absent means "unfiled" — shown at the Notes screen's root alongside
   // folders. See types/folder.types.ts.
   folderId?: string;
+  // Counts every saved change. Sent back with a save so the server can tell the copy this
+  // screen holds is out of date (someone else changed the note) instead of overwriting them.
+  version?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -18,3 +21,6 @@ export interface NewNoteInput {
   // See backend/src/controllers/note.controller.ts's updateNote.
   folderId?: string | null;
 }
+
+// What a note save may carry besides the changed fields.
+export type NoteUpdate = Partial<NewNoteInput> & { baseVersion?: number };

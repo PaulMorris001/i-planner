@@ -11,7 +11,7 @@ const LOGO_URL = `${env.backendPublicUrl}/email-logo.png`;
 // arbitrary freeform text like a note body) — a display name is still
 // user-chosen text that ends up interpolated into HTML an email client
 // renders, so treat it the same as sharedNoteHtml.ts treats note content.
-function escapeHtml(text: string): string {
+export function escapeHtml(text: string): string {
   return text
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -24,7 +24,7 @@ function escapeHtml(text: string): string {
 // page (rendered by a real browser), this HTML runs through inboxes like
 // Outlook desktop that strip or mangle <style> blocks, so anything that
 // actually matters for legibility is inlined per-element instead.
-function page(bodyHtml: string): string {
+export function page(bodyHtml: string): string {
   return `<!DOCTYPE html>
 <html>
   <head>

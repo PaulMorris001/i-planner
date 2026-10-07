@@ -8,17 +8,31 @@ interface ShareOptionsModalProps {
   onClose: () => void;
   onSharePdf: () => void;
   onShareLink: () => void;
+  // Owner only: invite people to view or edit this note by email. Omitted for someone who was invited.
+  onInvite?: () => void;
 }
 
 // Local to note-editor.tsx — the only place a note offers two different ways
 // to share. Same row shape as ItemActionSheet, but that component's API is
 // fixed to Edit/extras/Delete, which doesn't fit a plain "pick one of two"
 // choice with no edit/delete semantics at all.
-export function ShareOptionsModal({ visible, onClose, onSharePdf, onShareLink }: ShareOptionsModalProps) {
+export function ShareOptionsModal({ visible, onClose, onSharePdf, onShareLink, onInvite }: ShareOptionsModalProps) {
   return (
-    <BottomSheetModal visible={visible} onClose={onClose} maxHeightPct={40}>
+    <BottomSheetModal visible={visible} onClose={onClose} maxHeightPct={onInvite ? 50 : 40}>
       <Text style={styles.title}>Share note</Text>
       <View style={styles.list}>
+        {onInvite && (
+          <Pressable
+            style={styles.row}
+            onPress={() => {
+              onClose();
+              onInvite();
+            }}
+          >
+            <IconSymbol name="person.fill" color={Colors.textPrimary} size={19} />
+            <Text style={styles.rowText}>Invite people</Text>
+          </Pressable>
+        )}
         <Pressable
           style={styles.row}
           onPress={() => {

@@ -22,6 +22,7 @@ import { PushToken } from '../models/PushToken';
 import { ReferralProfile } from '../models/ReferralProfile';
 import { Referral } from '../models/Referral';
 import { PointEvent } from '../models/PointEvent';
+import { NoteMember } from '../models/NoteMember';
 import { StudySession } from '../models/StudySession';
 import { StudyRun } from '../models/StudyRun';
 import { AuthedRequest } from '../middleware/requireAuth';
@@ -56,6 +57,8 @@ export async function deleteAccount(req: AuthedRequest, res: Response) {
     // Points already paid to the other side of a referral stay with that person.
     ReferralProfile.deleteMany({ firebaseUid }),
     PointEvent.deleteMany({ firebaseUid }),
+    // Their notes' collaborators lose access with the notes, and any note shared with them stops listing them.
+    NoteMember.deleteMany({ $or: [{ ownerUid: firebaseUid }, { memberUid: firebaseUid }] }),
     StudySession.deleteMany({ firebaseUid }),
     StudyRun.deleteMany({ firebaseUid }),
     Referral.deleteMany({ $or: [{ referrerUid: firebaseUid }, { referredUid: firebaseUid }] }),

@@ -5,6 +5,7 @@ import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { BackButton } from '@/components/ui/BackButton';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { NotesBrowser } from '@/components/notes/NotesBrowser';
+import { SharedWithMeSection } from '@/components/notes/SharedWithMeSection';
 import { Colors } from '@/constants/theme';
 import { useNotes } from '@/hooks/useNotes';
 import { useFolders } from '@/hooks/useFolders';
@@ -58,6 +59,8 @@ export default function Notes() {
         searchPlaceholder="Search notes and folders"
         showIllustratedEmptyState
       />
+
+      <SharedWithMeSection />
     </ScreenWrapper>
   );
 }

@@ -2,7 +2,8 @@ import { ScreenWrapper } from "@/components/layout/ScreenWrapper";
 import { DeleteAccountModal } from "@/components/profile/DeleteAccountModal";
 import { PointsFaq } from "@/components/profile/PointsFaq";
 import { ReferralCodeCard } from "@/components/referral/ReferralCodeCard";
-import { StudyHoursLine } from "@/components/study/StudyHoursLine";
+import { ProfileInfoRow } from "@/components/profile/ProfileInfoRow";
+import { StudyHoursRows } from "@/components/study/StudyHoursRows";
 import { Button } from "@/components/ui/Button";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { SkeletonBlock } from "@/components/ui/Skeleton";
@@ -232,30 +233,38 @@ export default function Profile() {
         <Text style={styles.pageTitle}>Profile & settings</Text>
 
         <View style={styles.profileCard}>
-          {initializing ? (
-            <SkeletonBlock width={48} height={48} borderRadius={24} />
-          ) : (
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{avatarInitial}</Text>
+          <View style={styles.profileHeader}>
+            {initializing ? (
+              <SkeletonBlock width={56} height={56} borderRadius={28} />
+            ) : (
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>{avatarInitial}</Text>
+              </View>
+            )}
+            <View style={styles.profileText}>
+              {initializing ? (
+                <SkeletonBlock width={120} height={16} borderRadius={5} />
+              ) : (
+                <Text style={styles.profileName} numberOfLines={1}>
+                  {displayName}
+                </Text>
+              )}
+              {user?.fullName && user?.email ? (
+                <Text style={styles.profileEmail} numberOfLines={1}>
+                  {user.email}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+
+          {/* The details run the full width of the card, separated from the header by a rule. */}
+          {!initializing && (
+            <View style={styles.profileDetails}>
+              <ProfileInfoRow label="Plan" value={TIER_LABEL[tier]} />
+              {handle ? <ProfileInfoRow label="Leaderboard name" value={handle} /> : null}
+              {currentPath !== "professional" ? <StudyHoursRows /> : null}
             </View>
           )}
-          <View>
-            {initializing ? (
-              <SkeletonBlock width={120} height={16} borderRadius={5} />
-            ) : (
-              <Text style={styles.profileName}>{displayName}</Text>
-            )}
-            <Text style={styles.profilePlan}>
-              I-Planner · {TIER_LABEL[tier]} plan
-            </Text>
-            {user?.fullName && user?.email ? (
-              <Text style={styles.profilePlan}>{user.email}</Text>
-            ) : null}
-            {handle ? (
-              <Text style={styles.profilePlan}>Leaderboard name · {handle}</Text>
-            ) : null}
-            {currentPath !== "professional" ? <StudyHoursLine /> : null}
-          </View>
         </View>
 
         <Text style={styles.eyebrow}>SWITCH PATH</Text>
@@ -687,20 +696,37 @@ const styles = StyleSheet.create({
     lineHeight: 30,
   },
   profileCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 13,
     backgroundColor: Colors.white,
     borderWidth: 1,
     borderColor: Colors.border,
     borderRadius: 17,
-    padding: 16,
+    padding: 18,
     marginTop: 16,
   },
+  profileHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+  },
+  profileText: {
+    flex: 1,
+    gap: 3,
+  },
+  // Full width of the card, set apart from the header by a rule.
+  profileDetails: {
+    marginTop: 16,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  profileEmail: {
+    fontSize: 13,
+    color: Colors.textMuted,
+  },
   avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: Colors.successSoft,
     alignItems: "center",
     justifyContent: "center",
@@ -714,11 +740,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
     color: Colors.textPrimary,
-  },
-  profilePlan: {
-    fontSize: 13,
-    color: Colors.textMuted,
-    marginTop: 1,
   },
   eyebrow: {
     fontSize: 12,

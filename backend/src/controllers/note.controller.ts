@@ -4,6 +4,8 @@ import { Folder } from '../models/Folder';
 import { AuthedRequest } from '../middleware/requireAuth';
 import { ApiError } from '../utils/ApiError';
 import { findOwnedOrThrow } from '../utils/ownedDoc';
+import { NoteMember } from '../models/NoteMember';
+import { requireNoteAccess } from '../services/noteAccess';
 import { cleanNoteText } from '../services/noteCleanup';
 import { NOTE_BODY_MAX_LENGTH, NOTE_RICH_BODY_MAX_LENGTH, NOTE_TITLE_MAX_LENGTH } from '../constants/noteLimits';
 import { sanitizeBody, visibleTextLength } from '../utils/richText';
@@ -57,9 +59,18 @@ export async function createNote(req: AuthedRequest, res: Response) {
 }
 
 export async function updateNote(req: AuthedRequest, res: Response) {
-  const note = await findOwnedOrThrow(Note, req.params.id, req.userId!);
+  // The owner can change everything; an invited editor only the title and text; a viewer nothing.
+  // Someone with no access gets the same 404 as a note that doesn't exist.
+  const access = await requireNoteAccess(req.userId!, req.params.id);
+  if (access.role === 'viewer') throw new ApiError(403, 'You can view this note but not edit it.', 'general');
+  const isOwner = access.role === 'owner';
+  const note = access.note;
 
-  const { title, body, folderId } = req.body ?? {};
+  const { title, body, folderId, baseVersion } = req.body ?? {};
+  if (!isOwner && folderId !== undefined) throw new ApiError(403, 'Only the owner of a note can move it.', 'general');
+
+  const set: Record<string, unknown> = {};
+  const unset: Record<string, ''> = {};
   if (title !== undefined) {
     if (!title || typeof title !== 'string' || !title.trim()) {
       throw new ApiError(400, 'Title is required.', 'general');
@@ -68,20 +79,17 @@ export async function updateNote(req: AuthedRequest, res: Response) {
     if (trimmedTitle.length > NOTE_TITLE_MAX_LENGTH) {
       throw new ApiError(400, `Title is too long (max ${NOTE_TITLE_MAX_LENGTH.toLocaleString()} characters).`, 'general');
     }
-    note.title = trimmedTitle;
+    set.title = trimmedTitle;
   }
   if (body !== undefined) {
     // Unlike createNote, a wrong type here is rejected outright rather than
     // silently coerced — coercing to '' on an *update* would silently wipe
     // an existing note's content, and passing anything else straight to
-    // Mongoose would let it get cast/stringified at save() with no length
-    // check at all (the `typeof body === 'string'` guard this replaces only
-    // skipped the check below for a non-string value, it never stopped the
-    // assignment itself).
+    // Mongoose would let it get cast/stringified with no length check at all.
     if (typeof body !== 'string') {
       throw new ApiError(400, 'Body must be text.', 'general');
     }
-    note.body = validatedBody(body);
+    set.body = validatedBody(body);
   }
   // Explicit null (or '') un-files the note — the "move to no folder" case —
   // distinct from folderId simply being absent from the patch, which leaves
@@ -89,20 +97,60 @@ export async function updateNote(req: AuthedRequest, res: Response) {
   // the same ownership check as create.
   if (folderId !== undefined) {
     if (folderId === null || folderId === '') {
-      note.folderId = undefined;
+      unset.folderId = '';
     } else if (typeof folderId === 'string') {
       await findOwnedOrThrow(Folder, folderId, req.userId!);
-      note.folderId = folderId;
+      set.folderId = folderId;
     }
   }
 
-  await note.save();
-  res.json(toPublicNote(note));
+  // Nothing to change: leave the note (and its version) exactly as it is.
+  if (!Object.keys(set).length && !Object.keys(unset).length) {
+    res.json(toPublicNote(note));
+    return;
+  }
+
+  // Optimistic concurrency. The app sends the version it loaded; if the note has been saved by
+  // someone else since, this save is refused (below) rather than overwriting their work.
+  // An invited editor MUST send it; the owner may omit it (older app versions do).
+  const filter: Record<string, unknown> = { _id: note._id };
+  if (baseVersion !== undefined) {
+    if (!Number.isInteger(baseVersion) || baseVersion < 0) throw new ApiError(400, 'Invalid version.', 'general');
+    filter.$or = baseVersion === 0 ? [{ version: 0 }, { version: { $exists: false } }] : [{ version: baseVersion }];
+  } else if (!isOwner) {
+    throw new ApiError(400, 'Reload the note and try again.', 'general');
+  }
+
+  const updated = await Note.findOneAndUpdate(
+    filter,
+    {
+      $set: { ...set, lastEditedByUid: req.userId },
+      $inc: { version: 1 },
+      ...(Object.keys(unset).length ? { $unset: unset } : {}),
+    },
+    { new: true, runValidators: true }
+  );
+  if (!updated) {
+    // Either someone saved first (a conflict) or the note was deleted in the meantime.
+    const latest = await Note.findById(note._id);
+    if (!latest) throw new ApiError(404, 'Not found.', 'general');
+    res.status(409).json({
+      message: 'This note was changed by someone else. Load the latest version to keep their changes.',
+      field: 'conflict',
+      note: toPublicNote(latest),
+    });
+    return;
+  }
+  res.json(toPublicNote(updated));
 }
 
 export async function deleteNote(req: AuthedRequest, res: Response) {
-  const note = await findOwnedOrThrow(Note, req.params.id, req.userId!);
-  await note.deleteOne();
+  const access = await requireNoteAccess(req.userId!, req.params.id);
+  // Only the owner deletes a note. Someone it was shared with can leave it instead.
+  if (access.role !== 'owner') throw new ApiError(403, 'Only the owner of a note can delete it. You can leave it instead.', 'general');
+  await access.note.deleteOne();
+  // Everyone who had access loses it with the note.
+  await NoteMember.deleteMany({ noteId: access.note.id });
   res.status(204).send();
 }
 

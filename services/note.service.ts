@@ -1,4 +1,4 @@
-import type { NewNoteInput, Note } from "@/types/note.types";
+import type { NewNoteInput, Note, NoteUpdate } from "@/types/note.types";
 import { authedRequest } from "./authedRequest";
 
 export const noteService = {
@@ -7,7 +7,7 @@ export const noteService = {
   create: (input: NewNoteInput) =>
     authedRequest<Note>("/notes", { method: "POST", body: input }),
 
-  update: (id: string, patch: Partial<NewNoteInput>) =>
+  update: (id: string, patch: NoteUpdate) =>
     authedRequest<Note>(`/notes/${id}`, { method: "PATCH", body: patch }),
 
   remove: (id: string) =>

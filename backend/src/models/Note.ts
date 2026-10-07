@@ -10,6 +10,10 @@ export interface NoteDocument extends Document {
   // folders existed. Plain string, not a Mongoose ref/populate — this app
   // never uses those anywhere, ids are plain strings throughout.
   folderId?: string;
+  // Counts every saved change. Collaborators send the version they loaded, so a save based on an
+  // out-of-date copy is refused instead of silently overwriting someone else's edit.
+  version?: number;
+  lastEditedByUid?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -27,6 +31,8 @@ const noteSchema = new Schema<NoteDocument>(
     title: { type: String, required: true, trim: true, maxlength: NOTE_TITLE_MAX_LENGTH },
     body: { type: String, default: '', maxlength: NOTE_RICH_BODY_MAX_LENGTH },
     folderId: { type: String },
+    version: { type: Number, default: 0 },
+    lastEditedByUid: { type: String },
   },
   // Unlike Habit, updatedAt is kept — Habit's derived fields (streak/week) come from
   // createdAt, but Notes has no such derivation and needs "last edited" for sort order.
@@ -39,6 +45,7 @@ export function toPublicNote(doc: NoteDocument) {
     title: doc.title,
     body: doc.body,
     ...(doc.folderId ? { folderId: doc.folderId } : {}),
+    version: doc.version ?? 0,
     createdAt: doc.createdAt.toISOString(),
     updatedAt: doc.updatedAt.toISOString(),
   };
