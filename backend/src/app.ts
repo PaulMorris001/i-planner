@@ -4,6 +4,7 @@ import cors from 'cors';
 import { env } from './config/env';
 import { router } from './routes';
 import { sharedNoteWebRouter } from './routes/sharedNoteWeb.routes';
+import { sharedFolderWebRouter } from './routes/sharedFolderWeb.routes';
 import { errorHandler } from './middleware/errorHandler';
 
 export function createApp() {
@@ -37,6 +38,8 @@ export function createApp() {
   // Short share links (/n/<slug>) - /shared stays mounted so links already
   // sent keep working.
   app.use('/n', sharedNoteWebRouter);
+  // Shared folder preview pages (/f/<folder-name>-<slug>).
+  app.use('/f', sharedFolderWebRouter);
 
   app.use('/api', router);
 

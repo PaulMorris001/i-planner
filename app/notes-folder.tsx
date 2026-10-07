@@ -9,6 +9,7 @@ import { BackButton } from '@/components/ui/BackButton';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { NotesBrowser } from '@/components/notes/NotesBrowser';
 import { NewFolderModal } from '@/components/notes/NewFolderModal';
+import { shareFolderLink } from '@/utils/shareFolderLink';
 import { Colors, Spacing } from '@/constants/theme';
 import { useNotes } from '@/hooks/useNotes';
 import { useFolders } from '@/hooks/useFolders';
@@ -110,6 +111,7 @@ export default function NotesFolder() {
         editLabel="Rename"
         onEdit={() => setRenameModalOpen(true)}
         onDelete={handleDeleteFolder}
+        extraActions={folder ? [{ label: 'Share link', icon: 'link', onPress: () => shareFolderLink(folder.id) }] : undefined}
       />
 
       <NewFolderModal

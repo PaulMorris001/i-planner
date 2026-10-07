@@ -14,6 +14,8 @@ import { Note } from '../models/Note';
 import { Folder } from '../models/Folder';
 import { SharedNote } from '../models/SharedNote';
 import { SharedNoteImport } from '../models/SharedNoteImport';
+import { SharedFolder } from '../models/SharedFolder';
+import { SharedFolderImport } from '../models/SharedFolderImport';
 import { ImportedCalendarEvent } from '../models/ImportedCalendarEvent';
 import { KnownDevice } from '../models/KnownDevice';
 import { PushToken } from '../models/PushToken';
@@ -45,6 +47,8 @@ export async function deleteAccount(req: AuthedRequest, res: Response) {
     Folder.deleteMany({ firebaseUid }),
     SharedNote.deleteMany({ firebaseUid }),
     SharedNoteImport.deleteMany({ firebaseUid }),
+    SharedFolder.deleteMany({ firebaseUid }),
+    SharedFolderImport.deleteMany({ firebaseUid }),
     ImportedCalendarEvent.deleteMany({ firebaseUid }),
     KnownDevice.deleteMany({ firebaseUid }),
     PushToken.deleteMany({ firebaseUid }),

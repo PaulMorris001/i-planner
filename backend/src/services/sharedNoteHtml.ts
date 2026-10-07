@@ -1,10 +1,10 @@
 import { RICH_BODY_MARKER, isRichBody, sanitizeRichHtml } from '../utils/richText';
 
-const APP_STORE_URL = "https://apps.apple.com/app/id6792868417";
-const PLAY_STORE_URL =
+export const APP_STORE_URL = "https://apps.apple.com/app/id6792868417";
+export const PLAY_STORE_URL =
   "https://play.google.com/store/apps/details?id=com.obitoventures.iplanner";
 
-function escapeHtml(text: string): string {
+export function escapeHtml(text: string): string {
   return text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -43,7 +43,7 @@ const PAGE_STYLES = `
   .stores a { color: #3B82F6; text-decoration: none; font-weight: 600; }
 `;
 
-function page(title: string, bodyHtml: string, actionsHtml = ""): string {
+export function page(title: string, bodyHtml: string, actionsHtml = ""): string {
   return `<!DOCTYPE html>
 <html>
   <head>

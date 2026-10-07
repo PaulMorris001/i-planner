@@ -21,6 +21,7 @@ import { calendarImportRouter } from './calendarImport.routes';
 import { pushRouter } from './push.routes';
 import { referralRouter } from './referral.routes';
 import { studyRouter } from './study.routes';
+import { sharedFolderRouter } from './sharedFolder.routes';
 
 export const router = Router();
 
@@ -34,6 +35,7 @@ router.use('/tasks', taskRouter);
 router.use('/habits', habitRouter);
 router.use('/notes', noteRouter);
 router.use('/shared-notes', sharedNoteRouter);
+router.use('/shared-folders', sharedFolderRouter);
 router.use('/folders', folderRouter);
 router.use('/bills', billRouter);
 router.use('/savings-goals', savingsGoalRouter);

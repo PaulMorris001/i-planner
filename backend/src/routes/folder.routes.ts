@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { listFolders, createFolder, updateFolder, deleteFolder } from '../controllers/folder.controller';
+import { createFolderShare } from '../controllers/sharedFolder.controller';
 import { requireAuth } from '../middleware/requireAuth';
 import { asyncHandler } from '../utils/asyncHandler';
 
@@ -11,3 +12,4 @@ folderRouter.get('/', asyncHandler(listFolders));
 folderRouter.post('/', asyncHandler(createFolder));
 folderRouter.patch('/:id', asyncHandler(updateFolder));
 folderRouter.delete('/:id', asyncHandler(deleteFolder));
+folderRouter.post('/:id/share', asyncHandler(createFolderShare));

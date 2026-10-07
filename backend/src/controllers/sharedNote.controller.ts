@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import { Request, Response } from 'express';
-import { Note, toPublicNote } from '../models/Note';
-import { SharedNote } from '../models/SharedNote';
+import { Note, NoteDocument, toPublicNote } from '../models/Note';
+import { SharedNote, SharedNoteDocument } from '../models/SharedNote';
 import { SharedNoteImport } from '../models/SharedNoteImport';
 import { AuthedRequest } from '../middleware/requireAuth';
 import { ApiError } from '../utils/ApiError';
@@ -35,6 +35,47 @@ async function resolveSharedNote(id: string) {
   const note = await Note.findOne({ _id: shared.noteId, firebaseUid: shared.firebaseUid });
   if (!note) return null;
   return { note, shared };
+}
+
+// What a copy of `note` would be once imported (same caps/sanitizing as the import
+// itself), so "do I already have this?" compares like with like.
+export function copyOf(note: { title: string; body: string }) {
+  return {
+    title: note.title.slice(0, NOTE_TITLE_MAX_LENGTH),
+    // A formatted body is copied whole: cutting HTML at a character count would slice
+    // through a tag. It was validated and sanitized when saved; sanitizing again is a
+    // cheap safeguard on a path that skips note.controller.ts.
+    body: isRichBody(note.body) ? sanitizeBody(note.body) : note.body.slice(0, NOTE_BODY_MAX_LENGTH),
+  };
+}
+
+export type ExistingReason = 'own' | 'imported' | 'same';
+
+// A note must never be added to an account that already has it:
+//  - 'own': the link is to the person's OWN note (they shared it, then opened it).
+//  - 'imported': they already added this exact share and that copy still exists.
+//  - 'same': they already have a note with exactly this title and text (for example a
+//    friend sent their copy back without changing it).
+// Adding a note creates a NEW, independent note (new id, no syncing). So a friend's
+// copy that was edited and shared back is a different note and can be added.
+async function findExistingNote(
+  uid: string,
+  shared: SharedNoteDocument,
+  source: NoteDocument
+): Promise<{ note: NoteDocument; reason: ExistingReason } | null> {
+  if (shared.firebaseUid === uid) return { note: source, reason: 'own' };
+
+  const previousImport = await SharedNoteImport.findOne({ token: shared.token, firebaseUid: uid });
+  if (previousImport) {
+    const copy = await Note.findOne({ _id: previousImport.noteId, firebaseUid: uid });
+    if (copy) return { note: copy, reason: 'imported' };
+    // That earlier copy was deleted since: falls through to the checks below.
+  }
+
+  const { title, body } = copyOf(source);
+  const same = await Note.findOne({ firebaseUid: uid, title, body });
+  if (same) return { note: same, reason: 'same' };
+  return null;
 }
 
 export async function createShare(req: AuthedRequest, res: Response) {
@@ -85,29 +126,42 @@ export async function getSharedNoteWebPage(req: Request, res: Response) {
 export async function getSharedNotePreview(req: AuthedRequest, res: Response) {
   const resolved = await resolveSharedNote(req.params.token);
   if (!resolved) throw new ApiError(404, 'This note is no longer available.', 'general');
-  res.json({ title: resolved.note.title, body: resolved.note.body });
+  const existing = await findExistingNote(req.userId!, resolved.shared, resolved.note);
+  res.json({
+    title: resolved.note.title,
+    body: resolved.note.body,
+    // Set when this account already has the note: the app offers "Open" instead of "Add".
+    existing: existing ? { noteId: existing.note.id as string, reason: existing.reason } : null,
+  });
 }
 
 export async function importSharedNote(req: AuthedRequest, res: Response) {
   const shared = await findShare(req.params.token);
   if (!shared) throw new ApiError(404, 'This note is no longer available.', 'general');
 
-  // Already imported this exact share before (including the sharer reopening
-  // their own link) — hand back the existing copy instead of creating a
-  // duplicate. Falls through to a fresh import if that earlier copy was
-  // itself deleted since.
+  // Already imported this exact share before: hand back that copy even if the sharer
+  // has since deleted the original.
   const previousImport = await SharedNoteImport.findOne({ token: shared.token, firebaseUid: req.userId });
   if (previousImport) {
-    const existingNote = await Note.findOne({ _id: previousImport.noteId, firebaseUid: req.userId });
-    if (existingNote) {
-      res.json({ alreadyImported: true, note: toPublicNote(existingNote) });
+    const existingCopy = await Note.findOne({ _id: previousImport.noteId, firebaseUid: req.userId });
+    if (existingCopy) {
+      res.json({ alreadyImported: true, reason: 'imported', note: toPublicNote(existingCopy) });
       return;
     }
-    // That earlier copy was deleted since — fall through to a fresh import.
+    // That earlier copy was deleted since. Its import record has to go too: the unique
+    // {token, account} index would otherwise reject the new copy below as a repeat.
+    await SharedNoteImport.deleteOne({ _id: previousImport._id, noteId: previousImport.noteId });
   }
 
   const note = await Note.findOne({ _id: shared.noteId, firebaseUid: shared.firebaseUid });
   if (!note) throw new ApiError(404, 'This note is no longer available.', 'general');
+
+  // Never create a second copy of a note the account already has.
+  const existing = await findExistingNote(req.userId!, shared, note);
+  if (existing) {
+    res.json({ alreadyImported: true, reason: existing.reason, note: toPublicNote(existing.note) });
+    return;
+  }
 
   // This bypasses note.controller.ts's createNote entirely (it's a straight
   // copy, not a client-submitted create), so nothing else enforces the usual
@@ -115,11 +169,7 @@ export async function importSharedNote(req: AuthedRequest, res: Response) {
   // source note is already within them (it should be, but a cap lowered
   // since the source was created, or legacy data from before caps existed,
   // would otherwise import uncapped).
-  const title = note.title.slice(0, NOTE_TITLE_MAX_LENGTH);
-  // A formatted body is copied whole: cutting HTML at a character count would
-  // slice through a tag. It was validated and sanitized when saved; sanitizing
-  // again is a cheap safeguard on a path that skips note.controller.ts.
-  const body = isRichBody(note.body) ? sanitizeBody(note.body) : note.body.slice(0, NOTE_BODY_MAX_LENGTH);
+  const { title, body } = copyOf(note);
 
   // Unfiled, like every other newly created note — the recipient can move it
   // into a folder themselves afterward.
@@ -137,11 +187,11 @@ export async function importSharedNote(req: AuthedRequest, res: Response) {
     const winningImport = await SharedNoteImport.findOne({ token: shared.token, firebaseUid: req.userId });
     const winningNote = winningImport && (await Note.findOne({ _id: winningImport.noteId, firebaseUid: req.userId }));
     if (winningNote) {
-      res.json({ alreadyImported: true, note: toPublicNote(winningNote) });
+      res.json({ alreadyImported: true, reason: 'imported', note: toPublicNote(winningNote) });
       return;
     }
     throw err;
   }
 
-  res.status(201).json({ alreadyImported: false, note: toPublicNote(created) });
+  res.status(201).json({ alreadyImported: false, reason: null, note: toPublicNote(created) });
 }

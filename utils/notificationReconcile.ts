@@ -1,9 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Notifications from 'expo-notifications';
 import {
   scheduleTaskNotifications,
   scheduleClassNotifications,
   scheduleBillNotifications,
   scheduleSavingsGoalNotifications,
+  ALARM_SCHEDULE_VERSION,
   cancelNotifications,
   cancelAllScheduledReminders,
   getPendingNotificationIds,
@@ -68,7 +70,7 @@ function withCacheLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
 function taskSignature(t: Task): string {
   return JSON.stringify([
     t.title, t.dueDate, t.time, t.recurring, t.freq ?? null,
-    t.dayIdxs ?? null, t.alarmEnabled ?? false, t.recurring ? null : t.done,
+    t.dayIdxs ?? null, t.alarmEnabled ?? false, t.alarmEnabled ? ALARM_SCHEDULE_VERSION : 0, t.recurring ? null : t.done,
     // Flips on the start date, swapping first-week one-offs for the real
     // repeating triggers (see recurrenceNotStarted).
     recurrenceNotStarted(t.recurring, t.dueDate),
@@ -77,7 +79,7 @@ function taskSignature(t: Task): string {
 
 function classSignature(c: ClassItem): string {
   return JSON.stringify([
-    c.courseName, c.startDate, c.endDate ?? null, c.time, c.recurring, c.freq, c.dayIdxs, c.alarmEnabled ?? false,
+    c.courseName, c.startDate, c.endDate ?? null, c.time, c.recurring, c.freq, c.dayIdxs, c.alarmEnabled ?? false, c.alarmEnabled ? ALARM_SCHEDULE_VERSION : 0,
     // Crossing the end date needs to flip the signature too, or reconcile
     // would never notice a class's semester just ended and stop re-arming
     // its (already-scheduled, now-stale) reminder — same reasoning as
@@ -136,6 +138,15 @@ async function reconcile<T extends { id: string; notificationIds?: string[] }>(
       next.map(async (item) => {
         const sig = signatureOf(item);
         const cached = cache[item.id];
+        // This device scheduled these reminders itself and just hasn't recorded them yet:
+        // createTask schedules BEFORE it saves, and the server copy carries those ids. A
+        // refresh landing in that gap used to see "no record" and schedule a second full
+        // set (an alarm is several notifications, so people got them doubled). Every id is
+        // still pending here, so they are ours: adopt them instead of scheduling again.
+        if (!cached && pending && item.notificationIds?.length && item.notificationIds.every((id) => pending.has(id))) {
+          cache[item.id] = { sig, ids: item.notificationIds };
+          return item;
+        }
         // Every id this device recorded for the item is gone from the OS's
         // pending list — restored from a backup (the cache comes back, the
         // notifications don't), dropped by iOS's 64 cap, or a scheduling
@@ -157,8 +168,54 @@ async function reconcile<T extends { id: string; notificationIds?: string[] }>(
     );
 
     await writeCache(cacheKey, cache);
+    // Safety net: whatever else went wrong, never leave exact duplicates pending.
+    dedupeScheduledNotifications().catch(() => {});
     return result;
   });
+}
+
+const ALL_CACHE_KEYS = [TASK_CACHE_KEY, CLASS_CACHE_KEY, BILL_CACHE_KEY, SAVINGS_GOAL_CACHE_KEY];
+
+// Two pending notifications with the same title, body, time and data are the same
+// reminder scheduled twice (a race, an old build, a restore). The person would just
+// see it fire twice, so cancel the extras. The copy a schedule cache tracks is kept
+// (so later edits/deletes still cancel the right ones); with none tracked, one is kept.
+// Distinct reminders never match: a different time, task or alarm repeat differs.
+async function sweepDuplicates(): Promise<void> {
+  const pending = await Notifications.getAllScheduledNotificationsAsync();
+  if (pending.length < 2) return;
+
+  const caches = await Promise.all(ALL_CACHE_KEYS.map(readCache));
+  const tracked = new Set(caches.flatMap((cache) => Object.values(cache).flatMap((entry) => entry.ids)));
+
+  const groups = new Map<string, string[]>();
+  for (const request of pending) {
+    // A burst's escalationIds list is unique per burst, so it is left out of the comparison.
+    const { escalationIds: _ignored, ...data } = (request.content.data ?? {}) as Record<string, unknown>;
+    void _ignored;
+    const key = JSON.stringify([request.content.title, request.content.body, request.trigger, data]);
+    groups.set(key, [...(groups.get(key) ?? []), request.identifier]);
+  }
+
+  const extras: string[] = [];
+  for (const ids of groups.values()) {
+    if (ids.length < 2) continue;
+    const trackedHere = ids.filter((id) => tracked.has(id));
+    const keep = new Set(trackedHere.length ? trackedHere : [ids[0]]);
+    for (const id of ids) if (!keep.has(id)) extras.push(id);
+  }
+  if (extras.length) {
+    console.warn(`[notificationReconcile] cancelling ${extras.length} duplicate reminder(s)`);
+    await cancelNotifications(extras);
+  }
+}
+
+// One sweep at a time: two overlapping ones could both cancel the same group.
+let sweepChain: Promise<void> = Promise.resolve();
+export function dedupeScheduledNotifications(): Promise<void> {
+  const run = () => sweepDuplicates().catch((err) => console.error('[notificationReconcile] duplicate sweep failed', err));
+  sweepChain = sweepChain.then(run, run);
+  return sweepChain;
 }
 
 // Called from TasksContext's fetchTasks (mount, foreground refetch, and

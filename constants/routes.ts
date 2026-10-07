@@ -23,6 +23,7 @@ export const Routes = {
   NOTE_EDITOR: '/note-editor',
   NOTES_FOLDER: '/notes-folder',
   SHARED_NOTE: '/shared-note',
+  SHARED_FOLDER: '/shared-folder',
   PLANS:      '/plans',
   CERT_TRACKER: '/cert-tracker',
   CLASSES:    '/classes',

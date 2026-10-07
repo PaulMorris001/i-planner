@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { router } from 'expo-router';
 import { ItemActionSheet } from '@/components/ui/ItemActionSheet';
+import { shareFolderLink } from '@/utils/shareFolderLink';
 import { ListRow } from '@/components/ui/ListRow';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { DashedAddButton } from '@/components/ui/DashedAddButton';
@@ -276,6 +277,11 @@ export function NotesBrowser({ parentId, emptyNotesText, searchPlaceholder, show
           setFolderModalOpen(true);
         }}
         onDelete={() => folderActionTarget && handleDeleteFolder(folderActionTarget)}
+        extraActions={
+          folderActionTarget
+            ? [{ label: 'Share link', icon: 'link', onPress: () => shareFolderLink(folderActionTarget.id) }]
+            : undefined
+        }
       />
 
       <NewFolderModal

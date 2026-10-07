@@ -6,7 +6,7 @@ import { IconSymbol, type IconSymbolName } from '@/components/ui/icon-symbol';
 import { BottomSheetModal } from '@/components/ui/BottomSheetModal';
 import { useAuth } from '@/hooks/useAuth';
 import { useNotes } from '@/hooks/useNotes';
-import { sharedNoteService } from '@/services/sharedNote.service';
+import { sharedNoteService, type ExistingNoteReason, type SharedNotePreview } from '@/services/sharedNote.service';
 import { bodyToPlainText } from '@/utils/richNote';
 import { Routes } from '@/constants/routes';
 import { Colors, Spacing, Radius } from '@/constants/theme';
@@ -26,9 +26,9 @@ export default function SharedNote() {
   const { user, initializing } = useAuth();
   const { refetch: refetchNotes } = useNotes();
   const [status, setStatus] = useState<Status>('loading');
-  const [preview, setPreview] = useState<{ title: string; body: string } | null>(null);
+  const [preview, setPreview] = useState<SharedNotePreview | null>(null);
   const [importing, setImporting] = useState(false);
-  const [alreadyImportedNote, setAlreadyImportedNote] = useState<Note | null>(null);
+  const [alreadyImportedNote, setAlreadyImportedNote] = useState<{ note: Note; reason: ExistingNoteReason | null } | null>(null);
 
   useEffect(() => {
     if (initializing || !user || !token) return;
@@ -64,10 +64,10 @@ export default function SharedNote() {
     if (!token || importing) return;
     setImporting(true);
     try {
-      const { alreadyImported, note } = await sharedNoteService.importNote(token);
+      const { alreadyImported, reason, note } = await sharedNoteService.importNote(token);
       if (alreadyImported) {
         setImporting(false);
-        setAlreadyImportedNote(note);
+        setAlreadyImportedNote({ note, reason });
         return;
       }
       await openNote(note.id);
@@ -161,19 +161,37 @@ export default function SharedNote() {
       </ScrollView>
 
       <View style={styles.footer}>
-        <Pressable style={[styles.primaryBtn, styles.footerPrimaryBtn]} onPress={handleImport} disabled={importing}>
-          {importing ? (
-            <ActivityIndicator color={Colors.white} size="small" />
-          ) : (
-            <>
-              <IconSymbol name="plus" color={Colors.white} size={16} />
-              <Text style={styles.primaryBtnText}>Add to My Notes</Text>
-            </>
-          )}
-        </Pressable>
-        <Pressable style={styles.secondaryBtn} onPress={goToNotes}>
-          <Text style={styles.secondaryBtnText}>Not now</Text>
-        </Pressable>
+        {preview!.existing ? (
+          <>
+            {/* The account already has this note: nothing to add, only to open. */}
+            <Text style={styles.existingNotice}>{existingMessage(preview!.existing.reason)}</Text>
+            <Pressable
+              style={[styles.primaryBtn, styles.footerPrimaryBtn]}
+              onPress={() => openNote(preview!.existing!.noteId)}
+            >
+              <Text style={styles.primaryBtnText}>Open My Note</Text>
+            </Pressable>
+            <Pressable style={styles.secondaryBtn} onPress={goToNotes}>
+              <Text style={styles.secondaryBtnText}>Back to Notes</Text>
+            </Pressable>
+          </>
+        ) : (
+          <>
+            <Pressable style={[styles.primaryBtn, styles.footerPrimaryBtn]} onPress={handleImport} disabled={importing}>
+              {importing ? (
+                <ActivityIndicator color={Colors.white} size="small" />
+              ) : (
+                <>
+                  <IconSymbol name="plus" color={Colors.white} size={16} />
+                  <Text style={styles.primaryBtnText}>Add to My Notes</Text>
+                </>
+              )}
+            </Pressable>
+            <Pressable style={styles.secondaryBtn} onPress={goToNotes}>
+              <Text style={styles.secondaryBtnText}>Not now</Text>
+            </Pressable>
+          </>
+        )}
       </View>
 
       <BottomSheetModal visible={!!alreadyImportedNote} onClose={() => setAlreadyImportedNote(null)}>
@@ -181,8 +199,8 @@ export default function SharedNote() {
           <View style={styles.modalIconBadge}>
             <IconSymbol name="checkmark" color={Colors.success} size={22} />
           </View>
-          <Text style={styles.modalTitle}>Already added</Text>
-          <Text style={styles.modalSub}>You&apos;ve already added this note to your notes.</Text>
+          <Text style={styles.modalTitle}>{alreadyImportedNote?.reason === 'own' ? 'This is your note' : 'Already added'}</Text>
+          <Text style={styles.modalSub}>{existingMessage(alreadyImportedNote?.reason ?? 'imported')}</Text>
           <View style={styles.modalActions}>
             <Pressable style={styles.modalCloseBtn} onPress={() => setAlreadyImportedNote(null)}>
               <Text style={styles.modalCloseText}>Close</Text>
@@ -190,9 +208,9 @@ export default function SharedNote() {
             <Pressable
               style={styles.modalOpenBtn}
               onPress={() => {
-                const note = alreadyImportedNote;
+                const found = alreadyImportedNote;
                 setAlreadyImportedNote(null);
-                if (note) openNote(note.id);
+                if (found) openNote(found.note.id);
               }}
             >
               <Text style={styles.modalOpenText}>Open Note</Text>
@@ -202,6 +220,13 @@ export default function SharedNote() {
       </BottomSheetModal>
     </ScreenWrapper>
   );
+}
+
+// The line shown when the account already has the note (instead of an Add button).
+function existingMessage(reason: ExistingNoteReason): string {
+  if (reason === 'own') return 'This is your own note, so it is already in your notes.';
+  if (reason === 'same') return 'You already have this exact note in your notes.';
+  return "You've already added this note to your notes.";
 }
 
 // Shared shell for the invalid-link / login-required / unavailable / error
@@ -254,6 +279,14 @@ const styles = StyleSheet.create({
   },
   footerPrimaryBtn: {
     marginTop: 0,
+  },
+  existingNotice: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 19,
+    marginHorizontal: Spacing.md,
+    marginBottom: 12,
   },
   centerState: {
     flex: 1,

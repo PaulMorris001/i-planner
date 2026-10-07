@@ -65,18 +65,16 @@ export function formatMinutes(n: number): string {
   return `${n} minute${n === 1 ? '' : 's'}`;
 }
 
-// A one-off alarm (a non-recurring task's due-time fire, or any snooze) isn't
-// just a single notification — it's a short burst that keeps re-firing a
-// couple minutes apart until the user actually acts on one of them, to
-// approximate a real alarm "ringing until dismissed" within what a local
-// notification can legitimately do (see utils/notifications.ts's isAlarm doc
-// comment below for what that excludes). Scoped to one-off alarms only — a
-// *recurring* alarm task's native WEEKLY/DAILY/MONTHLY trigger fires once per
-// occurrence already and re-fires again next time regardless, and there's no
-// way to selectively silence "just this occurrence's" escalations without
-// also silencing every future occurrence's, so those stay single-fire (still
-// get the loud sound/actions below, just not the repeat burst).
-const ALARM_ESCALATION_COUNT = 3;
+// A one-off alarm used to be a short burst (the due-time fire plus a few repeats a
+// minute apart, to imitate an alarm "ringing until dismissed"). Users reported getting
+// the same due-time notification too many times, so it now fires ONCE: the alarm keeps
+// its loud sound and Snooze/Dismiss buttons, but no repeats. The burst code stays (with
+// zero extras) so a future change can bring a gentler repeat back.
+const ALARM_ESCALATION_COUNT = 0;
+// Bump whenever how an alarm is scheduled changes. It is part of the reconcile
+// signature (utils/notificationReconcile.ts), so alarms already scheduled the old way
+// on a device are cancelled and scheduled again the new way on the next refresh.
+export const ALARM_SCHEDULE_VERSION = 2;
 const ALARM_ESCALATION_INTERVAL_MINUTES = 1;
 
 let handlerRegistered = false;
