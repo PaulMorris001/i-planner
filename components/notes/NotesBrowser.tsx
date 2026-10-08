@@ -3,7 +3,11 @@ import { View, Text, StyleSheet } from 'react-native';
 import { router } from 'expo-router';
 import { ItemActionSheet } from '@/components/ui/ItemActionSheet';
 import { shareFolderLink } from '@/utils/shareFolderLink';
+import { shareNoteLink } from '@/utils/shareNoteLink';
+import { ShareOptionsModal } from '@/components/notes/ShareOptionsModal';
+import { CollaboratorsSheet } from '@/components/notes/CollaboratorsSheet';
 import { ListRow } from '@/components/ui/ListRow';
+import { SwipeableRow, type SwipeAction } from '@/components/ui/SwipeableRow';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { DashedAddButton } from '@/components/ui/DashedAddButton';
 import { ViewModeToggle } from '@/components/ui/ViewModeToggle';
@@ -76,6 +80,10 @@ export function NotesBrowser({ parentId, emptyNotesText, searchPlaceholder, show
   const { tileWidth, gap } = useGridTileWidth();
   const [query, setQuery] = useState('');
   const [actionTarget, setActionTarget] = useState<Note | null>(null);
+  // The note whose Share options (PDF / link / invite people) are open, and the one being invited to.
+  const [shareTarget, setShareTarget] = useState<Note | null>(null);
+  const [inviteNote, setInviteNote] = useState<Note | null>(null);
+  const [inviteSheetOpen, setInviteSheetOpen] = useState(false);
   const [folderActionTarget, setFolderActionTarget] = useState<Folder | null>(null);
   const [folderModalOpen, setFolderModalOpen] = useState(false);
   const [editingFolder, setEditingFolder] = useState<Folder | null>(null);
@@ -142,21 +150,42 @@ export function NotesBrowser({ parentId, emptyNotesText, searchPlaceholder, show
     }
   };
 
+  // Revealed by swiping a note card to the left.
+  const noteSwipeActions = (note: Note): SwipeAction[] => [
+    { label: 'Edit', icon: 'pencil', color: Colors.primaryLight, onPress: () => openEditor(note.id) },
+    { label: 'Share', icon: 'square.and.arrow.up', color: Colors.primary, onPress: () => setShareTarget(note) },
+    { label: 'Delete', icon: 'trash', color: Colors.error, onPress: () => handleDeleteNote(note) },
+  ];
+
+  // Revealed by swiping a folder row to the left.
+  const folderSwipeActions = (folder: Folder): SwipeAction[] => [
+    {
+      label: 'Rename',
+      icon: 'pencil',
+      color: Colors.primaryLight,
+      onPress: () => {
+        setEditingFolder(folder);
+        setFolderModalOpen(true);
+      },
+    },
+    { label: 'Share', icon: 'link', color: Colors.primary, onPress: () => shareFolderLink(folder.id) },
+    { label: 'Delete', icon: 'trash', color: Colors.error, onPress: () => handleDeleteFolder(folder) },
+  ];
   const renderFolders = (list: Folder[]) =>
     viewMode === 'list' ? (
       <View style={styles.folderList}>
         {list.map((folder) => {
           const count = notes.filter((n) => n.folderId === folder.id).length;
           return (
-            <ListRow
-              key={folder.id}
-              leading={{ type: 'icon', name: 'folder.fill', color: Colors.primaryLight, background: Colors.infoSoft }}
-              title={folder.name}
-              meta={`${count} note${count === 1 ? '' : 's'}`}
-              onPress={() => openFolder(folder.id)}
-              onLongPress={() => setFolderActionTarget(folder)}
-              onMenuPress={() => setFolderActionTarget(folder)}
-            />
+            <SwipeableRow key={folder.id} actions={folderSwipeActions(folder)} borderRadius={14}>
+              <ListRow
+                leading={{ type: 'icon', name: 'folder.fill', color: Colors.primaryLight, background: Colors.infoSoft }}
+                title={folder.name}
+                meta={`${count} note${count === 1 ? '' : 's'}`}
+                onPress={() => openFolder(folder.id)}
+                onLongPress={() => setFolderActionTarget(folder)}
+              />
+            </SwipeableRow>
           );
         })}
       </View>
@@ -177,7 +206,13 @@ export function NotesBrowser({ parentId, emptyNotesText, searchPlaceholder, show
 
   const renderNotes = (list: Note[], text: string) =>
     viewMode === 'list' ? (
-      <NoteListSection notes={list} onOpenNote={(id) => openEditor(id)} onShowActions={setActionTarget} emptyText={text} />
+      <NoteListSection
+        notes={list}
+        onOpenNote={(id) => openEditor(id)}
+        onShowActions={setActionTarget}
+        swipeActions={noteSwipeActions}
+        emptyText={text}
+      />
     ) : (
       <NoteGridSection notes={list} onOpenNote={(id) => openEditor(id)} onShowActions={setActionTarget} emptyText={text} />
     );
@@ -262,10 +297,28 @@ export function NotesBrowser({ parentId, emptyNotesText, searchPlaceholder, show
         onDelete={() => actionTarget && handleDeleteNote(actionTarget)}
         extraActions={
           actionTarget
-            ? [{ label: 'Share', icon: 'square.and.arrow.up', onPress: () => shareNote(actionTarget) }]
+            ? [{ label: 'Share', icon: 'square.and.arrow.up', onPress: () => setShareTarget(actionTarget) }]
             : undefined
         }
       />
+
+      <ShareOptionsModal
+        visible={!!shareTarget}
+        onClose={() => setShareTarget(null)}
+        onSharePdf={() => shareTarget && shareNote(shareTarget)}
+        onShareLink={() => shareTarget && shareNoteLink(shareTarget.id)}
+        onInvite={
+          shareTarget
+            ? () => {
+                setInviteNote(shareTarget);
+                setInviteSheetOpen(true);
+              }
+            : undefined
+        }
+      />
+
+      {/* Stays mounted after closing so the sheet can slide away. */}
+      {!!inviteNote && <CollaboratorsSheet visible={inviteSheetOpen} onClose={() => setInviteSheetOpen(false)} noteId={inviteNote.id} />}
 
       <ItemActionSheet
         visible={!!folderActionTarget}
@@ -279,7 +332,7 @@ export function NotesBrowser({ parentId, emptyNotesText, searchPlaceholder, show
         onDelete={() => folderActionTarget && handleDeleteFolder(folderActionTarget)}
         extraActions={
           folderActionTarget
-            ? [{ label: 'Share link', icon: 'link', onPress: () => shareFolderLink(folderActionTarget.id) }]
+            ? [{ label: 'Share as link', icon: 'link', onPress: () => shareFolderLink(folderActionTarget.id) }]
             : undefined
         }
       />

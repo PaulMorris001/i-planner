@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, TextInput, Pressable, StyleSheet, Alert, Keyboard, ActivityIndicator, Share, Platform, AppState } from 'react-native';
-import { useLocalSearchParams, router } from 'expo-router';
+import { View, Text, TextInput, Pressable, StyleSheet, Alert, Keyboard, ActivityIndicator, AppState } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
 import { useNavigation, usePreventRemove } from '@react-navigation/native';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { FolderPickerModal } from '@/components/notes/FolderPickerModal';
 import { ShareOptionsModal } from '@/components/notes/ShareOptionsModal';
 import { CollaboratorsSheet } from '@/components/notes/CollaboratorsSheet';
+import { Routes } from '@/constants/routes';
+import { goBackOr } from '@/utils/navigation';
 import { NotePeopleSheet } from '@/components/notes/NotePeopleSheet';
 import { requestConfirm } from '@/components/ui/ConfirmModal';
 import { Colors, Spacing, Radius } from '@/constants/theme';
@@ -14,7 +16,7 @@ import { useNotes } from '@/hooks/useNotes';
 import { useFolders } from '@/hooks/useFolders';
 import { useDictation } from '@/hooks/useDictation';
 import { noteService } from '@/services/note.service';
-import { sharedNoteService } from '@/services/sharedNote.service';
+import { shareNoteLink } from '@/utils/shareNoteLink';
 import { collaborationService } from '@/services/collaboration.service';
 import type { Note } from '@/types/note.types';
 import type { NoteAccessRole } from '@/types/collaboration.types';
@@ -129,6 +131,8 @@ export default function NoteEditor() {
   // True while any save (autosave or manual) is in flight, so the two can
   // never race each other into creating the same not-yet-saved note twice.
   const busyRef = useRef(false);
+  // Set when Save is tapped while an autosave is still writing: the save runs the moment it finishes.
+  const saveWhenIdleRef = useRef(false);
   const lastSavedRef = useRef<{ title: string; body: string }>({ title: '', body: '' });
 
   // --- Rich text editor -----------------------------------------------------
@@ -315,6 +319,11 @@ export default function NoteEditor() {
       if (latest) setConflict(latest);
     } finally {
       busyRef.current = false;
+      // A Save tap arrived while this was writing: do it now, with whatever has been typed since.
+      if (saveWhenIdleRef.current) {
+        saveWhenIdleRef.current = false;
+        saveNowRef.current({ queued: true });
+      }
     }
   };
 
@@ -569,8 +578,23 @@ export default function NoteEditor() {
     }
   });
 
-  const handleSave = async () => {
-    if (!canSave || busyRef.current) return;
+  // Saves what is on screen. `queued` is true when this runs because a Save tap arrived while an
+  // autosave was still writing: the button state from that earlier render no longer applies.
+  const saveNow = async ({ queued }: { queued: boolean }) => {
+    if (busyRef.current) {
+      // An autosave is writing the note right now: remember the tap and save as soon as it is
+      // done, instead of silently ignoring it.
+      if (canEditRef.current && !conflictRef.current) {
+        saveWhenIdleRef.current = true;
+        setSubmitting(true);
+      }
+      return;
+    }
+    if (!queued && !canSave) return;
+    if (!canEditRef.current || conflictRef.current) {
+      setSubmitting(false);
+      return;
+    }
     // See baselineReadyRef: never save before the note's real text is known.
     if (savedIdRef.current && !baselineReadyRef.current) return;
     // Saving means "done typing for now", so put the keyboard away. The editor
@@ -586,20 +610,27 @@ export default function NoteEditor() {
     setSubmitting(true);
     try {
       const b = await currentBody();
-      // Same first-line fallback as autosave for a note with no title.
-      const t = title.trim() || deriveFallbackTitle(b);
+      // Same first-line fallback as autosave for a note with no title. Read from the refs, not the
+      // render's state: a queued save runs long after the render that started it.
+      const t = titleRef.current.trim() || deriveFallbackTitle(b);
       if (!t) return;
+      // Nothing new since the last save (an autosave already wrote it): just show it as saved.
+      if (t === lastSavedRef.current.title && b === lastSavedRef.current.body) {
+        setHasSaved(true);
+        setAutosaveStatus('saved');
+        return;
+      }
       if (savedIdRef.current) {
         await updateNote(savedIdRef.current, { title: t, body: b });
       } else {
         // Record the new note's id: the editor stays open after saving now, so
         // the next save must update this note, not create a second one.
-        const created = await createNote({ title: t, body: b, folderId: newNoteFolderId });
+        const created = await createNote({ title: t, body: b, folderId: newNoteFolderIdRef.current });
         savedIdRef.current = created.id;
         setSavedId(created.id);
       }
       lastSavedRef.current = { title: t, body: b };
-      if (!title.trim()) setTitle(t);
+      if (!titleRef.current.trim()) setTitle(t);
       // Stays on the screen; the header button turns green "Saved" (and
       // setHasSaved re-renders so isDirty catches up to the ref above).
       setHasSaved(true);
@@ -614,6 +645,9 @@ export default function NoteEditor() {
       busyRef.current = false;
     }
   };
+  const saveNowRef = useRef(saveNow);
+  saveNowRef.current = saveNow;
+  const handleSave = () => saveNow({ queued: false });
 
   const handleSelectFolder = async (folderId: string | null) => {
     setFolderPickerOpen(false);
@@ -642,7 +676,7 @@ export default function NoteEditor() {
       setCleanupState('idle');
       lastSavedRef.current = { title, body };
       deleteNote(editing.id)
-        .then(() => router.back())
+        .then(() => goBackOr(Routes.NOTES))
         .catch((err) => console.error('[NoteEditor] failed to delete note', err));
     });
   };
@@ -670,15 +704,7 @@ export default function NoteEditor() {
     if (!editing || sharing) return;
     setSharing(true);
     try {
-      const { url } = await sharedNoteService.share(editing.id);
-      // Exactly one field per platform. iOS shares `message` and `url` as two
-      // separate items, so passing both made WhatsApp/Messages paste the link
-      // twice. `url` gets iOS's native link preview; Android ignores `url`
-      // entirely and only shares `message`.
-      await Share.share(Platform.OS === 'ios' ? { url } : { message: url });
-    } catch (err) {
-      console.error('[NoteEditor] failed to create share link', err);
-      Alert.alert("Couldn't create link", 'Check your connection and try again.');
+      await shareNoteLink(editing.id);
     } finally {
       setSharing(false);
     }
@@ -741,7 +767,7 @@ export default function NoteEditor() {
         setCleanupState('idle');
         lastSavedRef.current = { title, body };
         leaveSharedNote(noteId)
-          .then(() => router.back())
+          .then(() => goBackOr(Routes.NOTES))
           .catch((err) => {
             console.error('[NoteEditor] failed to leave note', err);
             isClosingRef.current = false;
@@ -783,7 +809,7 @@ export default function NoteEditor() {
         if ((err as { status?: number } | null)?.status === 404 && !isClosingRef.current) {
           isClosingRef.current = true;
           Alert.alert('Note unavailable', 'This note was deleted, or you no longer have access to it.', [
-            { text: 'OK', onPress: () => router.back() },
+            { text: 'OK', onPress: () => goBackOr(Routes.NOTES) },
           ]);
         }
       }
@@ -798,7 +824,7 @@ export default function NoteEditor() {
     // on-screen nav bar (3-button or gesture pill) on edge-to-edge devices.
     <ScreenWrapper backgroundColor={Colors.offWhite} edges={['top', 'right', 'bottom', 'left']}>
       <View style={styles.headerRow}>
-        <Pressable hitSlop={10} onPress={() => router.back()} style={styles.backBtn}>
+        <Pressable hitSlop={10} onPress={() => goBackOr(Routes.NOTES)} style={styles.backBtn}>
           <IconSymbol name="chevron.left" color={Colors.textPrimary} size={20} />
         </Pressable>
 

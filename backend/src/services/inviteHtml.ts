@@ -27,7 +27,7 @@ export function buildInvitePageHtml(input: { inviterLabel: string; noteTitle: st
     <form class="decline-form" method="post" action="/invite/${encodeURIComponent(input.token)}/decline">
       <button class="decline-btn" type="submit">Decline</button>
     </form>
-    <div class="stores">Don't have the app? <a href="${APP_STORE_URL}">App Store</a> &middot; <a href="${PLAY_STORE_URL}">Google Play</a>. Install it, sign in, then open this link again.</div>`
+    <div class="stores">Don't have the app? <a href="${APP_STORE_URL}">App Store</a> &middot; <a href="${PLAY_STORE_URL}">Google Play</a>. Install it, sign in, then open this link again. If the app opens but shows an error page, close it fully and reopen it once so it can update, then open this link again.</div>`
   );
 }
 

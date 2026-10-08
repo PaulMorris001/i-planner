@@ -9,6 +9,7 @@ import { useNotes } from '@/hooks/useNotes';
 import { sharedNoteService, type ExistingNoteReason, type SharedNotePreview } from '@/services/sharedNote.service';
 import { bodyToPlainText } from '@/utils/richNote';
 import { Routes } from '@/constants/routes';
+import { openOnTopOf } from '@/utils/navigation';
 import { Colors, Spacing, Radius } from '@/constants/theme';
 import type { Note } from '@/types/note.types';
 
@@ -57,7 +58,7 @@ export default function SharedNote() {
     // createNote entirely, so nothing updated it. Without this, note-editor
     // opens to an id it can't find locally and just renders blank.
     await refetchNotes();
-    router.replace(`${Routes.NOTE_EDITOR}?id=${noteId}`);
+    openOnTopOf(Routes.NOTES, `${Routes.NOTE_EDITOR}?id=${noteId}`);
   };
 
   const handleImport = async () => {

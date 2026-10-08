@@ -11,6 +11,7 @@ import { captureInvitationState, isInviteExpired, newInviteExpiry } from '../ser
 import { assertInvitationKeepsItsPlace, assertMayInvite } from '../services/inviteLimits';
 import { requireInviteeEmail, requireRole } from '../services/inviteValidation';
 import { sendInvitationOrUndo } from '../services/inviteEmail';
+import { notifyOwnerOfInviteResponse } from '../services/inviteResponsePush';
 import { buildInviteMessageHtml, buildInvitePageHtml } from '../services/inviteHtml';
 import { COLLABORATION_UPGRADE_MESSAGE, NoteRole, canUseCollaboration } from '../constants/collaboration';
 
@@ -301,20 +302,44 @@ export async function acceptInvite(req: AuthedRequest, res: Response) {
   }
   if (!accepted) throw new ApiError(410, 'This invitation has already been used.', 'general');
   res.json({ noteId: accepted.noteId, role: accepted.role });
+
+  // Only the request that actually accepted it tells the owner (a repeat tap changes nothing).
+  void notifyOwnerOfInviteResponse({
+    ownerUid: accepted.ownerUid,
+    noteId: accepted.noteId,
+    noteTitle: note.title,
+    inviteeEmail: accepted.email,
+    responderUid: uid,
+    outcome: 'accepted',
+  });
 }
 
 // Marks a still-pending invitation as declined. Declining never needs an account: the link in the
-// email is enough.
-async function declinePendingInvite(invitationId: unknown): Promise<void> {
-  await NoteMember.findOneAndUpdate({ _id: invitationId, status: 'pending' }, { $set: { status: 'declined', respondedAt: new Date() } });
+// email is enough. Returns whether THIS call declined it (false when it had already been answered).
+async function declinePendingInvite(invitationId: unknown): Promise<boolean> {
+  const declined = await NoteMember.findOneAndUpdate(
+    { _id: invitationId, status: 'pending' },
+    { $set: { status: 'declined', respondedAt: new Date() } }
+  );
+  return !!declined;
 }
 
 export async function declineInvite(req: AuthedRequest, res: Response) {
   const lookup = await findInviteByToken(req.params.token);
   if (!lookup) throw inviteUnavailable();
   if (lookup.invitation.status === 'accepted') throw new ApiError(409, 'This invitation was already accepted.', 'general');
-  await declinePendingInvite(lookup.invitation._id);
+  const declinedNow = await declinePendingInvite(lookup.invitation._id);
   res.status(204).send();
+  if (declinedNow && lookup.note) {
+    void notifyOwnerOfInviteResponse({
+      ownerUid: lookup.invitation.ownerUid,
+      noteId: lookup.invitation.noteId,
+      noteTitle: lookup.note.title,
+      inviteeEmail: lookup.invitation.email,
+      responderUid: req.userId,
+      outcome: 'declined',
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -355,6 +380,15 @@ export async function declineInviteWebPage(req: Request, res: Response) {
     res.send(buildInviteMessageHtml('Already accepted', 'This invitation was already accepted, so it can no longer be declined here.'));
     return;
   }
-  await declinePendingInvite(lookup.invitation._id);
+  const declinedNow = await declinePendingInvite(lookup.invitation._id);
+  if (declinedNow && lookup.note) {
+    void notifyOwnerOfInviteResponse({
+      ownerUid: lookup.invitation.ownerUid,
+      noteId: lookup.invitation.noteId,
+      noteTitle: lookup.note.title,
+      inviteeEmail: lookup.invitation.email,
+      outcome: 'declined',
+    });
+  }
   res.send(buildInviteMessageHtml('Invitation declined', "You've declined the invitation. The sender won't be notified by email, and you won't get access to the note."));
 }

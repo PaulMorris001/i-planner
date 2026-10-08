@@ -153,7 +153,7 @@ async function handleAlarmResponse(response: Notifications.NotificationResponse)
   // Server-sent pushes (backend services/pushNotifications.ts) - announcements,
   // the 10 PM tasks-left nudge, AI replies: open the screen they name, if any.
   // Only in-app paths, never an arbitrary URL.
-  if (kind === 'announcement' || kind === 'task-nudge' || kind === 'ai-reply') {
+  if (kind === 'announcement' || kind === 'task-nudge' || kind === 'ai-reply' || kind === 'invite-response') {
     const route = typeof data?.route === 'string' ? data.route : undefined;
     if (route?.startsWith('/')) router.push(route as Parameters<typeof router.push>[0]);
     return;

@@ -5,6 +5,7 @@ import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { IconSymbol, type IconSymbolName } from '@/components/ui/icon-symbol';
 import { Colors, Radius, Spacing } from '@/constants/theme';
 import { Routes } from '@/constants/routes';
+import { openOnTopOf } from '@/utils/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { useNotes } from '@/hooks/useNotes';
 import { collaborationService } from '@/services/collaboration.service';
@@ -54,7 +55,7 @@ export default function Invite() {
       const { noteId } = await collaborationService.acceptInvite(token);
       // The note is new to this account: load it before opening, or the editor finds nothing.
       await refetchNotes();
-      router.replace(`${Routes.NOTE_EDITOR}?id=${noteId}`);
+      openOnTopOf(Routes.NOTES, `${Routes.NOTE_EDITOR}?id=${noteId}`);
     } catch (err) {
       console.error('[Invite] failed to accept', err);
       setError((err as { message?: string })?.message || "Couldn't accept the invitation. Try again.");

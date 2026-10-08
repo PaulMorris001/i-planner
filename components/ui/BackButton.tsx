@@ -1,17 +1,20 @@
 import { Text, Pressable, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
-import { router } from 'expo-router';
 import { IconSymbol } from './icon-symbol';
 import { Colors, Spacing, Typography } from '@/constants/theme';
+import { Routes, type AppRoute } from '@/constants/routes';
+import { goBackOr } from '@/utils/navigation';
 
 interface BackButtonProps {
   // 'icon' = chevron + "Back" (list/detail screens). 'text' = inline "← Back" (auth screens).
   variant?: 'icon' | 'text';
   onPress?: () => void;
+  // Where Back goes when there is no screen behind this one (the app was opened straight onto it by a link).
+  fallbackRoute?: AppRoute;
   style?: StyleProp<ViewStyle>;
 }
 
-export function BackButton({ variant = 'icon', onPress, style }: BackButtonProps) {
-  const handlePress = onPress ?? (() => router.back());
+export function BackButton({ variant = 'icon', onPress, fallbackRoute = Routes.DASHBOARD, style }: BackButtonProps) {
+  const handlePress = onPress ?? (() => goBackOr(fallbackRoute));
 
   if (variant === 'text') {
     return (

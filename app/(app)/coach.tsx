@@ -126,6 +126,11 @@ export default function Coach() {
   // so the effect plays once and everything else renders in full.
   const [typingMessageId, setTypingMessageId] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
+  // The typing-in effect is only for someone watching the reply arrive. If the app went to the
+  // background while a message was being answered (the "reply ready" notification is for exactly
+  // that person), the reply must be fully written when they come back, not typing out.
+  const leftAppDuringSendRef = useRef(false);
+  const wasBackgroundedRef = useRef(false);
 
   const visibleModes = MODES.filter((m) => m.id !== 'study' || focusProfile !== 'professional');
   const mode = modeOverride && visibleModes.some((m) => m.id === modeOverride) ? modeOverride : visibleModes[0].id;
@@ -168,7 +173,18 @@ export default function Coach() {
   // shows up even if this screen's own request was cut off meanwhile.
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'background') {
+        leftAppDuringSendRef.current = true;
+        wasBackgroundedRef.current = true;
+        return;
+      }
       if (state !== 'active') return;
+      // Back from the background: finish any reply that was still typing in, so it is complete
+      // the moment the screen is in front of the user (for example after tapping the notification).
+      if (wasBackgroundedRef.current) {
+        wasBackgroundedRef.current = false;
+        setTypingMessageId(null);
+      }
       coachService
         .list(mode)
         .then((msgs) =>
@@ -275,6 +291,7 @@ export default function Coach() {
         createdAt: new Date().toISOString(),
       },
     ]);
+    leftAppDuringSendRef.current = false;
     setSending(true);
     setSendingFiles(sentAttachments.length > 0);
     try {
@@ -283,7 +300,8 @@ export default function Coach() {
       );
       const reply = await coachService.send(mode, text, files, onUploadProgress);
       setMessages((prev) => (prev.some((m) => m.id === reply.id) ? prev : [...prev, reply]));
-      setTypingMessageId(reply.id);
+      // Typed in only for someone who stayed on the screen; otherwise it is simply there, complete.
+      setTypingMessageId(leftAppDuringSendRef.current ? null : reply.id);
       if (reply.createdTaskIds?.length) {
         // AI-created tasks are already Google-synced server-side but still need
         // the client Apple Calendar/notification step. Use refetch()'s return
@@ -299,7 +317,7 @@ export default function Coach() {
         const last = latest[latest.length - 1];
         if (last?.role === 'assistant' && new Date(last.createdAt).getTime() >= sentAt - 60_000) {
           setMessages(latest);
-          setTypingMessageId(last.id);
+          setTypingMessageId(leftAppDuringSendRef.current ? null : last.id);
           // The reply may have created tasks. Refetching also schedules their reminders.
           refetchTasks().catch((e) => console.error('[Coach] failed to refresh tasks after recovery', e));
           return;

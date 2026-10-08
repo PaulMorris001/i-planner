@@ -5,6 +5,7 @@ import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { IconSymbol, type IconSymbolName } from '@/components/ui/icon-symbol';
 import { Colors, Radius, Spacing } from '@/constants/theme';
 import { Routes } from '@/constants/routes';
+import { openOnTopOf } from '@/utils/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { useFolders } from '@/hooks/useFolders';
 import { useNotes } from '@/hooks/useNotes';
@@ -56,7 +57,7 @@ export default function SharedFolder() {
   // would open blank.
   const openFolder = async (folderId: string) => {
     await Promise.all([refetchFolders(), refetchNotes()]);
-    router.replace(`${Routes.NOTES_FOLDER}?id=${folderId}`);
+    openOnTopOf(Routes.NOTES, `${Routes.NOTES_FOLDER}?id=${folderId}`);
   };
 
   const handleAdd = async () => {

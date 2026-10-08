@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { View, Pressable, StyleSheet } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { ItemActionSheet } from '@/components/ui/ItemActionSheet';
@@ -10,6 +10,8 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { NotesBrowser } from '@/components/notes/NotesBrowser';
 import { NewFolderModal } from '@/components/notes/NewFolderModal';
 import { shareFolderLink } from '@/utils/shareFolderLink';
+import { goBackOr } from '@/utils/navigation';
+import { Routes } from '@/constants/routes';
 import { Colors, Spacing } from '@/constants/theme';
 import { useNotes } from '@/hooks/useNotes';
 import { useFolders } from '@/hooks/useFolders';
@@ -40,7 +42,7 @@ export default function NotesFolder() {
       () => {
         deleteFolder(folder.id)
           .then(() => Promise.all([refetchNotes(), refetchFolders()]))
-          .then(() => router.back())
+          .then(() => goBackOr(Routes.NOTES))
           .catch((err) => console.error('[NotesFolder] failed to delete folder', err));
       },
       "Notes inside will be moved to “No folder,” and subfolders will move up a level — nothing is deleted."
@@ -79,7 +81,7 @@ export default function NotesFolder() {
       refreshing={refreshing}
     >
       <View style={styles.headerBar}>
-        <BackButton style={styles.backButtonOverride} />
+        <BackButton style={styles.backButtonOverride} fallbackRoute={Routes.NOTES} />
         <Pressable
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           onPress={() => setFolderMenuOpen(true)}
@@ -111,7 +113,7 @@ export default function NotesFolder() {
         editLabel="Rename"
         onEdit={() => setRenameModalOpen(true)}
         onDelete={handleDeleteFolder}
-        extraActions={folder ? [{ label: 'Share link', icon: 'link', onPress: () => shareFolderLink(folder.id) }] : undefined}
+        extraActions={folder ? [{ label: 'Share as link', icon: 'link', onPress: () => shareFolderLink(folder.id) }] : undefined}
       />
 
       <NewFolderModal

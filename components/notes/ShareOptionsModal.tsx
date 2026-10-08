@@ -51,7 +51,7 @@ export function ShareOptionsModal({ visible, onClose, onSharePdf, onShareLink, o
           }}
         >
           <IconSymbol name="link" color={Colors.textPrimary} size={19} />
-          <Text style={styles.rowText}>Share link</Text>
+          <Text style={styles.rowText}>Share as link</Text>
         </Pressable>
       </View>
     </BottomSheetModal>
