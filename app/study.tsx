@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { StudySessionSheet } from '@/components/study/StudySessionSheet';
+import { StudyTimerCard } from '@/components/study/StudyTimerCard';
 import { BackButton } from '@/components/ui/BackButton';
 import { requestConfirm } from '@/components/ui/ConfirmModal';
 import { DashedAddButton } from '@/components/ui/DashedAddButton';
@@ -128,24 +129,14 @@ export default function Study() {
         </View>
 
         {current && (
-          <View style={styles.activeCard}>
-            <Text style={styles.activeEyebrow}>{paused ? 'PAUSED' : 'STUDYING NOW'}</Text>
-            <Text style={styles.activeName} numberOfLines={1}>
-              {current.sessionName}
-            </Text>
-            <Text style={[styles.clock, paused && styles.clockPaused]}>{formatClock(study.elapsedMs)}</Text>
-            <Text style={styles.activeHint}>
-              {paused ? 'The timer is on hold. Break time is not counted.' : 'Every full 30 minutes earns points.'}
-            </Text>
-            <View style={styles.activeButtons}>
-              <Pressable style={styles.pauseButton} onPress={handlePauseResume} disabled={study.busy}>
-                <Text style={styles.pauseText}>{paused ? 'Resume' : 'Pause'}</Text>
-              </Pressable>
-              <Pressable style={styles.stopButton} onPress={handleStop} disabled={study.busy}>
-                {study.busy ? <ActivityIndicator color={Colors.white} size="small" /> : <Text style={styles.stopText}>Stop</Text>}
-              </Pressable>
-            </View>
-          </View>
+          <StudyTimerCard
+            sessionName={current.sessionName}
+            paused={paused}
+            elapsedMs={study.elapsedMs}
+            busy={study.busy}
+            onPauseResume={handlePauseResume}
+            onStop={handleStop}
+          />
         )}
 
         <Text style={styles.eyebrow}>YOUR STUDY SESSIONS</Text>
@@ -220,40 +211,6 @@ const styles = StyleSheet.create({
   },
   statValue: { fontSize: 22, fontWeight: '800', color: Colors.textPrimary },
   statLabel: { fontSize: 12.5, color: Colors.textSecondary, marginTop: 2 },
-  activeCard: {
-    marginTop: 14,
-    backgroundColor: Colors.white,
-    borderWidth: 1.5,
-    borderColor: Colors.primaryLight,
-    borderRadius: 18,
-    padding: 16,
-    alignItems: 'center',
-  },
-  activeEyebrow: { fontSize: 12, fontWeight: '700', color: Colors.primaryLight, letterSpacing: 0.5 },
-  activeName: { fontSize: 16, fontWeight: '700', color: Colors.textPrimary, marginTop: 4, maxWidth: '100%' },
-  clock: { fontSize: 46, fontWeight: '800', color: Colors.textPrimary, marginTop: 6, fontVariant: ['tabular-nums'] },
-  clockPaused: { color: Colors.textMuted },
-  activeHint: { fontSize: 12.5, color: Colors.textSecondary, marginTop: 2, textAlign: 'center' },
-  activeButtons: { flexDirection: 'row', gap: 10, marginTop: 16, alignSelf: 'stretch' },
-  pauseButton: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: Colors.primaryLight,
-  },
-  pauseText: { fontSize: 15, fontWeight: '700', color: Colors.primaryLight },
-  stopButton: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    borderRadius: 14,
-    backgroundColor: Colors.error,
-  },
-  stopText: { fontSize: 15, fontWeight: '700', color: Colors.white },
   eyebrow: {
     fontSize: 12,
     fontWeight: '700',

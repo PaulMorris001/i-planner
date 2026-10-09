@@ -110,7 +110,7 @@ export function StudySessionSheet({ visible, onClose, editing, saving, onSave, o
         {scheduled && (
           <>
             <Text style={styles.label}>DAYS</Text>
-            <WeekdayPicker selected={days} onChange={setDays} activeColor={Colors.primaryLight} />
+            <WeekdayPicker selected={days} onChange={setDays} activeColor={Colors.primaryLight} carousel />
 
             <View style={styles.timeRow}>
               <Pressable style={styles.timeButton} onPress={() => setPicker(picker === 'start' ? null : 'start')}>
