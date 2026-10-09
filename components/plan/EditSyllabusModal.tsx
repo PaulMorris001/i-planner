@@ -3,7 +3,7 @@ import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
 import { BottomSheetModal } from '@/components/ui/BottomSheetModal';
 import { ModalCloseButton } from '@/components/ui/ModalCloseButton';
 import { Colors } from '@/constants/theme';
-import { confirmDelete } from '@/utils/confirmDelete';
+import { useNestedConfirm } from '@/components/ui/ConfirmModal';
 import type { Syllabus } from '@/types/syllabus.types';
 
 interface EditSyllabusModalProps {
@@ -47,6 +47,8 @@ export function EditSyllabusModal({ visible, onClose, onSave, onRemove, editingS
     }
   };
 
+  const { confirmDelete, confirmSheet } = useNestedConfirm();
+
   const handleRemove = () => {
     confirmDelete(editingSyllabus?.courseName || 'this syllabus', () => {
       onRemove()
@@ -57,6 +59,7 @@ export function EditSyllabusModal({ visible, onClose, onSave, onRemove, editingS
 
   return (
     <BottomSheetModal visible={visible} onClose={handleClose}>
+      {confirmSheet}
       <View style={styles.headerRow}>
         <Text style={styles.title}>Edit syllabus</Text>
         <ModalCloseButton onPress={handleClose} />

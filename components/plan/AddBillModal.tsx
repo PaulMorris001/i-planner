@@ -8,7 +8,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors, Spacing, Radius } from '@/constants/theme';
 import { formatDatePickerLabel, parseISODateLocal, toDateKey } from '@/utils/date';
 import { CURRENCY_SYMBOL } from '@/utils/currency';
-import { confirmDelete } from '@/utils/confirmDelete';
+import { useNestedConfirm } from '@/components/ui/ConfirmModal';
 import type { Bill, BillCategory, NewBillInput } from '@/types/bill.types';
 
 const AMOUNT_STEP = 10;
@@ -105,6 +105,8 @@ export function AddBillModal({ visible, onClose, onSave, onRemove, editingBill }
     }
   };
 
+  const { confirmDelete, confirmSheet } = useNestedConfirm();
+
   const handleRemove = () => {
     if (!onRemove) return;
     confirmDelete(name || 'this bill', () => {
@@ -116,6 +118,7 @@ export function AddBillModal({ visible, onClose, onSave, onRemove, editingBill }
 
   return (
     <BottomSheetModal visible={visible} onClose={handleClose} maxHeightPct={90}>
+      {confirmSheet}
       <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <View style={styles.headerRow}>
           <Text style={styles.title}>{editingBill ? 'Edit bill' : 'Add a bill'}</Text>

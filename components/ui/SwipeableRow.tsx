@@ -47,7 +47,22 @@ export function SwipeableRow({ children, actions, borderRadius }: SwipeableRowPr
         if (openRow === rowRef.current) openRow = null;
       }}
       renderRightActions={(_progress, _translation, swipeable) => (
-        <View style={[styles.actions, { width: ACTION_WIDTH * actions.length }]}>
+        // The panel is `borderRadius` wider than its buttons and pulled that far to the left
+        // (negative margin), so its first colour tucks underneath the card. The card's rounded
+        // corners then show that colour behind them instead of a hard straight edge next to a gap.
+        // The margin cancels the extra width for the library, so the card still slides exactly
+        // the buttons' width.
+        <View
+          style={[
+            styles.actions,
+            {
+              width: ACTION_WIDTH * actions.length + borderRadius,
+              paddingLeft: borderRadius,
+              marginLeft: -borderRadius,
+              backgroundColor: actions[0].color,
+            },
+          ]}
+        >
           {actions.map((action) => (
             <Pressable
               key={action.label}

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { BottomSheetModal } from '@/components/ui/BottomSheetModal';
-import { requestConfirm } from '@/components/ui/ConfirmModal';
 import { Colors, Spacing } from '@/constants/theme';
 import { collaborationService } from '@/services/collaboration.service';
 import type { CollabRole, NotePerson } from '@/types/collaboration.types';
@@ -32,6 +31,9 @@ export function CollaboratorsSheet({ visible, onClose, noteId }: CollaboratorsSh
   const [message, setMessage] = useState<{ text: string; tone: 'error' | 'ok' } | null>(null);
   // The row currently being changed (resend / role / remove), so it can show a spinner.
   const [busyPersonId, setBusyPersonId] = useState<string | null>(null);
+  // The row asking "are you sure?" before cancelling an invitation / removing access. Asked inline,
+  // because a separate confirm popup can't open on top of this sheet (iOS ignores it).
+  const [confirmingPersonId, setConfirmingPersonId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -50,6 +52,7 @@ export function CollaboratorsSheet({ visible, onClose, noteId }: CollaboratorsSh
     if (!visible) return;
     setEmail('');
     setMessage(null);
+    setConfirmingPersonId(null);
     load();
   }, [visible, load]);
 
@@ -83,19 +86,21 @@ export function CollaboratorsSheet({ visible, onClose, noteId }: CollaboratorsSh
     }
   };
 
+  // Changes what an accepted person may do. They are told by a notification, and an open copy of
+  // the note switches over on its own.
+  const handleChangeRole = async (person: NotePerson) => {
+    const id = person.id;
+    if (!id) return;
+    const newRole: CollabRole = person.role === 'editor' ? 'viewer' : 'editor';
+    await runPersonAction(id, () => collaborationService.changeRole(noteId, id, newRole), "Couldn't change that.");
+    setMessage((current) => current ?? { text: `${person.label} can now ${newRole === 'editor' ? 'edit' : 'only view'} this note. They've been notified.`, tone: 'ok' });
+  };
+
   const handleRemove = (person: NotePerson) => {
     const id = person.id;
     if (!id) return;
-    requestConfirm({
-      title: person.status === 'accepted' ? 'Remove access?' : 'Cancel invitation?',
-      message:
-        person.status === 'accepted'
-          ? `${person.email ?? person.label} will no longer be able to open this note.`
-          : `The invitation sent to ${person.email ?? person.label} will stop working.`,
-      confirmLabel: person.status === 'accepted' ? 'Remove' : 'Cancel invitation',
-      destructive: true,
-      onConfirm: () => runPersonAction(id, () => collaborationService.remove(noteId, id), "Couldn't remove them."),
-    });
+    setConfirmingPersonId(null);
+    runPersonAction(id, () => collaborationService.remove(noteId, id), "Couldn't remove them.");
   };
 
   const describeAccess = (p: NotePerson): string => {
@@ -173,13 +178,25 @@ export function CollaboratorsSheet({ visible, onClose, noteId }: CollaboratorsSh
               </View>
               {busyPersonId === p.id ? (
                 <ActivityIndicator color={Colors.primaryLight} size="small" />
+              ) : confirmingPersonId === p.id ? (
+                <View style={styles.memberActions}>
+                  <Text style={styles.confirmText}>{p.status === 'accepted' ? 'Remove access?' : 'Cancel invitation?'}</Text>
+                  <View style={styles.confirmButtons}>
+                    <Pressable hitSlop={8} onPress={() => setConfirmingPersonId(null)}>
+                      <Text style={styles.action}>Keep</Text>
+                    </Pressable>
+                    <Pressable hitSlop={8} onPress={() => handleRemove(p)}>
+                      <Text style={styles.actionDanger}>Yes</Text>
+                    </Pressable>
+                  </View>
+                </View>
               ) : (
                 !!p.id && (
                   <View style={styles.memberActions}>
                     {p.status === 'accepted' && (
                       <Pressable
                         hitSlop={6}
-                        onPress={() => runPersonAction(p.id!, () => collaborationService.changeRole(noteId, p.id!, p.role === 'editor' ? 'viewer' : 'editor'), "Couldn't change that.")}
+                        onPress={() => handleChangeRole(p)}
                       >
                         <Text style={styles.action}>{p.role === 'editor' ? 'Make viewer' : 'Make editor'}</Text>
                       </Pressable>
@@ -189,7 +206,7 @@ export function CollaboratorsSheet({ visible, onClose, noteId }: CollaboratorsSh
                         <Text style={styles.action}>{p.status === 'declined' ? 'Invite again' : 'Resend'}</Text>
                       </Pressable>
                     )}
-                    <Pressable hitSlop={6} onPress={() => handleRemove(p)}>
+                    <Pressable hitSlop={6} onPress={() => setConfirmingPersonId(p.id!)}>
                       <Text style={styles.actionDanger}>{p.status === 'accepted' ? 'Remove' : 'Cancel'}</Text>
                     </Pressable>
                   </View>
@@ -238,5 +255,7 @@ const styles = StyleSheet.create({
   memberStatusMuted: { color: Colors.textMuted },
   memberActions: { alignItems: 'flex-end', gap: 6 },
   action: { fontSize: 12.5, fontWeight: '700', color: Colors.primaryLight },
+  confirmText: { fontSize: 12.5, color: Colors.textSecondary },
+  confirmButtons: { flexDirection: 'row', gap: 16 },
   actionDanger: { fontSize: 12.5, fontWeight: '700', color: Colors.error },
 });

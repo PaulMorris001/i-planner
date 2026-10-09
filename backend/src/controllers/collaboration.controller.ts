@@ -12,6 +12,7 @@ import { assertInvitationKeepsItsPlace, assertMayInvite } from '../services/invi
 import { requireInviteeEmail, requireRole } from '../services/inviteValidation';
 import { sendInvitationOrUndo } from '../services/inviteEmail';
 import { notifyOwnerOfInviteResponse } from '../services/inviteResponsePush';
+import { notifyMemberOfAccessChange } from '../services/accessChangePush';
 import { buildInviteMessageHtml, buildInvitePageHtml } from '../services/inviteHtml';
 import { COLLABORATION_UPGRADE_MESSAGE, NoteRole, canUseCollaboration } from '../constants/collaboration';
 
@@ -141,9 +142,17 @@ export async function resendInvite(req: AuthedRequest, res: Response) {
 export async function changeMemberRole(req: AuthedRequest, res: Response) {
   const note = await requireOwnedNote(req);
   const role = requireRole(req.body?.role);
-  const member = await NoteMember.findOneAndUpdate({ _id: req.params.memberId, noteId: note.id }, { $set: { role } }, { new: true }).catch(() => null);
+  const before = await NoteMember.findOne({ _id: req.params.memberId, noteId: note.id }).catch(() => null);
+  if (!before) throw notFound();
+  const member = await NoteMember.findOneAndUpdate({ _id: before._id }, { $set: { role } }, { new: true });
   if (!member) throw notFound();
   res.json(toPublicMember(member));
+
+  // Someone who already joined is told right away; a pending invitation simply carries the new
+  // permission, and re-selecting the same one changes nothing, so neither sends a push.
+  if (before.status === 'accepted' && before.memberUid && before.role !== role) {
+    void notifyMemberOfAccessChange({ memberUid: before.memberUid, ownerUid: req.userId!, noteId: note.id, noteTitle: note.title, newRole: role });
+  }
 }
 
 // Cancels a pending invitation or removes someone's access. Immediate: their next request is refused.

@@ -25,6 +25,46 @@ export function requestConfirm(options: ConfirmOptions) {
   showConfirm?.(options);
 }
 
+// The confirm card itself. Shown by the app-wide host below, or by useNestedConfirm inside a sheet.
+function ConfirmSheet({ options, onClose }: { options: ConfirmOptions | null; onClose: () => void }) {
+  const handleConfirm = () => {
+    const onConfirm = options?.onConfirm;
+    onClose();
+    onConfirm?.();
+  };
+
+  return (
+    <BottomSheetModal visible={!!options} onClose={onClose}>
+      {options && (
+        <View style={styles.content}>
+          <Text style={styles.title}>{options.title}</Text>
+          <Text style={styles.message}>{options.message}</Text>
+          <View style={styles.actions}>
+            <Pressable style={styles.cancelBtn} onPress={onClose}>
+              <Text style={styles.cancelText}>Cancel</Text>
+            </Pressable>
+            <Pressable style={[styles.confirmBtn, options.destructive && styles.confirmBtnDestructive]} onPress={handleConfirm}>
+              <Text style={[styles.confirmText, options.destructive && styles.confirmTextDestructive]}>{options.confirmLabel}</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
+    </BottomSheetModal>
+  );
+}
+
+// For a delete button that lives INSIDE a sheet. The app-wide confirm below can't open on top of
+// another open sheet (iOS ignores it and the screen is left unresponsive), so this one is rendered
+// inside that sheet instead: put `confirmSheet` among the sheet's children.
+export function useNestedConfirm() {
+  const [options, setOptions] = useState<ConfirmOptions | null>(null);
+  return {
+    confirmDelete: (itemLabel: string, onConfirm: () => void) =>
+      setOptions({ title: `Delete ${itemLabel}?`, message: "This can't be undone.", confirmLabel: 'Delete', destructive: true, onConfirm }),
+    confirmSheet: <ConfirmSheet options={options} onClose={() => setOptions(null)} />,
+  };
+}
+
 export function ConfirmModalHost() {
   const [options, setOptions] = useState<ConfirmOptions | null>(null);
 
@@ -42,35 +82,7 @@ export function ConfirmModalHost() {
 
   const close = () => setOptions(null);
 
-  const handleConfirm = () => {
-    const onConfirm = options?.onConfirm;
-    close();
-    onConfirm?.();
-  };
-
-  return (
-    <BottomSheetModal visible={!!options} onClose={close}>
-      {options && (
-        <View style={styles.content}>
-          <Text style={styles.title}>{options.title}</Text>
-          <Text style={styles.message}>{options.message}</Text>
-          <View style={styles.actions}>
-            <Pressable style={styles.cancelBtn} onPress={close}>
-              <Text style={styles.cancelText}>Cancel</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.confirmBtn, options.destructive && styles.confirmBtnDestructive]}
-              onPress={handleConfirm}
-            >
-              <Text style={[styles.confirmText, options.destructive && styles.confirmTextDestructive]}>
-                {options.confirmLabel}
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-      )}
-    </BottomSheetModal>
-  );
+  return <ConfirmSheet options={options} onClose={close} />;
 }
 
 const styles = StyleSheet.create({

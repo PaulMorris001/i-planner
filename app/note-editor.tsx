@@ -10,6 +10,7 @@ import { CollaboratorsSheet } from '@/components/notes/CollaboratorsSheet';
 import { Routes } from '@/constants/routes';
 import { goBackOr } from '@/utils/navigation';
 import { NotePeopleSheet } from '@/components/notes/NotePeopleSheet';
+import { NoteEditorMenu, type NoteMenuItem } from '@/components/notes/NoteEditorMenu';
 import { requestConfirm } from '@/components/ui/ConfirmModal';
 import { Colors, Spacing, Radius } from '@/constants/theme';
 import { useNotes } from '@/hooks/useNotes';
@@ -100,6 +101,7 @@ export default function NoteEditor() {
   const [peopleOpen, setPeopleOpen] = useState(false);
   // The read-only people list an invited person can open.
   const [viewPeopleOpen, setViewPeopleOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   // Set when a save was refused because someone else saved first: the latest copy, shown in a banner.
   const [conflict, setConflict] = useState<Note | null>(null);
 
@@ -715,6 +717,19 @@ export default function NoteEditor() {
     setShareMenuOpen(true);
   };
 
+  // What the header's "⋮" menu offers: the owner can share, see who has access and delete; someone
+  // who was invited can see who has access and leave.
+  const menuItems: NoteMenuItem[] = isOwner
+    ? [
+        { label: 'Share', icon: 'square.and.arrow.up', onPress: () => handleShare() },
+        { label: 'People with access', icon: 'person.fill', onPress: () => setPeopleOpen(true) },
+        { label: 'Delete note', icon: 'trash', onPress: () => handleDelete(), destructive: true },
+      ]
+    : [
+        { label: 'People with access', icon: 'person.fill', onPress: () => setViewPeopleOpen(true) },
+        { label: 'Leave note', icon: 'rectangle.portrait.and.arrow.right', onPress: () => handleLeave(), destructive: true },
+      ];
+
   // ---- Collaboration ---------------------------------------------------------
   // Set once the screen is on its way out (deleted, left, or access lost), so the check
   // below doesn't announce a note as "unavailable" because of the screen's own action.
@@ -835,24 +850,9 @@ export default function NoteEditor() {
         </View>
 
         <View style={styles.headerActions}>
-          {!!editing && isOwner && (
-            <Pressable hitSlop={10} onPress={handleShare} disabled={sharing} style={styles.shareBtn}>
-              <IconSymbol name="square.and.arrow.up" color={Colors.textPrimary} size={17} />
-            </Pressable>
-          )}
-          {!!editing && isOwner && (
-            <Pressable hitSlop={10} onPress={handleDelete} style={styles.deleteBtn}>
-              <IconSymbol name="trash" color={Colors.error} size={17} />
-            </Pressable>
-          )}
-          {!!editing && !isOwner && (
-            <Pressable hitSlop={10} onPress={() => setViewPeopleOpen(true)} style={styles.shareBtn} accessibilityLabel="Who has access">
-              <IconSymbol name="person.fill" color={Colors.textPrimary} size={17} />
-            </Pressable>
-          )}
-          {!!editing && !isOwner && (
-            <Pressable hitSlop={10} onPress={handleLeave} style={styles.deleteBtn} accessibilityLabel="Leave this note">
-              <IconSymbol name="rectangle.portrait.and.arrow.right" color={Colors.error} size={17} />
+          {!!editing && (
+            <Pressable hitSlop={10} onPress={() => setMenuOpen(true)} style={styles.menuBtn} accessibilityLabel="More options">
+              <IconSymbol name="ellipsis" color={Colors.textPrimary} size={17} />
             </Pressable>
           )}
           {canEdit && (
@@ -982,6 +982,8 @@ export default function NoteEditor() {
         onSelect={handleSelectFolder}
       />
 
+      <NoteEditorMenu visible={menuOpen} onClose={() => setMenuOpen(false)} items={menuItems} />
+
       <ShareOptionsModal
         visible={shareMenuOpen}
         onClose={() => setShareMenuOpen(false)}
@@ -1054,21 +1056,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
-  shareBtn: {
+  menuBtn: {
     width: 32,
     height: 32,
     borderRadius: Radius.full,
     backgroundColor: Colors.offWhite,
     borderWidth: 1,
     borderColor: Colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  deleteBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.errorBg,
     alignItems: 'center',
     justifyContent: 'center',
   },

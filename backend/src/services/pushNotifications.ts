@@ -14,9 +14,9 @@ const ANNOUNCEMENT_CHANNEL_ID = 'announcements';
 export const REMINDERS_CHANNEL_ID = 'planner-reminders';
 
 // The app reads `kind` to decide how to show and route a push: 'announcement',
-// 'task-nudge' and 'invite-response' (someone accepted or declined a note invitation)
-// always show; 'ai-reply' is hidden while the app is open.
-export type PushKind = 'announcement' | 'task-nudge' | 'ai-reply' | 'invite-response';
+// 'task-nudge', 'invite-response' (someone accepted or declined a note invitation) and
+// 'access-change' (the owner changed what you may do in a note) always show; 'ai-reply' is hidden while the app is open.
+export type PushKind = 'announcement' | 'task-nudge' | 'ai-reply' | 'invite-response' | 'access-change';
 
 export interface PushContent {
   title: string;

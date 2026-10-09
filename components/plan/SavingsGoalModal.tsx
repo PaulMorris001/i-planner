@@ -7,7 +7,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors, Spacing, Radius } from '@/constants/theme';
 import { useSettings } from '@/hooks/useSettings';
 import { formatCurrency, monthlySavingsAmount, CURRENCY_SYMBOL } from '@/utils/currency';
-import { confirmDelete } from '@/utils/confirmDelete';
+import { useNestedConfirm } from '@/components/ui/ConfirmModal';
 import { formatDatePickerLabel, parseISODateLocal, toDateKey } from '@/utils/date';
 import type { SavingsGoal, NewSavingsGoalInput } from '@/types/savingsGoal.types';
 
@@ -119,6 +119,8 @@ export function SavingsGoalModal({ visible, onClose, onSave, onRemove, editingGo
     }
   };
 
+  const { confirmDelete, confirmSheet } = useNestedConfirm();
+
   const handleRemove = () => {
     if (!onRemove) return;
     confirmDelete(name || 'this goal', () => {
@@ -130,6 +132,7 @@ export function SavingsGoalModal({ visible, onClose, onSave, onRemove, editingGo
 
   return (
     <BottomSheetModal visible={visible} onClose={handleClose} maxHeightPct={88}>
+      {confirmSheet}
       {step === 'disclaimer' ? (
         <View style={styles.disclaimerWrap}>
           <View style={styles.iconBadge}>
