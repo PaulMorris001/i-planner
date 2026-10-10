@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { useRefreshOnForeground } from '@/hooks/useRefreshOnForeground';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '@/config/firebase';
 import { taskService } from '@/services/task.service';
@@ -73,6 +74,10 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     if (remindersEnabled && auth.currentUser) fetchTasks();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [remindersEnabled]);
+
+  // Changes made on another device (a task, bill, ...) are picked up when the app comes back to
+  // the foreground, so this device schedules its reminders for them too.
+  useRefreshOnForeground(fetchTasks, () => tasks.some((t) => t.id.startsWith('temp-')));
 
   const createTask = async (input: NewTaskInput) => {
     // Random suffix, not just Date.now() — SyllabusUploadModal fires createTask for

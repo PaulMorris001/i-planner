@@ -16,7 +16,8 @@ export const REMINDERS_CHANNEL_ID = 'planner-reminders';
 // The app reads `kind` to decide how to show and route a push: 'announcement',
 // 'task-nudge', 'invite-response' (someone accepted or declined a note invitation) and
 // 'access-change' (the owner changed what you may do in a note) always show; 'ai-reply' is hidden while the app is open.
-export type PushKind = 'announcement' | 'task-nudge' | 'ai-reply' | 'invite-response' | 'access-change';
+// 'sync' is silent (no title or body): it only wakes the app to refresh its data and reminders.
+export type PushKind = 'announcement' | 'task-nudge' | 'ai-reply' | 'invite-response' | 'access-change' | 'sync';
 
 export interface PushContent {
   title: string;
@@ -55,6 +56,30 @@ export async function sendPushToTokens(
     data: { kind, ...(content.route ? { route: content.route } : {}) },
   }));
 
+  return deliverMessages(messages);
+}
+
+// Silent push: no title, no body, nothing shown. iOS starts the app in the background for it
+// (content-available) and Android hands the data to the app's background task; the app then
+// refreshes what it holds. Delivery is best-effort, the phone may defer or skip it.
+export async function sendSilentToTokens(tokens: string[], data: Record<string, unknown>): Promise<PushSendResult> {
+  const valid = [...new Set(tokens)].filter((t) => Expo.isExpoPushToken(t));
+  const messages = valid.map(
+    (to) =>
+      ({
+        to,
+        data,
+        priority: 'high',
+        // Expo renamed the field; older SDK typings only know the underscore spelling.
+        contentAvailable: true,
+        _contentAvailable: true,
+      }) as ExpoPushMessage
+  );
+  return deliverMessages(messages);
+}
+
+// Sends prepared messages in Expo-sized chunks and removes the tokens Expo says are dead.
+async function deliverMessages(messages: ExpoPushMessage[]): Promise<PushSendResult> {
   const tickets: { token: string; ticket: ExpoPushTicket }[] = [];
   for (const chunk of expo.chunkPushNotifications(messages)) {
     try {
@@ -73,7 +98,7 @@ export async function sendPushToTokens(
 
   const accepted = tickets.filter(({ ticket }) => ticket.status === 'ok').length;
   const ticketIds = tickets.flatMap(({ ticket }) => (ticket.status === 'ok' ? [ticket.id] : []));
-  return { targeted: valid.length, accepted, failed: tickets.length - accepted, removedTokens: dead.length, ticketIds };
+  return { targeted: messages.length, accepted, failed: tickets.length - accepted, removedTokens: dead.length, ticketIds };
 }
 
 export interface PushReceiptSummary {

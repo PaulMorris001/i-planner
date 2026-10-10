@@ -124,7 +124,9 @@ export function initNotificationHandler(): void {
     // who switched away mid-reply - with the app open, the reply is already
     // on screen, so stay quiet. Everything else shows as normal.
     handleNotification: async (notification) => {
-      const show = (notification.request.content.data as Record<string, unknown> | undefined)?.kind !== 'ai-reply';
+      const kind = (notification.request.content.data as Record<string, unknown> | undefined)?.kind;
+      // 'sync' is a silent wake-up (see utils/backgroundSyncTask.ts): never shown.
+      const show = kind !== 'ai-reply' && kind !== 'sync';
       return { shouldShowBanner: show, shouldShowList: show, shouldPlaySound: show, shouldSetBadge: false };
     },
   });

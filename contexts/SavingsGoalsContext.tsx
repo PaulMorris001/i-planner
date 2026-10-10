@@ -1,3 +1,4 @@
+import { useRefreshOnForeground } from '@/hooks/useRefreshOnForeground';
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '@/config/firebase';
@@ -69,6 +70,10 @@ export function SavingsGoalsProvider({ children }: { children: ReactNode }) {
     if (remindersEnabled && auth.currentUser) fetchGoals();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [remindersEnabled]);
+
+  // Changes made on another device (a task, bill, ...) are picked up when the app comes back to
+  // the foreground, so this device schedules its reminders for them too.
+  useRefreshOnForeground(fetchGoals, () => goals.some((g) => g.id.startsWith('temp-')));
 
   const createGoal = async (input: NewSavingsGoalInput) => {
     const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;

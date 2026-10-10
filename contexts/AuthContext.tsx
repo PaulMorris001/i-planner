@@ -153,6 +153,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await unregisterPushToken();
     // A referral code that never reached the server belonged to this account only.
     await clearPendingReferralCode();
+    await socialAuthService.clearProviderSessions();
     await signOut(auth);
     setError(null);
   };

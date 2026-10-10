@@ -1,4 +1,5 @@
 import { Schema, model, Document } from 'mongoose';
+import { syncDevicesOnChange } from '../services/deviceSync';
 
 export interface TaskDocument extends Document {
   firebaseUid: string;
@@ -94,5 +95,8 @@ export function toPublicTask(doc: TaskDocument) {
     alarmEnabled: doc.alarmEnabled,
   };
 }
+
+// Other devices of the same account refresh (and schedule their reminders) when this changes.
+taskSchema.plugin(syncDevicesOnChange);
 
 export const Task = model<TaskDocument>('Task', taskSchema);

@@ -1,3 +1,4 @@
+import { useRefreshOnForeground } from '@/hooks/useRefreshOnForeground';
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '@/config/firebase';
@@ -99,6 +100,10 @@ export function PlanProvider({ children }: { children: ReactNode }) {
     return unsubscribe;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Changes made on another device (a task, bill, ...) are picked up when the app comes back to
+  // the foreground, so this device schedules its reminders for them too.
+  useRefreshOnForeground(fetchPlans);
 
   const savePlan = async (newPlan: StudentPlan) => {
     setPlan(newPlan);

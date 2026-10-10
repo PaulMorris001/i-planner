@@ -78,6 +78,7 @@
       [
         "expo-notifications",
         {
+          "enableBackgroundRemoteNotifications": true,
           "sounds": [
             "./assets/sounds/alarm_buzzer.wav"
           ]

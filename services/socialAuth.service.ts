@@ -174,6 +174,18 @@ export const socialAuthService = {
     }
   },
 
+  // Forgets the Google account this phone remembered, so the next "Continue with Google" shows the
+  // account chooser instead of silently signing straight back into the previous account. Apple
+  // keeps no session of its own. Best-effort: never blocks signing out.
+  async clearProviderSessions(): Promise<void> {
+    try {
+      configureGoogleOnce();
+      await GoogleSignin.signOut();
+    } catch (err) {
+      console.error("[socialAuth] could not clear the Google session", err);
+    }
+  },
+
   // Asks the person to confirm with their provider again, for actions Firebase wants a recent
   // sign-in for (deleting the account). Resolves to null when they closed the sheet.
   async reauthenticate(user: FirebaseUser, provider: SocialProvider): Promise<{ authorizationCode?: string } | null> {

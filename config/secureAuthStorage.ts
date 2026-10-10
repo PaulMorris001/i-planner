@@ -21,19 +21,34 @@ const ENCRYPTION_KEY_STORAGE_KEY = 'iplanner_firebase_auth_key';
 // first.
 let keyPromise: Promise<string> | null = null;
 
+// iOS only releases a default Keychain item while the phone is unlocked. A silent push can wake the
+// app while it is locked (see utils/backgroundSyncTask.ts), and an unreadable key would make the
+// session look signed-out, so this item is readable from the first unlock after a restart.
+const KEY_OPTIONS = { keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK };
+
 function getOrCreateEncryptionKey(): Promise<string> {
   if (!keyPromise) {
     keyPromise = (async () => {
-      const existing = await SecureStore.getItemAsync(ENCRYPTION_KEY_STORAGE_KEY);
-      if (existing) return existing;
+      const existing = await SecureStore.getItemAsync(ENCRYPTION_KEY_STORAGE_KEY, KEY_OPTIONS);
+      if (existing) {
+        // Keys saved by earlier versions used the stricter default: re-save once so they become
+        // readable in the background too. Failing to do so changes nothing about the key itself.
+        SecureStore.setItemAsync(ENCRYPTION_KEY_STORAGE_KEY, existing, KEY_OPTIONS).catch(() => {});
+        return existing;
+      }
 
       const randomBytes = await Crypto.getRandomBytesAsync(32);
       const key = Array.from(randomBytes)
         .map((b) => b.toString(16).padStart(2, '0'))
         .join('');
-      await SecureStore.setItemAsync(ENCRYPTION_KEY_STORAGE_KEY, key);
+      await SecureStore.setItemAsync(ENCRYPTION_KEY_STORAGE_KEY, key, KEY_OPTIONS);
       return key;
-    })();
+    })().catch((err) => {
+      // A failed lookup (e.g. the phone was still locked) must not be remembered for the rest of the
+      // process: the next call tries again.
+      keyPromise = null;
+      throw err;
+    });
   }
   return keyPromise;
 }

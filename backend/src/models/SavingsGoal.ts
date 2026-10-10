@@ -1,4 +1,5 @@
 import { Schema, model, Document } from 'mongoose';
+import { syncDevicesOnChange } from '../services/deviceSync';
 
 export interface SavingsGoalDocument extends Document {
   firebaseUid: string;
@@ -25,5 +26,8 @@ export function toPublicSavingsGoal(doc: SavingsGoalDocument) {
     targetDate: doc.targetDate,
   };
 }
+
+// Other devices of the same account refresh (and schedule their reminders) when this changes.
+savingsGoalSchema.plugin(syncDevicesOnChange);
 
 export const SavingsGoal = model<SavingsGoalDocument>('SavingsGoal', savingsGoalSchema);

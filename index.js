@@ -14,4 +14,8 @@
 // before expo-router's context requiring, so the polyfill has to live here.
 import './polyfills/webCrypto';
 
+// Defines the background task that refreshes reminders when another device changes something.
+// Must run at the top level of the entry point, before the app mounts.
+import './utils/backgroundSyncTask';
+
 import 'expo-router/entry';

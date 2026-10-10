@@ -1,4 +1,5 @@
 import { Schema, model, Document } from 'mongoose';
+import { syncDevicesOnChange } from '../services/deviceSync';
 
 export const PATH_TYPES = ['student', 'exam', 'professional'] as const;
 export type PathType = (typeof PATH_TYPES)[number];
@@ -21,5 +22,8 @@ const planSchema = new Schema<PlanDocument>({
 });
 
 planSchema.index({ firebaseUid: 1, pathType: 1 }, { unique: true });
+
+// Other devices of the same account refresh (and schedule their reminders) when this changes.
+planSchema.plugin(syncDevicesOnChange);
 
 export const Plan = model<PlanDocument>('Plan', planSchema);

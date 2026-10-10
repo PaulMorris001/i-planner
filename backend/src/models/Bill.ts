@@ -1,4 +1,5 @@
 import { Schema, model, Document } from 'mongoose';
+import { syncDevicesOnChange } from '../services/deviceSync';
 
 export const BILL_CATEGORIES = ['housing', 'utilities', 'subscriptions', 'insurance', 'loans', 'other'] as const;
 export type BillCategory = (typeof BILL_CATEGORIES)[number];
@@ -37,5 +38,8 @@ export function toPublicBill(doc: BillDocument) {
     lastPaidCycle: doc.lastPaidCycle,
   };
 }
+
+// Other devices of the same account refresh (and schedule their reminders) when this changes.
+billSchema.plugin(syncDevicesOnChange);
 
 export const Bill = model<BillDocument>('Bill', billSchema);
