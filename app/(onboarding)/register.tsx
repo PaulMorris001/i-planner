@@ -142,7 +142,7 @@ export default function Register() {
             style={styles.cta}
           />
 
-          <SocialAuthButtons />
+          <SocialAuthButtons referralCode={referralCode} />
         </View>
 
         {/* Legal */}

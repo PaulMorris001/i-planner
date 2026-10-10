@@ -5,6 +5,11 @@ import {
   mapFirebaseError,
   mapFirebaseUser,
 } from "@/services/auth.service";
+import {
+  socialAuthService,
+  type SocialProvider,
+  type SocialSignInResult,
+} from "@/services/socialAuth.service";
 import type {
   AuthError,
   LoginPayload,
@@ -19,6 +24,7 @@ import {
   EmailAuthProvider,
   onAuthStateChanged,
   reauthenticateWithCredential,
+  revokeAccessToken,
   signOut,
 } from "firebase/auth";
 import {
@@ -42,6 +48,11 @@ interface AuthContextValue {
   register: (
     payload: RegisterPayload,
   ) => ReturnType<typeof authService.register>;
+  // Apple / Google. Resolves to null when the person closed the sign-in sheet.
+  socialSignIn: (
+    provider: SocialProvider,
+    options?: { referralCode?: string },
+  ) => Promise<SocialSignInResult | null>;
   logout: () => Promise<void>;
   deleteAccount: (reauthPassword?: string) => Promise<void>;
   clearError: () => void;
@@ -114,6 +125,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const socialSignIn = async (
+    provider: SocialProvider,
+    options?: { referralCode?: string },
+  ) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await socialAuthService.signIn(provider, options);
+      if (result) setUser(result.user);
+      return result;
+    } catch (e) {
+      const err = e as AuthError;
+      setError(err);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const logout = async () => {
     // Local notifications outlive the session — without this, the signed-out
     // account's task/bill/class reminders keep firing on this device (or for
@@ -135,6 +165,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const currentUser = auth.currentUser;
     if (!currentUser)
       throw { message: "Not signed in.", field: "general" } as AuthError;
+
+    // Signed in with Apple or Google: there is no password, so the person confirms with their
+    // provider again. For Apple, its tokens are also revoked, which App Store rules require when an
+    // account is deleted. All of this happens BEFORE any data is wiped, so closing the sheet
+    // leaves everything as it was.
+    const socialProvider = socialAuthService.providerOf(currentUser);
+    if (socialProvider) {
+      const confirmed = await socialAuthService.reauthenticate(currentUser, socialProvider);
+      if (!confirmed) {
+        throw {
+          message: "Sign in again to confirm deleting your account.",
+          field: "general",
+        } as AuthError;
+      }
+      if (confirmed.authorizationCode) {
+        await revokeAccessToken(auth, confirmed.authorizationCode).catch((e) =>
+          console.error("[auth] could not revoke the Apple tokens", e),
+        );
+      }
+      await accountService.deleteData();
+      await cancelAllDeviceReminders();
+      try {
+        await deleteUser(currentUser);
+      } catch (e) {
+        throw mapFirebaseError(e);
+      }
+      return;
+    }
 
     if (reauthPassword) {
       try {
@@ -176,6 +234,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         error,
         login,
         register,
+        socialSignIn,
         logout,
         deleteAccount,
         clearError,

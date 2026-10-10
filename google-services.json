@@ -14,7 +14,15 @@
       },
       "oauth_client": [
         {
-          "client_id": "329407085695-rmr1kbdi61669en0uqjvi6hgfdqku2vg.apps.googleusercontent.com",
+          "client_id": "329407085695-juff2c438tpfnt127q35de06k4obcii0.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.obitoventures.iplanner",
+            "certificate_hash": "f05c99e715988050e7b38d078e2ebe0c01bf036a"
+          }
+        },
+        {
+          "client_id": "329407085695-o4nhcatp0bkkhclo9gtcfip233li3cbd.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
@@ -27,8 +35,15 @@
         "appinvite_service": {
           "other_platform_oauth_client": [
             {
-              "client_id": "329407085695-rmr1kbdi61669en0uqjvi6hgfdqku2vg.apps.googleusercontent.com",
+              "client_id": "329407085695-o4nhcatp0bkkhclo9gtcfip233li3cbd.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "329407085695-rnaimkrpn3hka17kujugu50vmofikhl9.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.obitoventures.iplanner"
+              }
             }
           ]
         }

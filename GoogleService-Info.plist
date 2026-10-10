@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CLIENT_ID</key>
+	<string>329407085695-rnaimkrpn3hka17kujugu50vmofikhl9.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.329407085695-rnaimkrpn3hka17kujugu50vmofikhl9</string>
+	<key>ANDROID_CLIENT_ID</key>
+	<string>329407085695-juff2c438tpfnt127q35de06k4obcii0.apps.googleusercontent.com</string>
+	<key>API_KEY</key>
+	<string>AIzaSyBIsbVND817Ltpy1aT0tz9fT7Jzf-kobbk</string>
+	<key>GCM_SENDER_ID</key>
+	<string>329407085695</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.obitoventures.iplanner</string>
+	<key>PROJECT_ID</key>
+	<string>iplanner-27410</string>
+	<key>STORAGE_BUCKET</key>
+	<string>iplanner-27410.firebasestorage.app</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:329407085695:ios:e941fcbadfc6b912ef934a</string>
+</dict>
+</plist>

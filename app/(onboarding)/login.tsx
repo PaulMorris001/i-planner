@@ -1,7 +1,6 @@
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useState } from 'react';
 import { router } from 'expo-router';
-import * as Notifications from 'expo-notifications';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -10,14 +9,13 @@ import { AuthHeader } from '@/components/onboarding/AuthHeader';
 import { FormErrorBanner } from '@/components/onboarding/FormErrorBanner';
 import { SocialAuthButtons } from '@/components/onboarding/SocialAuthButtons';
 import { useAuth } from '@/hooks/useAuth';
-import { useOnboarding } from '@/hooks/useOnboarding';
-import { settingsService } from '@/services/settings.service';
+import { usePostSignInRoute } from '@/hooks/usePostSignInRoute';
 import { Colors, Spacing, Typography } from '@/constants/theme';
 import { Routes } from '@/constants/routes';
 
 export default function Login() {
   const { login } = useAuth();
-  const { completeOnboarding, setFocusProfile } = useOnboarding();
+  const { routeReturningUser } = usePostSignInRoute();
 
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
@@ -39,33 +37,7 @@ export default function Login() {
     setSubmitting(true);
     try {
       await login({ email, password });
-      // The Login screen is only ever reached with no local onboarding state
-      // (a fresh install, reinstall, or new device) — focusProfile lives in
-      // AsyncStorage, so without this check a returning user would silently
-      // default to "professional" and never see Focus again. Restore it from
-      // Settings if this account already chose one; otherwise this really is
-      // a first-time-here device, so send them through Focus like Register does.
-      const settings = await settingsService.get();
-      if (settings.focusProfile) {
-        await setFocusProfile(settings.focusProfile);
-        await completeOnboarding();
-        // An account having already finished onboarding server-side says
-        // nothing about *this device's* OS notification permission — a
-        // delete-and-reinstall wipes that back to "undetermined" even for a
-        // returning account, and this branch used to skip straight to
-        // Dashboard regardless, silently leaving reminders/alarms off with
-        // no prompt ever shown again. Route through the prompt once more
-        // whenever it's still undetermined; a device that's already granted
-        // or denied it goes straight through, unchanged from before.
-        const { status } = await Notifications.getPermissionsAsync();
-        if (status === Notifications.PermissionStatus.UNDETERMINED) {
-          router.replace({ pathname: Routes.NOTIFICATIONS_PROMPT, params: { next: 'dashboard' } });
-        } else {
-          router.replace(Routes.DASHBOARD);
-        }
-      } else {
-        router.replace(Routes.NOTIFICATIONS_PROMPT);
-      }
+      await routeReturningUser();
     } catch (e: any) {
       setErrors({ general: e.message });
       setSubmitting(false);
