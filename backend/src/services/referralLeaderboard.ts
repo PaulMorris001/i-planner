@@ -1,5 +1,7 @@
 import { PointEvent } from '../models/PointEvent';
 import { ReferralProfile } from '../models/ReferralProfile';
+import { firebaseAuth } from '../config/firebaseAdmin';
+import { Referral } from '../models/Referral';
 import { ensureReferralEventsBackfilled } from './pointEvents';
 
 export const LEADERBOARD_SIZE = 10;
@@ -36,6 +38,72 @@ function standingsPipeline(start: Date, end: Date) {
 }
 
 let topCache: { weekStart: number; at: number; top: Standing[] } | null = null;
+
+// Called when an account is deleted, so the board stops showing it straight away.
+export function invalidateLeaderboardCache(): void {
+  topCache = null;
+}
+
+// Accounts whose existence was confirmed recently, so Firebase is not asked about them on every
+// request. A deleted account's points are removed with it, but anything that arrives after the
+// wipe (a request already in flight, the app still open on another device) can leave rows behind;
+// this keeps those from ever showing on the board.
+const VERIFIED_FOR_MS = 10 * 60 * 1000;
+const MAX_ACCOUNTS_CHECKED = 2000;
+const LOOKUP_BATCH = 100;
+const verifiedAt = new Map<string, number>();
+
+// What a deleted account leaves on the board: its points and its referral records. Kept narrow on
+// purpose: this runs without the person asking, so it touches nothing else.
+async function removeFromBoard(uid: string): Promise<void> {
+  await Promise.all([
+    PointEvent.deleteMany({ firebaseUid: uid }),
+    ReferralProfile.deleteMany({ firebaseUid: uid }),
+    Referral.deleteMany({ $or: [{ referrerUid: uid }, { referredUid: uid }] }),
+  ]);
+}
+
+// If most of a batch looks "deleted" at once, this server is pointed at the wrong Firebase project
+// (or Firebase is misbehaving) rather than half the users having deleted their accounts: do nothing.
+const IMPLAUSIBLE_MISSING_RATIO = 0.5;
+const MIN_BATCH_FOR_RATIO = 5;
+
+// Removes the points of accounts that no longer exist in Firebase. Only an explicit "not found"
+// counts: if Firebase can't be reached, nobody is removed.
+async function dropDeletedAccounts(start: Date, end: Date): Promise<boolean> {
+  const rows = await PointEvent.aggregate<{ _id: string }>([
+    { $match: { createdAt: { $gte: start, $lt: end } } },
+    { $group: { _id: '$firebaseUid' } },
+    { $limit: MAX_ACCOUNTS_CHECKED },
+  ]);
+  const now = Date.now();
+  const toCheck = rows.map((r) => r._id).filter((uid) => now - (verifiedAt.get(uid) ?? 0) > VERIFIED_FOR_MS);
+
+  let removedAny = false;
+  for (let i = 0; i < toCheck.length; i += LOOKUP_BATCH) {
+    const batch = toCheck.slice(i, i + LOOKUP_BATCH);
+    try {
+      const result = await firebaseAuth.getUsers(batch.map((uid) => ({ uid })));
+      const missing = new Set(result.notFound.map((id) => (id as { uid?: string }).uid).filter(Boolean) as string[]);
+      if (batch.length >= MIN_BATCH_FOR_RATIO && missing.size / batch.length > IMPLAUSIBLE_MISSING_RATIO) {
+        console.error('[leaderboard] most accounts look deleted at once; skipping the clean-up (wrong Firebase project?)');
+        continue;
+      }
+      for (const uid of batch) {
+        if (missing.has(uid)) {
+          await removeFromBoard(uid);
+          verifiedAt.delete(uid);
+          removedAny = true;
+        } else {
+          verifiedAt.set(uid, now);
+        }
+      }
+    } catch (err) {
+      console.error('[leaderboard] could not check accounts, skipping the clean-up this time', err);
+    }
+  }
+  return removedAny;
+}
 
 async function topStandings(start: Date, end: Date): Promise<Standing[]> {
   if (topCache && topCache.weekStart === start.getTime() && Date.now() - topCache.at < CACHE_MS) return topCache.top;
@@ -76,6 +144,7 @@ export interface Leaderboard {
 export async function getLeaderboard(uid: string, now: number = Date.now()): Promise<Leaderboard> {
   await ensureReferralEventsBackfilled();
   const { start, end } = weekBounds(now);
+  if (await dropDeletedAccounts(start, end)) invalidateLeaderboardCache();
   const top = await topStandings(start, end);
 
   const mine = await PointEvent.aggregate<{ _id: string; points: number; reachedAt: Date }>([
