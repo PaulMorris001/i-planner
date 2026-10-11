@@ -85,7 +85,7 @@ export default function Goals() {
         ) : goals.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyStateTitle}>No goals yet</Text>
-            <Text style={styles.emptyStateSub}>Tap "New goal" to start tracking one.</Text>
+            <Text style={styles.emptyStateSub}>Tap &quot;New goal&quot; to start tracking one.</Text>
           </View>
         ) : (
           <View style={styles.list}>

@@ -87,7 +87,7 @@ export function ExamSetupForm({
 
       <View style={styles.hintBox}>
         <Text style={styles.hintText}>
-          That's <Text style={styles.hintBold}>{totalHours} hours</Text> of study — enough to cover
+          That&apos;s <Text style={styles.hintBold}>{totalHours} hours</Text> of study — enough to cover
           all {weeks} {displayName} topic areas with review time.
         </Text>
       </View>

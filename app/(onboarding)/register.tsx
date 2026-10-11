@@ -147,7 +147,7 @@ export default function Register() {
 
         {/* Legal */}
         <Text style={styles.legal}>
-          By continuing, you agree to I-planner's{" "}
+          By continuing, you agree to I-planner&apos;s{" "}
           <Text
             style={styles.legalLink}
             onPress={() => WebBrowser.openBrowserAsync(TERMS_URL)}

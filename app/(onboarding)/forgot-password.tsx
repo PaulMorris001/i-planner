@@ -40,7 +40,7 @@ export default function ForgotPassword() {
           </View>
           <Text style={styles.sentTitle}>Check your email</Text>
           <Text style={styles.sentSub}>
-            We've sent a password reset link to{' '}
+            We&apos;ve sent a password reset link to{' '}
             <Text style={styles.sentEmail}>{email}</Text>
           </Text>
           <Button

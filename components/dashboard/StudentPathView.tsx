@@ -164,7 +164,7 @@ export function StudentPathView({
 
       {/* Today's Classes */}
       <Card style={styles.card}>
-        <Text style={styles.todayTitle}>Today's Classes</Text>
+        <Text style={styles.todayTitle}>Today&apos;s Classes</Text>
         {todaysClasses.length > 0 ? (
           <View style={{ gap: 8, marginTop: 11 }}>
             {todaysClasses.map((c) => {

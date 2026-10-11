@@ -69,7 +69,7 @@ export function DeleteAccountModal({ visible, onClose }: DeleteAccountModalProps
         <>
           <Text style={styles.warning}>
             This permanently deletes your account and everything in it — tasks, goals, habits,
-            classes, exams, and AI Coach history. This can't be undone.
+            classes, exams, and AI Coach history. This can&apos;t be undone.
           </Text>
 
           <Text style={styles.instructionLabel}>

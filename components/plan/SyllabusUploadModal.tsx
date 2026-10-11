@@ -390,8 +390,8 @@ export function SyllabusUploadModal({ visible, onClose }: SyllabusUploadModalPro
             </Text>
             {showingTopicsFallback && (
               <Text style={styles.topicsNote}>
-                No dated deadlines found, so here's the course's topic outline instead — pick a date for
-                each one you want tracked, or remove ones you don't.
+                No dated deadlines found, so here&apos;s the course&apos;s topic outline instead — pick a date for
+                each one you want tracked, or remove ones you don&apos;t.
               </Text>
             )}
             {deadlines.map((d) => (

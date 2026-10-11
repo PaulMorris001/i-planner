@@ -118,7 +118,10 @@ function mapSocialError(err: unknown, provider: SocialProvider): AuthError {
   if (code.startsWith("auth/")) return mapFirebaseError(err);
   const name = provider === "apple" ? "Apple" : "Google";
   console.error(`[socialAuth] ${name} sign-in failed`, err);
-  return { message: `Couldn't sign in with ${name}. Please try again.`, field: "general" };
+  // The provider's own error code, so a failure can be reported and traced (for example "10" is
+  // Google's DEVELOPER_ERROR: the app's signing fingerprint is not registered for this build).
+  const providerCode = code && !code.startsWith("auth/") ? ` (code ${code})` : "";
+  return { message: `Couldn't sign in with ${name}${providerCode}. Please try again.`, field: "general" };
 }
 
 // ---- Public API -----------------------------------------------------------------------------

@@ -454,7 +454,15 @@ export default function NoteEditor() {
     // Starts right away, even if the editor is still loading (see dictationBufferRef).
     dictationBufferRef.current = null;
     dictationBaseSetRef.current = false;
-    if (baselineReadyRef.current) setDictationBase(await currentBody());
+    if (baselineReadyRef.current) {
+      // Reading the note back from the editor can stall if its web view is busy; the mic must
+      // never wait on it for more than a moment, so fall back to the last known text.
+      const body = await Promise.race([
+        currentBody(),
+        new Promise<string>((resolve) => setTimeout(() => resolve(bodyRef.current), 1500)),
+      ]).catch(() => bodyRef.current);
+      setDictationBase(body);
+    }
     dictation.start();
   };
 
@@ -839,7 +847,7 @@ export default function NoteEditor() {
     // on-screen nav bar (3-button or gesture pill) on edge-to-edge devices.
     <ScreenWrapper backgroundColor={Colors.offWhite} edges={['top', 'right', 'bottom', 'left']}>
       <View style={styles.headerRow}>
-        <Pressable hitSlop={10} onPress={() => goBackOr(Routes.NOTES)} style={styles.backBtn}>
+        <Pressable hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} onPress={() => goBackOr(Routes.NOTES)} style={styles.backBtn} accessibilityRole="button" accessibilityLabel="Back">
           <IconSymbol name="chevron.left" color={Colors.textPrimary} size={20} />
         </Pressable>
 
