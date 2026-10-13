@@ -25,6 +25,7 @@ import { Colors, Spacing } from '@/constants/theme';
 import { Routes } from '@/constants/routes';
 import { FEATURE_MIN_TIER, TIER_LABEL, hasTier } from '@/constants/featureTiers';
 import { useRouter } from 'expo-router';
+import { attachmentNameFor } from '@/utils/attachmentName';
 import type { CoachMessage, CoachModeId } from '@/types/coach.types';
 
 interface Attachment {
@@ -48,11 +49,16 @@ const ATTACHMENT_TYPES = [
   'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  // Spreadsheets and tables: read cell by cell on the server.
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/csv',
+  'text/comma-separated-values',
+  'text/tab-separated-values',
   'image/jpeg',
   'image/png',
+  'image/webp',
   'text/plain',
   'text/markdown',
-  'text/csv',
 ];
 
 const MODES: { id: CoachModeId; label: string }[] = [
@@ -227,22 +233,23 @@ export default function Coach() {
       return;
     }
     // quality < 1 also makes iOS hand back a JPEG instead of HEIC, which the
-    // backend (JPG/PNG only) can read; 0.7 keeps text in a photo legible.
+    // backend can't read. 0.9 keeps the fine print and grid lines of a photographed
+    // table sharp (0.7 blurred small numbers).
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
-      quality: 0.7,
+      quality: 0.9,
       allowsMultipleSelection: true,
       selectionLimit: room,
     });
     if (result.canceled) return;
     addAttachments(
-      result.assets.map((a, i) => {
-        const ext = a.mimeType === 'image/png' ? 'png' : 'jpg';
-        // fileName can be null (limited photo access) or keep a .heic name;
-        // the backend picks the file type from the extension, so it must match.
-        const name = a.fileName && /\.(jpe?g|png)$/i.test(a.fileName) ? a.fileName : `photo-${Date.now()}-${i + 1}.${ext}`;
-        return { uri: a.uri, name, size: a.fileSize };
-      })
+      result.assets.map((a, i) => ({
+        uri: a.uri,
+        // fileName can be null (limited photo access) or keep a .heic name; the server
+        // picks how to read a file from its extension, so it must match the real type.
+        name: attachmentNameFor(a.fileName, a.mimeType ?? 'image/jpeg', `photo-${Date.now()}-${i + 1}`),
+        size: a.fileSize,
+      }))
     );
   };
 
@@ -253,7 +260,14 @@ export default function Coach() {
       copyToCacheDirectory: true,
     });
     if (result.canceled) return;
-    addAttachments(result.assets.map((a) => ({ uri: a.uri, name: a.name, size: a.size })));
+    addAttachments(
+      result.assets.map((a) => ({
+        uri: a.uri,
+        // Files from other apps sometimes arrive with no extension at all.
+        name: attachmentNameFor(a.name, a.mimeType, `file-${Date.now()}`),
+        size: a.size,
+      }))
+    );
   };
 
   const removeAttachment = (uri: string) => {

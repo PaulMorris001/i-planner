@@ -2,7 +2,7 @@ import OpenAI from 'openai';
 import { env } from '../config/env';
 import type { CoachAttachment, CoachModeId } from '../models/CoachMessage';
 import { CREATE_TASK_TOOL, createTasksFromDrafts } from './coachTools';
-import { attachmentContentParts, ATTACHMENT_TTL_SECONDS } from './coachAttachments';
+import { attachmentContentParts, ATTACHMENT_TTL_SECONDS, type ReadyAttachment } from './coachAttachments';
 
 // Earlier messages' attachments ride along again so follow-up questions about
 // the same document still work - but only the most recent few (each file is
@@ -18,7 +18,7 @@ export interface CoachHistoryMessage {
   createdAt?: Date;
 }
 
-function userMessageInput(text: string, attachments: CoachAttachment[] | undefined) {
+function userMessageInput(text: string, attachments: ReadyAttachment[] | undefined) {
   if (!attachments?.length) return { role: 'user' as const, content: text };
   return {
     role: 'user' as const,
@@ -80,7 +80,7 @@ export async function generateCoachReply(input: {
   contextSummary: string;
   history: CoachHistoryMessage[];
   userMessage: string;
-  userAttachments?: CoachAttachment[];
+  userAttachments?: ReadyAttachment[];
   firebaseUid: string;
   canCreateTasks: boolean;
 }): Promise<CoachReplyResult> {

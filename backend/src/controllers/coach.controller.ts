@@ -6,7 +6,7 @@ import { AuthedRequest } from '../middleware/requireAuth';
 import { ApiError } from '../utils/ApiError';
 import { buildContextSummary } from '../services/coachContext';
 import { generateCoachReply } from '../services/coachChat';
-import { checkAndConsumeQuery } from '../services/aiUsageLimiter';
+import { consumeQuery, hasQueryRemaining } from '../services/aiUsageLimiter';
 import { FEATURE_MIN_TIER, hasTier } from '../constants/featureTiers';
 import { parseIncomingAttachments, storeCoachAttachment } from '../services/coachAttachments';
 import { sendPushToUser, REMINDERS_CHANNEL_ID } from '../services/pushNotifications';
@@ -76,7 +76,9 @@ export async function sendCoachMessage(req: AuthedRequest, res: Response) {
     throw new ApiError(403, 'AI data-sharing disclosure has not been acknowledged yet.', 'general');
   }
 
-  const usage = await checkAndConsumeQuery(req.userId!, tier);
+  // Checked now, but only spent once the files (if any) have been read: a file that couldn't be
+  // read must not cost a message.
+  const usage = await hasQueryRemaining(req.userId!, tier);
   if (!usage.allowed) {
     const period = usage.period === 'week' ? 'week' : 'month';
     const resetLabel = usage.resetsAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -98,16 +100,22 @@ export async function sendCoachMessage(req: AuthedRequest, res: Response) {
   try {
     attachments = await Promise.all(incomingAttachments.map(storeCoachAttachment));
   } catch (err) {
+    // Already a clear message for the person (unsupported picture, unreadable workbook, ...).
+    if (err instanceof ApiError) throw err;
     console.error('[coach] failed to store attachment', err);
     throw new ApiError(502, "Couldn't read the attached file. Try again, or attach a different file.", 'general');
   }
+  await consumeQuery(req.userId!, tier);
 
   await CoachMessage.create({
     firebaseUid: req.userId,
     mode,
     role: 'user',
     content: trimmed,
-    attachments: attachments.length ? attachments : undefined,
+    // The inline copy of a picture is for this reply only; it is never stored.
+    attachments: attachments.length
+      ? attachments.map(({ filename, mimeType, openaiFileId, textContent }) => ({ filename, mimeType, openaiFileId, textContent }))
+      : undefined,
   });
 
   const consent = {
