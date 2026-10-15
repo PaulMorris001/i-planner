@@ -44,6 +44,8 @@ const user = (name: string, extra: Partial<AdminUserRow> = {}): AdminUserRow => 
   suspended: false,
   isAdmin: false,
   providers: ['password'],
+  productUpdates: false,
+  pushDevices: 0,
   ...extra,
 });
 
@@ -291,6 +293,58 @@ describe('announcements page', () => {
     const preview = document.querySelector('.preview')!;
     expect(within(preview as HTMLElement).getByText('Study timer is here')).toBeInTheDocument();
     expect(within(preview as HTMLElement).getByText(/Time your sessions/)).toBeInTheDocument();
+  });
+
+  it('shows who is opted in and who has a push device, and filters by it', async () => {
+    api.users.mockResolvedValue({
+      users: [user('Ada', { productUpdates: true, pushDevices: 2 }), user('Bob', { productUpdates: true, pushDevices: 0 })],
+      total: 2,
+      page: 1,
+      pageSize: 25,
+    });
+    show(<UsersPage />);
+    await screen.findByText('Ada');
+    expect(screen.getAllByText('UPDATES ON')).toHaveLength(2);
+    expect(screen.getByText('PUSH 2')).toBeInTheDocument();
+    expect(screen.getByText('NO PUSH')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'No push device' }));
+    await waitFor(() => expect(api.users).toHaveBeenLastCalledWith(expect.objectContaining({ filter: 'no_push' })));
+  });
+
+  it('uses the i-Planner logo (not a placeholder icon) in the notification preview', async () => {
+    show(<AnnouncementsPage />);
+    await screen.findByText(/320 devices/);
+    const preview = document.querySelector('.preview') as HTMLElement;
+    const logo = within(preview).getByAltText('i-Planner');
+    expect(logo).toHaveAttribute('src', '/logo.png');
+  });
+
+  it('shows an email preview with the logo only when email is switched on, and mirrors what is typed', async () => {
+    show(<AnnouncementsPage />);
+    await screen.findByText(/320 devices/);
+    expect(document.querySelector('.email-preview')).toBeNull();
+    await fill();
+    await userEvent.click(screen.getByRole('checkbox', { name: /email/i }));
+    const email = document.querySelector('.email-preview') as HTMLElement;
+    expect(email).not.toBeNull();
+    expect(within(email).getByAltText('i-Planner')).toHaveAttribute('src', '/logo.png');
+    expect(within(email).getByRole('heading', { name: 'Study timer is here' })).toBeInTheDocument();
+    expect(within(email).getByText(/Time your sessions/)).toBeInTheDocument();
+    expect(within(email).getByText(/Product updates/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('checkbox', { name: /email/i }));
+    expect(document.querySelector('.email-preview')).toBeNull();
+  });
+
+  it('the confirm dialog previews exactly the channels that will be used', async () => {
+    show(<AnnouncementsPage />);
+    await screen.findByText(/320 devices/);
+    await fill();
+    await userEvent.click(screen.getByRole('checkbox', { name: /push notification/i }));
+    await userEvent.click(screen.getByRole('checkbox', { name: /email/i }));
+    await userEvent.click(screen.getByRole('button', { name: /send to users/i }));
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.querySelector('.email-preview')).not.toBeNull();
+    expect(dialog.querySelector('.preview')).toBeNull();
   });
 
   it('confirms with the real reach, and sends exactly what was written to both channels', async () => {

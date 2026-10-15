@@ -1,5 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut, type User } from 'firebase/auth';
+import {
+  EmailAuthProvider,
+  onAuthStateChanged,
+  reauthenticateWithCredential,
+  signInWithEmailAndPassword,
+  signOut,
+  updatePassword,
+  type User,
+} from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { setUnauthorizedHandler } from '@/lib/api';
 
@@ -10,6 +18,8 @@ interface AuthContextValue {
   user: User | null;
   signIn: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  // Confirms the current password, then sets the new one. Throws the Firebase error on failure.
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -22,6 +32,19 @@ export function friendlySignInError(err: unknown): string {
   if (code === 'auth/network-request-failed') return 'Network error. Check your connection and try again.';
   if (code === 'auth/invalid-email') return 'That email address looks invalid.';
   return 'Incorrect email or password.';
+}
+
+export const MIN_PASSWORD_LENGTH = 8;
+
+// What Firebase says when changing a password fails, in words a person understands.
+export function friendlyPasswordError(err: unknown): string {
+  const code = (err as { code?: string } | null)?.code ?? '';
+  if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') return 'Your current password is incorrect.';
+  if (code === 'auth/weak-password') return `Choose a stronger password (at least ${MIN_PASSWORD_LENGTH} characters).`;
+  if (code === 'auth/too-many-requests') return 'Too many attempts. Please wait a moment and try again.';
+  if (code === 'auth/network-request-failed') return 'Network error. Check your connection and try again.';
+  if (code === 'auth/requires-recent-login') return 'For your security, please sign out, sign in again, then change your password.';
+  return "Couldn't change your password. Please try again.";
 }
 
 // Signed-in state plus the one thing that matters here: whether the account carries the `admin`
@@ -65,7 +88,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await signInWithEmailAndPassword(auth, email.trim(), password);
   }, []);
 
-  const value = useMemo(() => ({ status, user, signIn, logout }), [status, user, signIn, logout]);
+  // Re-checking the current password first is what Firebase requires for a sensitive change, and it
+  // stops someone at an unlocked screen from changing it without knowing it.
+  const changePassword = useCallback(async (currentPassword: string, newPassword: string) => {
+    const current = auth.currentUser;
+    if (!current?.email) throw { code: 'auth/requires-recent-login' };
+    await reauthenticateWithCredential(current, EmailAuthProvider.credential(current.email, currentPassword));
+    await updatePassword(current, newPassword);
+  }, []);
+
+  const value = useMemo(() => ({ status, user, signIn, logout, changePassword }), [status, user, signIn, logout, changePassword]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

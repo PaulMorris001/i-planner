@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { RequireAdmin } from '@/auth/RequireAdmin';
 import { AppShell } from '@/components/layout/AppShell';
+import { AccountPage } from '@/pages/AccountPage';
 import { AnalyticsPage } from '@/pages/AnalyticsPage';
 import { AnnouncementsPage } from '@/pages/AnnouncementsPage';
 import { LeaderboardPage } from '@/pages/LeaderboardPage';
@@ -23,6 +24,7 @@ export function App() {
         <Route path="announcements" element={<AnnouncementsPage />} />
         <Route path="users" element={<UsersPage />} />
         <Route path="leaderboard" element={<LeaderboardPage />} />
+        <Route path="account" element={<AccountPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

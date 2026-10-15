@@ -9,7 +9,7 @@ export interface AdminAnalytics {
   signupsByDay: { date: string; count: number }[];
 }
 
-export type UserFilter = 'all' | 'paid' | 'free' | 'suspended' | 'admins';
+export type UserFilter = 'all' | 'paid' | 'free' | 'suspended' | 'admins' | 'updates_on' | 'updates_off' | 'no_push';
 
 export interface AdminUserRow {
   uid: string;
@@ -23,6 +23,8 @@ export interface AdminUserRow {
   suspendedReason?: string;
   isAdmin: boolean;
   providers: string[];
+  productUpdates: boolean;
+  pushDevices: number;
 }
 
 export interface AdminUserPage {

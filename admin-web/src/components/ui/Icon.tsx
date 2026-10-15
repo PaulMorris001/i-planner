@@ -15,7 +15,10 @@ export type IconName =
   | 'logout'
   | 'sparkle'
   | 'alert'
-  | 'send';
+  | 'send'
+  | 'lock'
+  | 'chevron-left'
+  | 'chevron-right';
 
 // Simple outline icons (24x24, drawn with the current text colour). Kept inline so the dashboard
 // has no icon dependency.
@@ -103,6 +106,14 @@ const PATHS: Record<IconName, ReactNode> = {
       <circle cx="12" cy="12" r="9" />
       <path d="M12 8v5" />
       <path d="M12 16.5h.01" />
+    </>
+  ),
+  'chevron-left': <path d="m15 5-7 7 7 7" />,
+  'chevron-right': <path d="m9 5 7 7-7 7" />,
+  lock: (
+    <>
+      <rect x="5" y="11" width="14" height="9" rx="2.5" />
+      <path d="M8 11V8a4 4 0 0 1 8 0v3" />
     </>
   ),
   send: (

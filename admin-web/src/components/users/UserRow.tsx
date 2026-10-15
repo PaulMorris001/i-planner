@@ -55,6 +55,16 @@ export function UserRow({ user, onSuspend, onRestore }: UserRowProps) {
       </div>
 
       <div className="actions">
+        <Pill
+          label={user.productUpdates ? 'UPDATES ON' : 'UPDATES OFF'}
+          color={user.productUpdates ? '#15803D' : '#6B6A80'}
+          background={user.productUpdates ? '#E7F6EC' : '#ECECF4'}
+        />
+        <Pill
+          label={user.pushDevices > 0 ? `PUSH ${user.pushDevices}` : 'NO PUSH'}
+          color={user.pushDevices > 0 ? '#2563EB' : '#B45309'}
+          background={user.pushDevices > 0 ? '#E8EEFC' : '#FEF3E2'}
+        />
         {user.isAdmin && <Pill label="ADMIN" color="#fff" background="var(--primary)" />}
         <Pill label={tier.label} color={tier.color} background={tier.background} />
         {!user.isAdmin &&

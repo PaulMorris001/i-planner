@@ -1,4 +1,4 @@
-import { AnnouncementHistoryCard, ChannelToggle, NotificationPreview, SendConfirmDialog } from '@/components/announcements/AnnouncementBlocks';
+import { AnnouncementHistoryCard, ChannelToggle, EmailPreview, NotificationPreview, SendConfirmDialog } from '@/components/announcements/AnnouncementBlocks';
 import { Page } from '@/components/layout/Page';
 import { FilterChips } from '@/components/ui/Controls';
 import { Card, SectionTitle } from '@/components/ui/Display';
@@ -115,8 +115,14 @@ export function AnnouncementsPage() {
 
               {composer.push && (
                 <div>
-                  <div className="label" style={{ marginBottom: 8 }}>Preview</div>
+                  <div className="label" style={{ marginBottom: 8 }}>Notification preview</div>
                   <NotificationPreview title={composer.title} body={composer.body} />
+                </div>
+              )}
+              {composer.email && (
+                <div>
+                  <div className="label" style={{ marginBottom: 8 }}>Email preview</div>
+                  <EmailPreview title={composer.title} body={composer.body} />
                 </div>
               )}
 
@@ -149,6 +155,8 @@ export function AnnouncementsPage() {
         confirm={composer.confirm}
         title={composer.title}
         body={composer.body}
+        push={composer.push}
+        email={composer.email}
         reach={reach(!!composer.confirm?.test)}
         sending={composer.sending}
         error={composer.error}

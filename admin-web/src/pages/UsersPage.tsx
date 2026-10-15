@@ -20,6 +20,9 @@ const FILTERS: { value: UserFilter; label: string }[] = [
   { value: 'free', label: 'Free' },
   { value: 'suspended', label: 'Suspended' },
   { value: 'admins', label: 'Admins' },
+  { value: 'updates_on', label: 'Updates on' },
+  { value: 'updates_off', label: 'Updates off' },
+  { value: 'no_push', label: 'No push device' },
 ];
 
 // Every account: search, filter, and suspend or restore. The list, the paging and the moderation

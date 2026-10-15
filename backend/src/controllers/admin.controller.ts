@@ -6,7 +6,7 @@ import { getFullLeaderboard, type LeaderboardScope } from '../services/adminLead
 import { listUsers, restoreUser, suspendUser, type UserFilter } from '../services/adminUsers';
 import { listAnnouncements, previewAudience, sendAnnouncement } from '../services/adminAnnouncements';
 
-const FILTERS: UserFilter[] = ['all', 'suspended', 'paid', 'free', 'admins'];
+const FILTERS: UserFilter[] = ['all', 'suspended', 'paid', 'free', 'admins', 'updates_on', 'updates_off', 'no_push'];
 
 function intParam(value: unknown, fallback: number): number {
   const n = Number(value);

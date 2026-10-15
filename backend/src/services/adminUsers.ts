@@ -1,6 +1,8 @@
 import { firebaseAuth } from '../config/firebaseAdmin';
 import { AccountSuspension } from '../models/AccountSuspension';
 import { UserPresence } from '../models/UserPresence';
+import { Settings } from '../models/Settings';
+import { PushToken } from '../models/PushToken';
 import { Subscription, type SubscriptionTier } from '../models/Subscription';
 import { ApiError } from '../utils/ApiError';
 import { forgetSuspension } from './accountStatus';
@@ -69,7 +71,8 @@ export function invalidateDirectory(): void {
 
 // ---- Listing ----------------------------------------------------------------------------------
 
-export type UserFilter = 'all' | 'suspended' | 'paid' | 'free' | 'admins';
+// updates_on / updates_off: the "Product updates" opt-in. no_push: no registered device to push to.
+export type UserFilter = 'all' | 'suspended' | 'paid' | 'free' | 'admins' | 'updates_on' | 'updates_off' | 'no_push';
 
 export interface AdminUserRow {
   uid: string;
@@ -83,6 +86,10 @@ export interface AdminUserRow {
   suspendedReason?: string;
   isAdmin: boolean;
   providers: string[];
+  // Opted in to announcements (push and email).
+  productUpdates: boolean;
+  // Devices that can receive a push right now.
+  pushDevices: number;
 }
 
 export interface UserListQuery {
@@ -129,17 +136,30 @@ export async function listUsers(query: UserListQuery): Promise<{ users: AdminUse
     }
   } else if (filter === 'admins') {
     users = users.filter((u) => u.isAdmin);
+  } else if (filter === 'updates_on' || filter === 'updates_off') {
+    const rows = await Settings.find({ productUpdatesEnabled: true }, { firebaseUid: 1 }).lean();
+    const optedIn = new Set(rows.map((r) => r.firebaseUid));
+    users = users.filter((u) => optedIn.has(u.uid) === (filter === 'updates_on'));
+  } else if (filter === 'no_push') {
+    const rows = await PushToken.distinct('firebaseUid');
+    const withDevice = new Set<string>(rows);
+    users = users.filter((u) => !withDevice.has(u.uid));
   }
 
   const total = users.length;
   const slice = users.slice((page - 1) * pageSize, page * pageSize);
   const uids = slice.map((u) => u.uid);
 
-  const [subRows, suspensionRows, presenceRows] = await Promise.all([
+  const [subRows, suspensionRows, presenceRows, settingsRows, tokenRows] = await Promise.all([
     Subscription.find({ firebaseUid: { $in: uids } }, { firebaseUid: 1, tier: 1, expiresAt: 1 }).lean(),
     AccountSuspension.find({ firebaseUid: { $in: uids } }, { firebaseUid: 1, reason: 1 }).lean(),
     UserPresence.find({ firebaseUid: { $in: uids } }, { firebaseUid: 1, lastActiveAt: 1 }).lean(),
+    Settings.find({ firebaseUid: { $in: uids }, productUpdatesEnabled: true }, { firebaseUid: 1 }).lean(),
+    PushToken.find({ firebaseUid: { $in: uids } }, { firebaseUid: 1 }).lean(),
   ]);
+  const optedIn = new Set(settingsRows.map((r) => r.firebaseUid));
+  const devicesByUid = new Map<string, number>();
+  for (const t of tokenRows) devicesByUid.set(t.firebaseUid, (devicesByUid.get(t.firebaseUid) ?? 0) + 1);
   const subByUid = new Map(subRows.map((r) => [r.firebaseUid, r]));
   const suspendedByUid = new Map(suspensionRows.map((r) => [r.firebaseUid, r.reason]));
   const presenceByUid = new Map(presenceRows.map((r) => [r.firebaseUid, r.lastActiveAt]));
@@ -162,6 +182,8 @@ export async function listUsers(query: UserListQuery): Promise<{ users: AdminUse
         suspendedReason: suspendedByUid.get(u.uid),
         isAdmin: u.isAdmin,
         providers: u.providers,
+        productUpdates: optedIn.has(u.uid),
+        pushDevices: devicesByUid.get(u.uid) ?? 0,
       };
     }),
   };
