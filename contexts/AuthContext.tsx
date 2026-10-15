@@ -16,6 +16,7 @@ import type {
   RegisterPayload,
 } from "@/types/auth.types";
 import type { User } from "@/types/user.types";
+import { setAccountSuspendedHandler } from "@/services/authedRequest";
 import { cancelAllDeviceReminders } from "@/utils/notificationReconcile";
 import { unregisterPushToken } from "@/utils/pushNotifications";
 import { clearPendingReferralCode } from "@/utils/referralPending";
@@ -27,6 +28,7 @@ import {
   revokeAccessToken,
   signOut,
 } from "firebase/auth";
+import { Alert } from "react-native";
 import {
   createContext,
   ReactNode,
@@ -86,6 +88,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setInitializing(false);
     });
     return unsubscribe;
+  }, []);
+
+  // An account suspended while the app is open: sign out and say why, once.
+  useEffect(() => {
+    let handling = false;
+    setAccountSuspendedHandler(() => {
+      if (handling) return;
+      handling = true;
+      signOut(auth)
+        .catch(() => {})
+        .finally(() => {
+          Alert.alert('Account suspended', 'This account has been suspended. Please contact support if you think this is a mistake.');
+          handling = false;
+        });
+    });
+    return () => setAccountSuspendedHandler(null);
   }, []);
 
   const login = async (payload: LoginPayload) => {

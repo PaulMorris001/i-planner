@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "grant-access": "ts-node src/scripts/grantComplimentaryAccess.ts",
     "check-access": "ts-node src/scripts/checkAccess.ts",
-    "announce": "ts-node src/scripts/sendAnnouncement.ts"
+    "announce": "ts-node src/scripts/sendAnnouncement.ts",
+    "grant-admin": "ts-node src/scripts/grantAdmin.ts"
   },
   "dependencies": {
     "@apple/app-store-server-library": "^3.1.0",

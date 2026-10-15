@@ -6,6 +6,8 @@ import { router } from './routes';
 import { sharedNoteWebRouter } from './routes/sharedNoteWeb.routes';
 import { sharedFolderWebRouter } from './routes/sharedFolderWeb.routes';
 import { inviteWebRouter } from './routes/inviteWeb.routes';
+import { referralWebRouter } from './routes/referralWeb.routes';
+import { appLinksRouter } from './routes/appLinks.routes';
 import { errorHandler } from './middleware/errorHandler';
 
 export function createApp() {
@@ -43,6 +45,9 @@ export function createApp() {
   app.use('/f', sharedFolderWebRouter);
   // Note collaboration invitations (/invite/<token>).
   app.use('/invite', inviteWebRouter);
+  // Shared referral links (/r/<code>) and the files that let a tapped link open the app.
+  app.use('/r', referralWebRouter);
+  app.use('/.well-known', appLinksRouter);
 
   app.use('/api', router);
 

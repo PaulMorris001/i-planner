@@ -10,9 +10,11 @@ import { Routes } from "@/constants/routes";
 import { Colors, Spacing, Typography } from "@/constants/theme";
 import { useAuth } from "@/hooks/useAuth";
 import { referralService } from "@/services/referral.service";
-import { router } from "expo-router";
+import { pickInviteCode } from "@/utils/referralLink";
+import { clearInviteCode, getInviteCode } from "@/utils/referralInvite";
+import { router, useLocalSearchParams } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 export default function Register() {
@@ -21,7 +23,12 @@ export default function Register() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [referralCode, setReferralCode] = useState("");
+  // A friend's shared link opens this screen with the code in the address (`ref`); on Android a
+  // code can also arrive through the Play Store after install (hooks/useInstallReferral.ts).
+  const { ref } = useLocalSearchParams<{ ref?: string }>();
+  const linkCode = pickInviteCode(ref, null);
+  const [referralCode, setReferralCode] = useState(linkCode);
+  const [fromInvitation, setFromInvitation] = useState(!!linkCode);
   // Stays true from the tap (code check, then account creation) until the next screen takes
   // over; cleared only on failure, so the button never flips back to idle mid-way.
   const [submitting, setSubmitting] = useState(false);
@@ -32,6 +39,23 @@ export default function Register() {
     referralCode?: string;
     general?: string;
   }>({});
+
+  useEffect(() => {
+    if (referralCode) return;
+    let cancelled = false;
+    getInviteCode().then((stored) => {
+      const code = pickInviteCode(null, stored);
+      if (!cancelled && code) {
+        setReferralCode(code);
+        setFromInvitation(true);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+    // Only on first show: typing in the field must not bring a stored code back.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const validate = () => {
     const nextErrors: typeof errors = {};
@@ -66,6 +90,7 @@ export default function Register() {
     }
     try {
       await register({ fullName, email, password, referralCode: code || undefined });
+      await clearInviteCode();
       router.replace(Routes.NOTIFICATIONS_PROMPT);
     } catch (e: any) {
       setErrors({ general: e.message });
@@ -128,12 +153,19 @@ export default function Register() {
             label="Referral code (optional)"
             placeholder="Have a code from a friend?"
             value={referralCode}
-            onChangeText={setReferralCode}
+            onChangeText={(text) => {
+              setReferralCode(text);
+              setFromInvitation(false);
+            }}
             autoCapitalize="characters"
             autoCorrect={false}
             maxLength={12}
             error={errors.referralCode}
           />
+
+          {fromInvitation && (
+            <Text style={styles.invitationNote}>🎉 Invitation code added. You&apos;ll both earn points when you join.</Text>
+          )}
 
           <Button
             label="Create account"
@@ -190,6 +222,13 @@ const styles = StyleSheet.create({
   },
   cta: {
     marginTop: Spacing.sm,
+  },
+  invitationNote: {
+    ...Typography.caption,
+    color: Colors.success,
+    fontWeight: "600",
+    marginTop: -4,
+    marginBottom: Spacing.sm,
   },
   legal: {
     ...Typography.caption,

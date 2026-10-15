@@ -45,6 +45,11 @@ export function mapFirebaseError(err: unknown): AuthError {
     case "auth/wrong-password":
     case "auth/invalid-credential":
       return { message: "Invalid credentials.", field: "general" };
+    case "auth/user-disabled":
+      return {
+        message: "This account has been suspended. Please contact support.",
+        field: "general",
+      };
     case "auth/too-many-requests":
       return {
         message: "Too many attempts. Please try again later.",

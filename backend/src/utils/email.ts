@@ -35,3 +35,25 @@ export async function sendEmail({ to, subject, html, text }: SendEmailInput): Pr
   });
   if (error) throw new Error(`Resend send failed: ${error.message}`);
 }
+
+export interface BatchEmailMessage {
+  to: string;
+  subject: string;
+  html: string;
+  text?: string;
+}
+
+// Up to 100 different messages in one request (Resend's batch API). Resend allows only a couple of
+// requests per second, so announcements go out in batches rather than one call per person.
+export const EMAIL_BATCH_SIZE = 100;
+
+export async function sendEmailBatch(messages: BatchEmailMessage[]): Promise<void> {
+  if (!messages.length) return;
+  if (messages.length > EMAIL_BATCH_SIZE) throw new Error(`A batch holds at most ${EMAIL_BATCH_SIZE} emails.`);
+  if (!env.resendFromEmail) throw new Error('RESEND_FROM_EMAIL is not configured.');
+  const from = env.resendFromEmail;
+  const { error } = await getClient().batch.send(
+    messages.map((m) => ({ from, to: m.to, subject: m.subject, html: m.html, text: m.text }))
+  );
+  if (error) throw new Error(`Resend batch send failed: ${error.message}`);
+}

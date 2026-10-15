@@ -23,6 +23,7 @@ import { TimetableUploadModalProvider } from '@/contexts/TimetableUploadModalCon
 import { TimetableUploadModal } from '@/components/plan/TimetableUploadModal';
 import { ConfirmModalHost } from '@/components/ui/ConfirmModal';
 import { RefetchOnForeground } from '@/components/RefetchOnForeground';
+import { useInstallReferral } from '@/hooks/useInstallReferral';
 import { initNotificationHandler, registerAlarmNotificationRouting } from '@/utils/notifications';
 
 // Catches render/startup errors and shows them on screen — used in production
@@ -50,6 +51,8 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
 }
 
 export default function RootLayout() {
+  useInstallReferral();
+
   // Deferred to after first mount rather than module-import time — see
   // utils/notifications.ts for why.
   useEffect(() => {

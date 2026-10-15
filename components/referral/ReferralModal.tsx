@@ -3,6 +3,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors, Radius, Spacing } from '@/constants/theme';
 import { useReferral } from '@/hooks/useReferral';
 import { useCopyReferralCode } from '@/hooks/useCopyReferralCode';
+import { useShareReferralLink } from '@/hooks/useShareReferralLink';
 import { formatReferralCode, friendsLabel } from '@/utils/referralFormat';
 
 // Centered popup showing the account's referral code with a Copy button. It
@@ -16,6 +17,7 @@ export function ReferralModal() {
   const { loaded, code, points, referralCount, referredBy, welcomePending, rewards, modalOpen, closeModal, markWelcomeSeen } =
     useReferral();
   const { copied, copy } = useCopyReferralCode(code);
+  const { share } = useShareReferralLink(code);
 
   const visible = loaded && !!code && (modalOpen || welcomePending);
 
@@ -51,6 +53,10 @@ export function ReferralModal() {
           <Pressable style={[styles.copyButton, copied && styles.copyButtonDone]} onPress={copy} accessibilityRole="button">
             <IconSymbol name={copied ? 'checkmark' : 'doc.on.doc'} color={Colors.white} size={17} />
             <Text style={styles.copyText}>{copied ? 'Copied' : 'Copy code'}</Text>
+          </Pressable>
+          <Pressable style={styles.shareButton} onPress={share} accessibilityRole="button" hitSlop={6}>
+            <IconSymbol name="square.and.arrow.up" color={Colors.primaryLight} size={16} />
+            <Text style={styles.shareText}>Share invite link</Text>
           </Pressable>
 
           <Text style={styles.explainer}>
@@ -156,6 +162,19 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.white,
   },
+  shareButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    alignSelf: 'stretch',
+    marginTop: 10,
+    paddingVertical: 11,
+    borderRadius: Radius.full,
+    borderWidth: 1.5,
+    borderColor: Colors.primaryLight,
+  },
+  shareText: { fontSize: 14.5, fontWeight: '700', color: Colors.primaryLight },
   explainer: {
     fontSize: 12.5,
     lineHeight: 18,

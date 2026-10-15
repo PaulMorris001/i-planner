@@ -48,6 +48,16 @@ export const env = {
   // crashing startup.
   // App Store Connect → App Information → Bundle ID.
   appleBundleId: process.env.APPLE_BUNDLE_ID,
+  // Apple Developer → Membership → Team ID (10 characters). With the bundle id it names the app in
+  // /.well-known/apple-app-site-association so tapped links open the app. Optional: unset just
+  // makes that file 404 and links open the web page instead.
+  appleTeamId: clean(process.env.APPLE_TEAM_ID),
+  // SHA-256 fingerprints of the keys the Android app is signed with, comma-separated (EAS keystore,
+  // plus Play Console → App integrity → app signing key). Served in /.well-known/assetlinks.json.
+  androidCertSha256: (clean(process.env.ANDROID_CERT_SHA256) ?? '')
+    .split(',')
+    .map((v) => v.trim().toUpperCase())
+    .filter(Boolean),
   // App Store Connect → App Information → "Apple ID" — numeric, not the bundle id.
   // Only required for Production transactions; Sandbox doesn't need it.
   appleAppId: process.env.APPLE_APP_ID ? Number(process.env.APPLE_APP_ID) : undefined,

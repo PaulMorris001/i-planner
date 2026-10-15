@@ -18,6 +18,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.obitoventures.iplanner",
       "googleServicesFile": "./GoogleService-Info.plist",
+      "associatedDomains": ["applinks:api.i-plannerapp.com"],
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       },
@@ -39,7 +40,21 @@
         "android.permission.WRITE_CALENDAR",
         "android.permission.SCHEDULE_EXACT_ALARM"
       ],
-      "googleServicesFile": "./google-services.json"
+      "googleServicesFile": "./google-services.json",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "api.i-plannerapp.com",
+              "pathPrefix": "/r/"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     "web": {
       "output": "static",

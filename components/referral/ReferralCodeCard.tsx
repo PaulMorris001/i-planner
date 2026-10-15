@@ -3,6 +3,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { useReferral } from '@/hooks/useReferral';
 import { useCopyReferralCode } from '@/hooks/useCopyReferralCode';
+import { useShareReferralLink } from '@/hooks/useShareReferralLink';
 import { formatReferralCode, friendsLabel } from '@/utils/referralFormat';
 
 // The account's referral code on the Profile screen (just above Calendar Sync):
@@ -10,6 +11,7 @@ import { formatReferralCode, friendsLabel } from '@/utils/referralFormat';
 export function ReferralCodeCard() {
   const { loaded, code, points, referralCount, refresh } = useReferral();
   const { copied, copy } = useCopyReferralCode(code);
+  const { share } = useShareReferralLink(code);
 
   if (!code) {
     return (
@@ -38,13 +40,26 @@ export function ReferralCodeCard() {
             {points} points · {friendsLabel(referralCount)}
           </Text>
         </View>
+      </View>
+
+      <View style={styles.actionsRow}>
         <Pressable
-          style={[styles.copyButton, copied && styles.copyButtonDone]}
+          style={[styles.actionButton, copied && styles.copyButtonDone]}
           onPress={copy}
           accessibilityRole="button"
           accessibilityLabel="Copy referral code"
         >
+          <IconSymbol name={copied ? 'checkmark' : 'doc.on.doc'} color={copied ? Colors.white : Colors.primaryLight} size={15} />
           <Text style={[styles.copyText, copied && styles.copyTextDone]}>{copied ? 'Copied' : 'Copy'}</Text>
+        </Pressable>
+        <Pressable
+          style={styles.actionButton}
+          onPress={share}
+          accessibilityRole="button"
+          accessibilityLabel="Share referral link"
+        >
+          <IconSymbol name="square.and.arrow.up" color={Colors.primaryLight} size={15} />
+          <Text style={styles.copyText}>Share link</Text>
         </Pressable>
       </View>
     </View>
@@ -84,12 +99,21 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     marginTop: 2,
   },
-  copyButton: {
+  actionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
     borderWidth: 1.5,
     borderColor: Colors.primaryLight,
     borderRadius: 999,
-    paddingVertical: 7,
-    paddingHorizontal: 14,
+    paddingVertical: 9,
   },
   copyButtonDone: {
     backgroundColor: Colors.success,
