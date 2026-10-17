@@ -6,6 +6,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { PurchasesProvider } from '@/contexts/PurchasesContext';
 import { ReferralProvider } from '@/contexts/ReferralContext';
+import { InboxProvider } from '@/contexts/InboxContext';
 import { OnboardingProvider } from '@/contexts/OnboardingContext';
 import { HabitsProvider } from '@/contexts/HabitsContext';
 import { NotesProvider } from '@/contexts/NotesContext';
@@ -63,6 +64,7 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
     <AuthProvider>
+      <InboxProvider>
       <ReferralProvider>
       <PurchasesProvider>
         <OnboardingProvider>
@@ -99,6 +101,7 @@ export default function RootLayout() {
         </OnboardingProvider>
       </PurchasesProvider>
       </ReferralProvider>
+      </InboxProvider>
     </AuthProvider>
     </GestureHandlerRootView>
   );

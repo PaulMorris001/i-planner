@@ -20,6 +20,7 @@ export const Routes = {
   LEADERBOARD: '/leaderboard',
   STUDY:      '/study',
   NOTES:      '/notes',
+  NOTIFICATIONS: '/notifications',
   NOTE_EDITOR: '/note-editor',
   NOTES_FOLDER: '/notes-folder',
   SHARED_NOTE: '/shared-note',

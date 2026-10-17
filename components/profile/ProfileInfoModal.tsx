@@ -1,7 +1,9 @@
+import { CountBadge } from "@/components/ui/CountBadge";
 import { IconSymbol, type IconSymbolName } from "@/components/ui/icon-symbol";
 import { Routes, type AppRoute } from "@/constants/routes";
 import { Colors, Spacing } from "@/constants/theme";
 import { useAuth } from "@/hooks/useAuth";
+import { useInbox } from "@/hooks/useInbox";
 import { useTimetableUploadModal } from "@/contexts/TimetableUploadModalContext";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useRef } from "react";
@@ -85,6 +87,7 @@ export function ProfileInfoModal({
   const router = useRouter();
   const { user, logout } = useAuth();
   const { open: openTimetableUpload } = useTimetableUploadModal();
+  const { unreadCount } = useInbox();
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const drawerWidth = Math.min(windowWidth * DRAWER_WIDTH_PCT, DRAWER_MAX_WIDTH);
@@ -258,6 +261,19 @@ export function ProfileInfoModal({
             <IconSymbol name="xmark" color={Colors.textMuted} size={18} />
           </Pressable>
 
+          {/* Notifications: what the team and the server sent this account. The badge counts the
+              ones not opened yet (the dashboard menu button carries the same count). */}
+          <Pressable
+            style={[styles.bellButton, { top: insets.top + Spacing.sm - 6 }]}
+            hitSlop={8}
+            onPress={() => goTo(Routes.NOTIFICATIONS)}
+            accessibilityRole="button"
+            accessibilityLabel={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}
+          >
+            <IconSymbol name="bell.fill" color={Colors.primaryLight} size={20} />
+            <CountBadge count={unreadCount} style={styles.bellBadge} />
+          </Pressable>
+
           {/* flex: 1 (not just the content padding below) — otherwise the
               ScrollView shrinks to fit its own content and the footer row
               ends up sitting right after it instead of pinned to the actual
@@ -427,12 +443,22 @@ const styles = StyleSheet.create({
     right: Spacing.lg,
     zIndex: 1,
   },
+  bellButton: {
+    position: "absolute",
+    right: Spacing.lg + 34,
+    zIndex: 1,
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  bellBadge: { top: -4, right: -6 },
   profileRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 14,
     paddingBottom: 6,
-    paddingRight: 24,
+    paddingRight: 70,
   },
   avatar: {
     width: 54,

@@ -24,6 +24,7 @@ import { studyRouter } from './study.routes';
 import { sharedFolderRouter } from './sharedFolder.routes';
 import { collaborationRouter } from './collaboration.routes';
 import { adminRouter } from './admin.routes';
+import { inboxRouter } from './inbox.routes';
 
 export const router = Router();
 
@@ -55,6 +56,7 @@ router.use('/push', pushRouter);
 router.use('/referral', referralRouter);
 router.use('/study', studyRouter);
 router.use('/admin', adminRouter);
+router.use('/notifications', inboxRouter);
 
 // Sibling to /settings, not nested — settingsRouter blanket-applies requireAuth,
 // but this unauthenticated browser redirect can't carry one.

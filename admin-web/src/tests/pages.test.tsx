@@ -233,7 +233,7 @@ describe('leaderboard page', () => {
 
 describe('announcements page', () => {
   const overview: AnnouncementsOverview = {
-    audience: { pushDevices: 320, emailRecipients: 210 },
+    audience: { pushDevices: 320, emailRecipients: 210, noPushRecipients: 1 },
     history: [
       {
         id: 'a1',
@@ -311,6 +311,19 @@ describe('announcements page', () => {
     await waitFor(() => expect(api.users).toHaveBeenLastCalledWith(expect.objectContaining({ filter: 'no_push' })));
   });
 
+  it('can target people with no push device: email only, push switched off', async () => {
+    show(<AnnouncementsPage />);
+    await screen.findByText(/320 devices/);
+    await fill();
+    await userEvent.click(screen.getByRole('button', { name: /No push device/ }));
+    expect(screen.getByRole('checkbox', { name: /push notification/i })).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByRole('checkbox', { name: /email/i })).toHaveAttribute('aria-checked', 'true');
+    await userEvent.click(screen.getByRole('button', { name: /send to users/i }));
+    expect(screen.getByText(/who opted in but have no push device/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /send now/i }));
+    await waitFor(() => expect(api.sendAnnouncement).toHaveBeenCalledWith(expect.objectContaining({ segment: 'no_push', push: false, email: true })));
+  });
+
   it('uses the i-Planner logo (not a placeholder icon) in the notification preview', async () => {
     show(<AnnouncementsPage />);
     await screen.findByText(/320 devices/);
@@ -363,6 +376,7 @@ describe('announcements page', () => {
         title: 'Study timer is here',
         body: 'Time your sessions and earn points.',
         route: '/study',
+        segment: 'all',
         push: true,
         email: true,
         test: false,
@@ -406,7 +420,7 @@ describe('announcements page', () => {
   });
 
   it('explains an empty history', async () => {
-    api.announcements.mockResolvedValue({ audience: { pushDevices: 0, emailRecipients: 0 }, history: [] });
+    api.announcements.mockResolvedValue({ audience: { pushDevices: 0, emailRecipients: 0, noPushRecipients: 1 }, history: [] });
     show(<AnnouncementsPage />);
     expect(await screen.findByText('Nothing sent yet')).toBeInTheDocument();
   });

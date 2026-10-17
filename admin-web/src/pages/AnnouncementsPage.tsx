@@ -27,10 +27,12 @@ export function AnnouncementsPage() {
   const composer = useAnnouncementComposer((fresh) => overview.setData(fresh));
   const pushDevices = overview.data?.audience.pushDevices ?? 0;
   const emailRecipients = overview.data?.audience.emailRecipients ?? 0;
+  const noPushRecipients = overview.data?.audience.noPushRecipients ?? 0;
 
   const reach = (test: boolean) => {
     if (test) return 'Only you will receive this test.';
     const parts: string[] = [];
+    if (composer.segment === 'no_push') return `This will email ${formatCount(noPushRecipients)} ${plural(noPushRecipients, 'person', 'people')} who opted in but have no push device.`;
     if (composer.push) parts.push(`${formatCount(pushDevices)} ${plural(pushDevices, 'device', 'devices')}`);
     if (composer.email) parts.push(`${formatCount(emailRecipients)} ${plural(emailRecipients, 'inbox', 'inboxes')}`);
     return `This will reach ${parts.join(' and ')}.`;
@@ -92,6 +94,18 @@ export function AnnouncementsPage() {
             </Card>
 
             <div className="stack">
+              <Card>
+                <SectionTitle title="Who gets it" hint="Always limited to people who turned on “Product updates”" />
+                <FilterChips
+                  options={[
+                    { value: 'all', label: `Everyone opted in` },
+                    { value: 'no_push', label: `No push device (${formatCount(noPushRecipients)})` },
+                  ]}
+                  value={composer.segment}
+                  onChange={composer.setSegment}
+                />
+              </Card>
+
               <Card>
                 <SectionTitle title="Send as" hint="Only people who turned on “Product updates” are included" />
                 <div className="stack" style={{ gap: 10 }}>

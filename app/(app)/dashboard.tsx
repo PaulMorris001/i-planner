@@ -8,6 +8,7 @@ import { SyllabusUploadModal } from "@/components/plan/SyllabusUploadModal";
 import { ProfileInfoModal } from "@/components/profile/ProfileInfoModal";
 import { DashboardSkeleton } from "@/components/ui/DashboardSkeleton";
 import { GreetingHeader } from "@/components/ui/GreetingHeader";
+import { NotificationsBanner } from "@/components/ui/NotificationsBanner";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { StudentPathView } from "@/components/dashboard/StudentPathView";
 import { ExamPathView } from "@/components/dashboard/ExamPathView";
@@ -210,6 +211,7 @@ export default function Dashboard() {
         refreshing={refreshing}
       >
         <GreetingHeader onMenuPress={() => setProfileModalOpen(true)} />
+        <NotificationsBanner />
 
         {dashboardLoading ? (
           <DashboardSkeleton />

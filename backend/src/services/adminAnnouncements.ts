@@ -8,6 +8,7 @@ import { escapeHtml, page } from './authEmailHtml';
 import { flattenText } from './collabEmailHtml';
 import { sendPushToTokens } from './pushNotifications';
 import { getDirectory } from './adminUsers';
+import { recordInbox } from './inbox';
 
 export const TITLE_MAX = 65;
 export const BODY_MAX = 500;
@@ -16,7 +17,12 @@ const BATCH_PAUSE_MS = 700;
 // In-app screens an announcement can open when tapped.
 const ROUTE_PATTERN = /^\/[a-z0-9\-_/]{0,60}$/i;
 
+// 'all' = everyone opted in. 'no_push' = opted in but with no device that can get a push (so only
+// email can reach them, e.g. to ask them to switch notifications on).
+export type AnnouncementSegment = 'all' | 'no_push';
+
 export interface AnnouncementInput {
+  segment: AnnouncementSegment;
   title: string;
   body: string;
   // An in-app path to open on tap, e.g. /notes. Optional.
@@ -31,12 +37,14 @@ export interface AnnouncementInput {
 export interface Audience {
   pushTokens: string[];
   emails: string[];
+  // Everyone this announcement is for; each gets it in their in-app notification inbox.
+  uids: string[];
 }
 
 // Who may receive an announcement: accounts that switched "Product updates" on in the app (App
 // Store guideline 4.5.4 requires that opt-in for promotional pushes; the same switch covers
 // email), minus suspended or deleted accounts.
-export async function resolveAudience(): Promise<Audience> {
+export async function resolveAudience(segment: AnnouncementSegment = 'all'): Promise<Audience> {
   const [optedIn, suspended, directory] = await Promise.all([
     Settings.find({ productUpdatesEnabled: true }, { firebaseUid: 1 }).lean(),
     AccountSuspension.find({}, { firebaseUid: 1 }).lean(),
@@ -48,15 +56,17 @@ export async function resolveAudience(): Promise<Audience> {
     const user = byUid.get(uid);
     return !!user && !user.disabled && !blocked.has(uid);
   });
-  const tokens = await PushToken.find({ firebaseUid: { $in: eligible } }, { token: 1 }).lean();
-  const emails = eligible.map((uid) => byUid.get(uid)!.email).filter(Boolean);
-  return { pushTokens: [...new Set(tokens.map((t) => t.token))], emails: [...new Set(emails)] };
+  const tokens = await PushToken.find({ firebaseUid: { $in: eligible } }, { token: 1, firebaseUid: 1 }).lean();
+  const withDevice = new Set(tokens.map((t) => t.firebaseUid));
+  const recipients = segment === 'no_push' ? eligible.filter((uid) => !withDevice.has(uid)) : eligible;
+  const emails = recipients.map((uid) => byUid.get(uid)!.email).filter(Boolean);
+  return { pushTokens: segment === 'no_push' ? [] : [...new Set(tokens.map((t) => t.token))], emails: [...new Set(emails)], uids: recipients };
 }
 
 async function audienceForAdmin(adminUid: string): Promise<Audience> {
   const [tokens, directory] = await Promise.all([PushToken.find({ firebaseUid: adminUid }, { token: 1 }).lean(), getDirectory()]);
   const me = directory.find((u) => u.uid === adminUid);
-  return { pushTokens: tokens.map((t) => t.token), emails: me?.email ? [me.email] : [] };
+  return { pushTokens: tokens.map((t) => t.token), emails: me?.email ? [me.email] : [], uids: [adminUid] };
 }
 
 export function validateAnnouncement(input: Partial<AnnouncementInput>): AnnouncementInput {
@@ -66,12 +76,14 @@ export function validateAnnouncement(input: Partial<AnnouncementInput>): Announc
   if (!body) throw new ApiError(400, 'Write the announcement message.', 'body');
   if (body.length > BODY_MAX) throw new ApiError(400, `The message can be up to ${BODY_MAX} characters.`, 'body');
   if (!input.push && !input.email) throw new ApiError(400, 'Choose push, email or both.', 'channels');
+  const segment: AnnouncementSegment = input.segment === 'no_push' ? 'no_push' : 'all';
+  if (segment === 'no_push' && input.push) throw new ApiError(400, 'People with no push device can only be reached by email.', 'channels');
   let route: string | undefined;
   if (typeof input.route === 'string' && input.route.trim()) {
     route = input.route.trim().startsWith('/') ? input.route.trim() : `/${input.route.trim()}`;
     if (!ROUTE_PATTERN.test(route)) throw new ApiError(400, 'That screen path is not valid.', 'route');
   }
-  return { title, body, route, push: !!input.push, email: !!input.email, test: !!input.test };
+  return { title, body, route, segment, push: !!input.push, email: !!input.email, test: !!input.test };
 }
 
 export function buildAnnouncementEmail(title: string, body: string): { subject: string; html: string; text: string } {
@@ -108,7 +120,9 @@ export async function sendAnnouncement(
   if (sending) throw new ApiError(409, 'An announcement is already being sent. Wait for it to finish.', 'general');
   sending = true;
   try {
-    const audience = input.test ? await audienceForAdmin(admin.uid) : await resolveAudience();
+    const audience = input.test ? await audienceForAdmin(admin.uid) : await resolveAudience(input.segment);
+
+    await recordInbox(audience.uids, 'announcement', { title: input.title, body: input.body, route: input.route });
 
     let pushDevices = 0;
     let pushAccepted = 0;
@@ -175,7 +189,7 @@ export async function listAnnouncements(limit = 20) {
   }));
 }
 
-export async function previewAudience(): Promise<{ pushDevices: number; emailRecipients: number }> {
-  const audience = await resolveAudience();
-  return { pushDevices: audience.pushTokens.length, emailRecipients: audience.emails.length };
+export async function previewAudience(): Promise<{ pushDevices: number; emailRecipients: number; noPushRecipients: number }> {
+  const [audience, noPush] = await Promise.all([resolveAudience(), resolveAudience('no_push')]);
+  return { pushDevices: audience.pushTokens.length, emailRecipients: audience.emails.length, noPushRecipients: noPush.emails.length };
 }

@@ -173,7 +173,8 @@ export default function Profile() {
     if (!ok) {
       Alert.alert(
         "Couldn't enable reminders",
-        "Notification permission was denied. You can allow it later from your device settings.",
+        "Notification permission is off for i-Planner on this phone. Switch it on in your device settings, then try again.",
+        [{ text: "Not now", style: "cancel" }, { text: "Open Settings", onPress: () => Linking.openSettings() }],
       );
     }
   };
@@ -198,7 +199,8 @@ export default function Profile() {
     if (!ok) {
       Alert.alert(
         "Couldn't turn on updates",
-        "Notification permission was denied. You can allow it later from your device settings.",
+        "Notification permission is off for i-Planner on this phone. Switch it on in your device settings, then try again.",
+        [{ text: "Not now", style: "cancel" }, { text: "Open Settings", onPress: () => Linking.openSettings() }],
       );
     }
   };

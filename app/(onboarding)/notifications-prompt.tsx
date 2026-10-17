@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, Pressable, Alert, StyleSheet } from "react-native";
+import { View, Text, Pressable, Alert, Linking, StyleSheet } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { ScreenWrapper } from "@/components/layout/ScreenWrapper";
 import { Button } from "@/components/ui/Button";
@@ -33,7 +33,8 @@ export default function NotificationsPrompt() {
     if (!ok) {
       Alert.alert(
         "Couldn't enable reminders",
-        "Notification permission was denied. You can allow it later from Profile & Settings or your device settings.",
+        "Notification permission was denied. You can switch it on later from the Home screen, Profile & Settings or your device settings.",
+        [{ text: "Not now", style: "cancel" }, { text: "Open Settings", onPress: () => Linking.openSettings() }],
       );
     }
     proceed();

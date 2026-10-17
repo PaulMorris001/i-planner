@@ -18,6 +18,7 @@ import { SharedFolderImport } from '../models/SharedFolderImport';
 import { ImportedCalendarEvent } from '../models/ImportedCalendarEvent';
 import { KnownDevice } from '../models/KnownDevice';
 import { PushToken } from '../models/PushToken';
+import { InboxNotification } from '../models/InboxNotification';
 import { ReferralProfile } from '../models/ReferralProfile';
 import { Referral } from '../models/Referral';
 import { PointEvent } from '../models/PointEvent';
@@ -29,6 +30,7 @@ import { StudyRun } from '../models/StudyRun';
 // clean up what a deleted account left behind (see referralLeaderboard.ts).
 export async function wipeUserData(firebaseUid: string): Promise<void> {
   await Promise.all([
+    InboxNotification.deleteMany({ firebaseUid }),
     Task.deleteMany({ firebaseUid }),
     Goal.deleteMany({ firebaseUid }),
     Habit.deleteMany({ firebaseUid }),

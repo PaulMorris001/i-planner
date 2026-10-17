@@ -1,6 +1,7 @@
 import { Expo, ExpoPushMessage, ExpoPushTicket } from 'expo-server-sdk';
 import { PushToken } from '../models/PushToken';
 import { Settings } from '../models/Settings';
+import { recordInbox } from './inbox';
 
 // Sending via Expo's push service, which relays to FCM (Android) and APNs (iOS)
 // using the credentials stored in EAS — the backend only ever sees Expo push
@@ -18,6 +19,10 @@ export const REMINDERS_CHANNEL_ID = 'planner-reminders';
 // 'access-change' (the owner changed what you may do in a note) always show; 'ai-reply' is hidden while the app is open.
 // 'sync' is silent (no title or body): it only wakes the app to refresh its data and reminders.
 export type PushKind = 'announcement' | 'task-nudge' | 'ai-reply' | 'invite-response' | 'access-change' | 'sync';
+
+// Pushes worth keeping in the in-app inbox. The nightly task nudge and AI replies are not: they are
+// only useful in the moment (and the reply already sits in the Coach chat).
+const INBOX_KINDS = new Set<PushKind>(['announcement', 'invite-response', 'access-change']);
 
 export interface PushContent {
   title: string;
@@ -152,6 +157,7 @@ export async function sendPushToUser(
   options: { kind: PushKind; channelId?: string }
 ): Promise<void> {
   try {
+    if (INBOX_KINDS.has(options.kind)) await recordInbox([firebaseUid], options.kind, content);
     const tokens = await tokensForUser(firebaseUid);
     if (tokens.length) await sendPushToTokens(tokens, content, options);
   } catch (err) {

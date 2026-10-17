@@ -1,8 +1,10 @@
 import { ReferralPointsBadge } from "@/components/referral/ReferralPointsBadge";
+import { CountBadge } from "@/components/ui/CountBadge";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { SkeletonBlock } from "@/components/ui/Skeleton";
 import { Colors, Spacing, Radius } from "@/constants/theme";
 import { useAuth } from "@/hooks/useAuth";
+import { useInbox } from "@/hooks/useInbox";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 interface GreetingHeaderProps {
@@ -26,6 +28,7 @@ export function GreetingHeader({
   onMenuPress,
 }: GreetingHeaderProps) {
   const { user, initializing } = useAuth();
+  const { unreadCount } = useInbox();
   // Only show a skeleton when actually waiting on auth with no explicit override.
   const nameLoading = initializing && !name;
 
@@ -54,8 +57,17 @@ export function GreetingHeader({
       <View style={styles.actions}>
         <ReferralPointsBadge />
         {onMenuPress && (
-          <Pressable style={styles.menuButton} onPress={onMenuPress} hitSlop={8}>
+          <Pressable
+            style={styles.menuButton}
+            onPress={onMenuPress}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={unreadCount > 0 ? `Menu, ${unreadCount} unread notifications` : "Menu"}
+          >
             <IconSymbol name="line.3.horizontal" color={Colors.textPrimary} size={22} />
+            {/* The menu holds the notifications bell, so an unread count here tells the person
+                something inside needs a look. */}
+            <CountBadge count={unreadCount} style={styles.menuBadge} />
           </Pressable>
         )}
       </View>
@@ -89,6 +101,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
   },
+  menuBadge: { top: -5, right: -5 },
   // Same 42x42 footprint the old circular avatar had, so the header's height
   // doesn't shift now that it's a menu trigger instead of a user badge.
   menuButton: {

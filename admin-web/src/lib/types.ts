@@ -58,10 +58,13 @@ export interface AnnouncementDraft {
   title: string;
   body: string;
   route?: string;
+  segment: AnnouncementSegment;
   push: boolean;
   email: boolean;
   test: boolean;
 }
+
+export type AnnouncementSegment = 'all' | 'no_push';
 
 export interface AnnouncementOutcome {
   id: string;
@@ -88,6 +91,6 @@ export interface AnnouncementRecord {
 }
 
 export interface AnnouncementsOverview {
-  audience: { pushDevices: number; emailRecipients: number };
+  audience: { pushDevices: number; emailRecipients: number; noPushRecipients: number };
   history: AnnouncementRecord[];
 }

@@ -354,6 +354,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     try {
       setSettings(await settingsService.patch({ remindersEnabled: true }));
       backfillReminders();
+      // Save this phone's push token now, not at the next launch.
+      registerPushToken();
       return true;
     } catch (err) {
       setSettings(prevSettings);
